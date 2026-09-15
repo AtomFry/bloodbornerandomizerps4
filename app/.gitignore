@@ -1,0 +1,6 @@
+src/x64/
+pkg.gp4
+*.pkg
+eboot.bin
+sce_sys/param.sfo
+*.log
