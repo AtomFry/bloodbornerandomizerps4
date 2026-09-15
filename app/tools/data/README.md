@@ -74,7 +74,7 @@ already runs.
 adding one is an FTP copy rather than a rebuild. Real (large) mods belong in the
 gitignored `../../../data/`, not here; keep this directory to small fixtures.
 
-The feature is not designed or built. See `docs/deferred-ideas.md` §3 — the open
+The feature is not designed or built. See `docs/deferred-ideas.md` §4 — the open
 question is conflict handling: a mod shipping `map/mapstudio/*.msb.dcx` or
 `param/*` would silently overwrite what the randomizer just wrote. This one is
 trivial precisely because it touches nothing the randomizer touches.

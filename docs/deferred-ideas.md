@@ -230,9 +230,33 @@ on, since every enabled row would read the same number. Not resolved.
 
 ---
 
+## 3. Randomly hide model parts for visual variety
+
+**Carried over from the original README's "Personal Notes" when it was rewritten
+2026-09-15. Idea only — nothing investigated.**
+
+When randomizing, randomly switch off individual model parts on an enemy. The
+worked example: Garden of Eyes wear clothes, so you could spawn two visually
+distinct versions of the same creature — one clothed, one not — from a single
+pool entry.
+
+Attractive because it multiplies apparent variety without needing new creatures,
+and because [§2](#2-even-enemy-mix--flattening-the-pool-weighting) shows variety
+is genuinely limited: 29 of 82 models are worth 0.30% of draws each, and the
+size gate leaves some placements with fewer than 20 candidates.
+
+**Completely unexamined.** Nothing is known about whether model part visibility
+is addressable from the data this project already touches. The randomizer works
+in MSB placements and PARAM rows; part visibility is more likely a property of
+the FLVER model or the `chr` archives, neither of which this port parses at all.
+That makes this potentially much larger than it sounds — establish where part
+visibility actually lives before treating it as a feature.
+
+---
+
 # Part 2 — New capability
 
-## 3. Merge other mods into the output
+## 4. Merge other mods into the output
 
 **Raised 2026-09-14. Not designed, not scoped — recorded so the shape is not
 re-derived later.**
@@ -240,7 +264,7 @@ re-derived later.**
 The idea: let the user drop third-party Bloodborne mods alongside the
 randomizer, show one toggle per mod, and merge the enabled ones into the output.
 
-### 3.1 Why this is cheap
+### 4.1 Why this is cheap
 
 A mod for this game is **already the same shape as everything else here.**
 `app/tools/data/mods/no-logo/` is the committed example: three `.gfx` files
@@ -252,7 +276,7 @@ mod's files over the top, last. That is the mirror code path `FileIo` already
 runs at the start of every job, pointed at a different source and run at the
 other end.
 
-### 3.2 Where mods live
+### 4.2 Where mods live
 
 **On the console:** `/data/bbrandomizer/Mods/<name>/dvdroot_ps4/`, parallel to
 the existing `VanillaSource/`. The app enumerates that directory and builds the
@@ -266,7 +290,7 @@ and build iteration. A logo mod is 4 KB but a texture pack is hundreds of MB.
 developing and verifying the merge. Real mods belong in the gitignored
 `../data/`.
 
-### 3.3 Open questions
+### 4.3 Open questions
 
 1. **Conflict with randomization.** A mod that ships `map/mapstudio/*.msb.dcx`
    or `param/gameparam/*` would overwrite exactly what the randomizer just
@@ -287,7 +311,7 @@ developing and verifying the merge. Real mods belong in the gitignored
    positional bit string the way the enemy picker's selection is. Name-keyed.
 6. **Does the progress screen report it?** Probably one line per merged mod.
 
-### 3.4 Not yet decided
+### 4.4 Not yet decided
 
 Whether this is one setting with a drill-in (like the enemy picker) or something
 that lives on its own screen. Defer until the conflict question in (1) is
@@ -298,7 +322,7 @@ ordering and conflict resolution in the UI.
 
 # Part 3 — UI and UX
 
-## 4. Progress screen appears frozen during the item-data phase
+## 5. Progress screen appears frozen during the item-data phase
 
 When enemy drops is enabled, the run decompresses a 28 MB archive inside a
 single `Step()` call. The frame loop cannot draw during that, so the screen sits
@@ -312,7 +336,7 @@ or show an explicit "this step takes a while" hint before entering it.
 
 ---
 
-## 5. Save Data backup and restore are still simulated
+## 6. Save Data backup and restore are still simulated
 
 `StartCommit` prints `BACKING UP EXISTING SAVE (SIMULATED)`, `REMOVING EXISTING
 SAVE DATA (SIMULATED)` and `RESTORING SAVE DATA … (SIMULATED)`, and the backup
