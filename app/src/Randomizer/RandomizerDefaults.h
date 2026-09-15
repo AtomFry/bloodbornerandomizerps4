@@ -13,14 +13,22 @@ namespace bbr {
 struct RandomizerDefaults {
     // Manually entered by the user (Setup Defaults screen) - always
     // "AAAA00000" shaped (4 letters, 5 digits), same format the PS4 itself
-    // enforces for every title ID, official or a user's own repackaged
-    // one. CUSA03175 is the struct's own default (what a fresh install with
-    // no defaults.cfg starts from) because it's the version the randomizer
-    // mod is actually built around, not a placeholder - most users won't
-    // need to touch this row at all. Auto-detection/selection from
-    // installed titles is a later milestone - see the conversation this
-    // was scoped down from.
-    std::string bloodborneTitleId = "CUSA03175";
+    // enforces for every title ID, official or a user's own repackaged one.
+    //
+    // CUSA03173 (Europe / GOTY) is the struct's own default - what a fresh
+    // install with no defaults.cfg starts from. It is one of the six real
+    // Bloodborne title IDs listed in Game/GameInfo.cpp, and it is what the
+    // reference tool's own Nexus release targets.
+    //
+    // This was "CUSA03175" until 2026-09-15, which is NOT a real Bloodborne
+    // title ID - a fresh install would have written its output for a title
+    // that is not installed, AFR would have had nothing to overlay, and the
+    // game would have launched unmodified with no error anywhere. Silent, and
+    // indistinguishable from "the randomizer did nothing". If a title ID is
+    // ever changed here again, check it against GameInfo.cpp's list first.
+    //
+    // Auto-detection/selection from installed titles is a later milestone.
+    std::string bloodborneTitleId = "CUSA03173";
 
     // "Yes" is the struct's own default, not just the store's fallback -
     // this is what a brand-new install (no defaults.cfg on disk yet) uses.

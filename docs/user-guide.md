@@ -34,7 +34,7 @@ list — and those are opened with **X**.
 
 | Setting | Default | Where |
 |---|---|---|
-| [Bloodborne title ID](#bloodborne-title-id) | `CUSA03175` | Defaults |
+| [Bloodborne title ID](#bloodborne-title-id) | `CUSA03173` | Defaults |
 | [Seed](#seed) | rolled | Wizard |
 | [Backup existing save](#save-data-settings) | Yes | Both |
 | [Replace save](#save-data-settings) | New save data | Both |
@@ -60,10 +60,26 @@ produces the normal game.
 
 ### Bloodborne title ID
 
-Which installed copy of Bloodborne the randomized files are built for. The
-default `CUSA03175` is the version this app is built around; most people never
-need to change it. Get it wrong and the game will simply launch unmodified,
-because AFR will be layering files onto a title that isn't running.
+Which installed copy of Bloodborne the randomized files are built for. **Get it
+wrong and the game simply launches unmodified** — AFR will be layering files
+onto a title that isn't running, and nothing reports an error. A run that
+"did nothing" is almost always this.
+
+The default is `CUSA03173` (Europe / GOTY). Check it matches your copy:
+
+| Title ID | Region / edition |
+|---|---|
+| `CUSA00900` | USA |
+| `CUSA00207` | Australia |
+| `CUSA00208` | United Kingdom |
+| `CUSA01363` | Asia |
+| `CUSA03014` | Japan / The Old Hunters |
+| `CUSA03173` | Europe / GOTY |
+
+> If you used a build from before 2026-09-15, the default was `CUSA03175` —
+> not a real Bloodborne title ID. That value is saved in `defaults.cfg` and
+> **updating the app will not correct it**, because a stored setting always wins
+> over the built-in default. Check this row once after updating.
 
 *Setup Defaults only.*
 
