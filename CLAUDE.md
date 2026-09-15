@@ -13,7 +13,7 @@ app/                    the PS4 randomizer — the real project, where work happ
   src/                    Platform, UI, Game, Randomizer, Msb, Param
   tools/                  Python verifiers, table generators, tools/data/ fixtures
 docs/                   specs, findings, and plans/ — see §8
-data/                   GITIGNORED, ~1.6 GB of game trees — see §9
+data/                   GITIGNORED, game trees — see §9
 reference/              the Windows tool, read-only behavioural reference
   BloodborneRandomizer.sln
   Randomizer/             the WPF app (all Bloodborne logic)
@@ -33,24 +33,17 @@ here should be modified. When the PS4 port and this tool disagree, the default
 answer is that the port is wrong (see §7). Read it to learn what the port should
 do.
 
-> Renamed from `MSB Test/` on 2026-09-14 — it was never an MSB test, and the
-> inherited name cost a sentence of explanation every time. `RootNamespace` is
-> still `MSB_Test`; that is internal to C# and deliberately left alone.
-> `app/tools/starting_weapons_verify.py` reads
+> Two things here are load-bearing, not just documentation. `RootNamespace` is
+> still `MSB_Test`; that is internal to C# and deliberately left alone. And
+> `app/tools/starting_weapons_verify.py` parses
 > `reference/Randomizer/MainWindowComponents/RandomizeFunctions.cs` directly, so
-> that path is load-bearing, not just documentation.
-
-Two disposable diagnostic rigs (`fsprobe`, `sdl2smoke`) once proved the
-filesystem, toolchain, and SDL2 questions on hardware. They have been deleted;
-everything they established lives in
-[docs/ps4-homebrew-findings.md](docs/ps4-homebrew-findings.md). Read that before
-debugging anything platform-level — it will usually already have the answer, and
-several of its entries contradict what the SDK headers imply.
+> that path cannot move.
 
 This is **homebrew development, not jailbreak or exploit work.** The console is
 already modded; the app needs nothing beyond ordinary homebrew filesystem
 access. If something appears to require privilege escalation or a sandbox
-escape, stop and explain the dependency rather than working around it.
+escape, stop and explain the dependency rather than working around it. Standing
+rule: don't widen scope into jailbreak, exploit, or kernel territory.
 
 ---
 
@@ -101,11 +94,9 @@ subcommand:
 python tools/pool_verify.py selftest ../data/vanilla/dvdroot_ps4
 ```
 
-Existing verifiers: `pool_verify`, `boss_verify`, `treasure_verify`,
-`drops_verify`, `itemdata_verify`, `starting_weapons_verify`,
-`mergo_darkness_verify`, `ui_scroll_verify`. Reuse their parsing rather than
-duplicating it — `treasure_verify` reuses `boss_verify`'s MSBB reader, which is
-the pattern to follow.
+`ls app/tools/*_verify.py` lists the ones that exist. Reuse their parsing rather
+than duplicating it — `treasure_verify` reuses `boss_verify`'s MSBB reader,
+which is the pattern to follow.
 
 **State the limitation honestly whenever one of these is cited as evidence: a
 Python mirror pins the rules, not the C++ implementation of them.** The two can
@@ -139,10 +130,8 @@ ahead of the ask.
 sandboxing, PKG structure, AFR, the map format — is part of the work, not
 padding around it.
 
-**Never create commits or branches without asking.** Standing rule, restated
-several times. Leave the working tree and let the user decide.
-
-**Don't widen scope into jailbreak, exploit, or kernel territory.** Ever.
+**Never create commits or branches without asking.** Leave the working tree and
+let the user decide.
 
 ---
 
@@ -173,17 +162,16 @@ the real vanilla bytes. This contaminated the vanilla source once and produced a
 day of chasing a code bug that did not exist.
 
 **Don't call a value "corrupt" from an incomplete check.** The 900,000,000+
-range `NPCParamID`s in the reference tool's output are real, intentional,
-hand-curated scaling data (`NPCScalingFile.txt`, 26,591 lines) — not garbage.
-They were wrongly called corruption after checking map placements but never
-checking whether the values existed as valid param rows.
+range `NPCParamID`s in the reference tool's output are real hand-curated scaling
+data (`NPCScalingFile.txt`), not garbage. They were called corruption after
+checking map placements but never checking whether the values existed as valid
+param rows.
 
 **`OrbisKernelStat`'s `st_size` is unreliable on this SDK.** It returned 88 for a
-genuine 44KB file on real hardware, while `st_mode` checks have always been
-correct. `ReadWholeFile` therefore reads in growing 64KB chunks until a short
-read rather than sizing off `st_size`. The header's layout does not necessarily
-match the real kernel ABI field-for-field — treat any `OrbisKernelStat` field
-this project has not already hardware-validated with suspicion.
+genuine 44KB file on real hardware, which is why `ReadWholeFile` never sizes off
+it. The header's layout does not necessarily match the real kernel ABI
+field-for-field — treat any `OrbisKernelStat` field this project has not already
+hardware-validated with suspicion. `st_mode` has always been correct.
 
 **Byte decoding never proves game behaviour.** Knowing what a flag writes is not
 knowing what it does. Hardware-test before renaming a setting or inverting its
@@ -233,13 +221,12 @@ them. Decompression uses vendored `puff.c`.
 ## 7. Standing design preferences
 
 **Fidelity to the reference tool wins over improvement.** Several "obvious
-fixes" turned out to be deviations that made things worse. `EnemyExclusionListExtra`
-was 45 heuristic patterns that froze 119 placements and made early-game enemies
-identical in every run; it was removed, and the port now matches the reference's
-exclusions exactly. The archive is in `docs/enemy-exclusion-history.md` — re-add
-individual entries there with a stated reason rather than restoring the list.
-There is a similar parked idea (applying the `ThinkParamID <= 1` test
-symmetrically) deliberately left unimplemented for the same reason.
+fixes" turned out to be deviations that made things worse — `EnemyExclusionListExtra`
+froze 119 placements before it was removed. The port now matches the reference's
+exclusions exactly; re-add individual entries from
+`docs/enemy-exclusion-history.md` with a stated reason rather than restoring the
+list. A similar parked idea (applying the `ThinkParamID <= 1` test
+symmetrically) is deliberately left unimplemented for the same reason.
 
 **Chalice dungeons are out of scope**, by decision. Three settings are affected.
 Don't reopen it.
@@ -261,13 +248,12 @@ twice; both are reproduced on purpose and encoded as invariants in
   what was checked most recently.
 - `ps4-homebrew-findings.md` — hardware-confirmed platform knowledge: sandbox
   and filesystem, toolchain pins, packaging, SDL2, error decoding, and dead ends
-  not worth retrying. Check here first for anything platform-level.
+  not worth retrying. Check here first for anything platform-level; several
+  entries contradict what the SDK headers imply.
 - `windows-randomizer-technical-review.md` — the reference tool's architecture,
   algorithms, and bug catalogue.
-- `deferred-ideas.md` — recorded but unauthorized: caged-enemy compatibility,
-  pool-weighting flattening, **merging third-party mods into the output**, the
-  frozen-looking progress step, and the still simulated save-data backup.
-  Documentation only.
+- `deferred-ideas.md` — ideas recorded but explicitly **not** authorized. Check
+  before proposing a feature; it may already have been deferred on purpose.
 - `enemy-exclusion-history.md` — the removed `EnemyExclusionListExtra`, kept so
   entries can be re-added with justification rather than restored wholesale.
 - `user-guide.md` — user-facing; covers what ships today only.
@@ -280,11 +266,10 @@ no suffix. `workshop-tools.md` and `pickers.md` are the style reference.
 numbered technical sections, measured numbers rather than estimates, and an
 explicit **deviations from the plan as written** section once implemented.
 
-**Status lines are load-bearing — keep them true.** They say exactly where a
-thing stands, and a stale one actively misleads: a plan that still says "no code
-written" for shipped work will send the next reader off to rebuild it. Four said
-exactly that before being corrected on 2026-09-14. When a feature lands, update
-its plan's status line *and* the spec table row in the same pass.
+**Status lines are load-bearing — keep them true.** A stale one actively
+misleads: a plan that still says "no code written" for shipped work will send the
+next reader off to rebuild it, and four of them said exactly that. When a feature
+lands, update its plan's status line *and* the spec table row in the same pass.
 
 "Implemented, builds clean, awaiting hardware test" is a real and common status —
 use it rather than rounding up to done.
@@ -295,17 +280,12 @@ Also `app/UI_BLUEPRINT.md`.
 
 ## 9. Git
 
-Only the C# reference tool and the README are tracked. **`app/`, `docs/`, and
-`CLAUDE.md` are untracked** — the entire PS4 port is uncommitted. That is a
-standing decision to revisit, not an oversight, but it does mean there is no
-history behind anything in `app/`: a deleted file there is gone.
+`app/`, `docs/`, and `CLAUDE.md` have been tracked since `785cefe` — the PS4
+port is committed and has history behind it.
 
-**`/data/` is gitignored and must stay that way.** It holds ~1.7 GB of game
-trees — the vanilla baseline, past run output, the downloaded reference release,
-hardware logs. None of it is source or ours to redistribute. The ignore rule at
-the bottom of `.gitignore` is the only thing standing between a stray
-`git add .` and a permanently bloated repository. `app/.gitignore` separately
-covers build output (`src/x64/`, `*.pkg`, `eboot.bin`, `pkg.gp4`, `*.log`).
+**`/data/` is gitignored and must stay that way** — ~1.7 GB of game trees that
+are neither source nor ours to redistribute. `app/.gitignore` separately covers
+build output (`src/x64/`, `*.pkg`, `eboot.bin`, `pkg.gp4`, `*.log`).
 
 ---
 

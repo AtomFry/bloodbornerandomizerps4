@@ -207,14 +207,26 @@ available as a second, independent opinion on the same diff.
 - `grill-me` — structured interrogation of an ask before planning. Authored from
   scratch; used by `spec-author` and `planner`. The one that most directly
   prevents wasted work.
-- `bb-project-facts` — the domain briefing: what AFR is, why there's no vanilla
-  data, what the param/MSB layers are, what `data/vanilla` and `data/runs` contain. Every agent
-  needs this and none of them should re-derive it.
-- `bb-verifier` — how to write a `tools/*_verify.py` mirror: the selftest
-  convention, how to point it at `data/vanilla/dvdroot_ps4`,
-  and the standing caveat that a Python mirror pins the rules and not the C++.
-- `bb-doc-style` — the house style these plan documents are written in, so
-  generated artifacts read like the ones already here.
+
+**Cut on 2026-09-15: `bb-project-facts`, `bb-verifier`, `bb-doc-style`.** All
+three were originally specified as distillations of material that `CLAUDE.md`
+already carries — and, worse, each would have been a prose *description* of
+something that already has a working exemplar in the repo:
+
+| Proposed skill | Already in | Exemplar it would have described |
+|---|---|---|
+| `bb-project-facts` | `CLAUDE.md` §6 + §8 | `docs/ps4-homebrew-findings.md` |
+| `bb-verifier` | `CLAUDE.md` §3 | the existing `app/tools/*_verify.py` |
+| `bb-doc-style` | `CLAUDE.md` §8 | `workshop-tools.md`, `pickers.md` |
+
+A copy drifts from its original, and the copy is the one that misleads — which is
+the failure `CLAUDE.md` §8 already warns about for status lines. Agents that need
+this material get a pointer (*"read `CLAUDE.md` §6 and §8 first"*), not a
+duplicate. `grill-me` survives the same test: it is the only skill in the
+original inventory with no counterpart anywhere in the repo.
+
+**This rests on an unverified assumption** — that project `CLAUDE.md` is loaded
+into subagent context. See §9 question 5; it gates stages B and D.
 
 **Templates** (`docs/plans/_templates/`) — `plan.md`, `plan-review.md`,
 `implementation-report.md`, `code-review.md`, `test-report.md`, `spec.md`.
@@ -270,12 +282,12 @@ this project paced generally.
 | Stage | What gets built | Proven by |
 |---|---|---|
 | **A** ✅ | `CLAUDE.md` only — **done** | A fresh session behaves correctly without re-explaining the build, the heredoc hazard, or the commit rule. *Still to be proven in practice; see §11.* |
-| **B** | `specs/` + index + spec template + `/spec` + `spec-author` + `grill-me` + `bb-project-facts` | Run `/spec` on a real backlog row. Compare to how you'd have written it. |
-| **C** | `/plan` + `planner` + plan template + `bb-doc-style` | Run `/plan` on that spec. Compare to `workshop-tools.md`. |
+| **B** | `specs/` + index + spec template + `/spec` + `spec-author` + `grill-me` | Run `/spec` on a real backlog row. Compare to how you'd have written it. |
+| **C** | `/plan` + `planner` + plan template | Run `/plan` on that spec. Compare to `workshop-tools.md`. |
 | **D** | `/review-plan` + `plan-reviewer` + review template | Point it at an existing finished plan whose outcome you already know. Does it find the things that actually went wrong? |
 | **E** | `/implement` + `implementer` + implementation-report template | First full run through A–E on one real feature. |
 | **F** | `/review-code` + `code-reviewer` | |
-| **G** | `/verify` + `verifier` + `bb-verifier` | |
+| **G** | `/verify` + `verifier` | |
 | **H** | `/document` + `documenter` | |
 | **I** | Orchestration: `/feature 022` runs the chain with the human gates in the right places | Only after A–H have survived contact with two or three real features. |
 
@@ -301,6 +313,15 @@ of it.
    indirection. We'll know after stage B.
 4. **Model choice per stage.** Reviewers arguably want the strongest model and
    the documenter doesn't. Deferred until there's usage to judge from.
+5. **Does a subagent inherit project `CLAUDE.md`?** *(blocking — settle before
+   stage B builds an agent, and certainly before stage D.)* The §6 decision to
+   cut the three `bb-*` skills assumes it does. If it doesn't, stages 2 and 4 —
+   which run in fresh context **by design** — would be reviewing PS4 randomizer
+   plans with no idea what AFR is, and the skills question reopens. Settle it
+   empirically, not by argument: spawn a throwaway agent and ask it what
+   `CLAUDE.md` says about why there is no vanilla game data reachable by the app.
+   It either knows or it doesn't. Note that even a "no" does not restore the
+   skills — the fix would be a pointer line in each agent file, not a copy.
 
 ---
 
@@ -342,11 +363,33 @@ stops before committing, the file is doing its job. If any of that has to be
 re-explained, the file is missing something and should be fixed before stage B
 builds on it.
 
-**Two loose ends surfaced while writing it**, both recorded in `CLAUDE.md` §9:
-`app/` and `docs/` are entirely untracked, so the whole port is uncommitted; and
-the 1.7 GB of game data now under `/data/` needed a `.gitignore` entry before anything in
-that area is ever `git add`ed. Neither is this plan's business to fix, but both
-are now written down where the next session will see them.
+**Two loose ends surfaced while writing it** — `app/` and `docs/` being entirely
+untracked, and `/data/` needing a `.gitignore` entry. **Both are now closed:**
+commit `785cefe` tracked the port, the docs, and `CLAUDE.md`, and `/data/` is
+ignored at the bottom of `.gitignore`.
+
+**Stage A revision — 2026-09-15.** `CLAUDE.md` was audited for bloat against its
+own stated purpose in §5 of this document: *standing facts and rules that apply
+to all work*. Twelve findings, 321 → 301 lines — 60 lines out, 40 rewritten back
+in, so the density improved more than the length dropped. The test applied to
+each candidate was: does it apply to all work, is there a rule attached, and
+would deleting it change what an agent does?
+
+The useful distinction that came out of it, worth reusing: **evidence that makes
+a rule stick** (keep — "hit four separate times" is why the heredoc rule survives
+contact with a confident agent) versus **history with no rule attached** (cut —
+two deleted diagnostic rigs, a directory rename, a tally of past corrections).
+§5 traps and §6 domain orientation were left nearly untouched for that reason.
+
+One finding was not bloat but a live error: §9 asserted the PS4 port was
+uncommitted, five commits after it was committed. A stale fact in an
+always-loaded file gets acted on, which is the strongest argument in this
+document for keeping the inventory in §8 honest.
+
+**Stage A's original test still has not run.** The audit improved the file; it
+did not prove it works. That test is unchanged: a fresh session asked for
+something ordinary should reach for the right build command, check the string
+against the uppercase-only 8x8 font, and stop before committing.
 
 **Next: stage B** — `specs/`, the spec template and index, `/spec`,
-`spec-author`, `grill-me`, and `bb-project-facts`.
+`spec-author`, and `grill-me`. Settle §9 question 5 first.
