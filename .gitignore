@@ -338,3 +338,14 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+# ---------------------------------------------------------------------------
+# Local working data — NEVER commit.
+#
+# /data/ holds ~1.7 GB of Bloodborne game trees: the trusted vanilla baseline,
+# saved randomizer output from past test runs, the downloaded reference-tool
+# release, and hardware logs. None of it is source, none of it is ours to
+# redistribute, and all of it is reproducible from the console or the Nexus
+# page. This rule is the only thing standing between a stray `git add .` and
+# a permanently bloated repository.
+# ---------------------------------------------------------------------------
+/data/
