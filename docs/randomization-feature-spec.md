@@ -65,7 +65,7 @@ list further down.
 
 ---
 
-## 3. Enemy and boss pickers (0 remaining — both done)
+## 3. Enemy and boss pickers (0 remaining — all three shipped)
 
 **Our design, but not new capability.** The reference already has all four
 semantics; what it lacks is a usable front-end. Today you type raw five-character
@@ -83,6 +83,7 @@ and the code chops the string into five-character chunks:
 |---|---|---|---|
 | 9 | Enemies to include | A checklist of every pool creature, **all ticked by default**. Untick a few to keep them out of the run; untick everything but one and every enemy becomes that creature | **DONE** — shipped as the `ENEMIES INCLUDED` drill-in, 82 rows; see `docs/plans/pickers.md` |
 | 10 | Bosses to include | The same for the boss pool. Leave only Ludwig ticked and every boss arena is Ludwig | **DONE** — shipped as the `BOSSES INCLUDED` drill-in, 17 rows; same component as row 9 |
+| 32 | Bypassed enemies | A checklist of every creature that has a randomizable placement, **none ticked by default**. Tick one and it leaves the randomizer entirely: its own placements keep their vanilla identity, and it is never used as a replacement anywhere | **DONE** — shipped as the `ENEMIES SKIPPED` drill-in, 85 rows, same component as rows 9 and 10; hardware-tested 2026-09-19. **Retired row 16.** Two documented exceptions, both deliberate: the six Yahar'gul maidens still change, and with `RANDOMIZE BOSSES` on the boss pool is not filtered. See `docs/features/032-bypassed-enemies/` |
 
 Why this is worth building rather than porting the text box:
 
@@ -113,6 +114,81 @@ Pool weighting turned out to be the interesting discovery: one model is 12.3% of
 all draws and 13 models are half of them. Deliberately left alone here and
 written up as `docs/deferred-ideas.md §2`.
 
+### Row 32 — bypassed enemies, and what it replaces
+
+**This one is new capability, not just a front-end** — the claim at the top of
+this section does not extend to it. `excludeEnemiesBool`
+(`StartFunctions.cs:536-563`) removes the listed models from `enemyData`, the
+**pool**, and nothing else; those models' own placements are still overwritten
+like anything else. The only placement protection the reference has is its
+hard-coded `unusedPlusBossList` and the three strings `bellMaidenBool` appends to
+it. Row 32 makes that list editable.
+
+**One list, both halves — deliberately.** The exclusion list feeds pool
+contribution (`EnemyRandomizer.cpp:375`) and placement overwriting (`:629`), so a
+ticked creature is out of the randomizer entirely. That coupling is exactly what
+makes row 32 reproduce `bellMaidenBool`: tick `CHIME MAIDEN` and `CHIME MAIDEN
+(LIGHT)` and you have row 16, all 54 of its placements (`c1050` 31, `c1051` 23).
+Decoupling the two halves was considered and rejected — with the placement half
+alone, freezing the maidens would still scatter ~98 new ones across the game per
+run, which is not what anyone means by "unchanged".
+
+**85 rows, not 82 — `EnemyPoolTable.h` must not be reused.** Measured against
+`data/vanilla/dvdroot_ps4`: 85 distinct models sit on randomizable placements,
+covering 2,269 of them, but only 82 can be drawn as replacements. The three that
+can be overwritten yet never placed are `c1130` (2 placements, `ThinkParamID` 0),
+`c2121` (8, `ThinkParamID` 1) and `c2561` (9, skipped outright at `:380`).
+Reusing the 82-row table would silently make those three unfreezable. This wants
+its own generated table, its own frozen order, and its own `pool_verify.py table`
+check.
+
+The two tables also report different numbers for the same creature: row 9's
+column is **draw weight**, row 32's is **placements protected**. Huntsman
+(Transformed) is 41 pool entries and 283 placements.
+
+**The default inverts, and so must the fail-safe.** All ticked is the no-op for
+row 9; **none** ticked is the no-op here. `ModelPoolSelection` constructs to
+`EnableAll()` and leaves a wrong-length `Decode()` sitting there — right for a
+pool picker, exactly wrong for this one, where a stale config would freeze the
+whole game and produce a run that changes nothing. The safe default belongs in
+the type rather than baked into it.
+
+**It can starve the pool, and the fix shipped with it — but not as the
+commit-time check this section first proposed.** Row 16 already reached that
+state: with the flag on and only the two `CHIME MAIDEN` rows ticked in
+`ENEMIES INCLUDED`, nothing survived both filters and the run failed after the
+mirror phase, leaving a half-built tree. Row 32 widens that from one
+combination to many.
+
+The developer chose a **non-failing** resolution instead (spec 032 D4): a
+starved run completes, drawing from `ENEMIES INCLUDED` for that run while the
+skipped placements stay frozen, and says so on screen. `NoneEnabled()`'s two
+existing refusals are untouched (D5). Separating that from the *other* cause of
+an empty pool — an unreadable vanilla source, which must still fail — was the
+bulk of the work and shipped as its own milestone.
+
+**Two things that do not generalise, and must be preserved rather than tidied
+away.** `c1055` is one of `bellMaidenBool`'s three strings, matches zero
+placements in any map, and has no model to hang a row on — inert, but it is
+transcription fidelity and a selftest pins it. And the six forced `c1050_011x`
+placements in Yahar'gul bypass both gates unconditionally
+(`RandomizeFunctions.cs:288-320`), so ticking `CHIME MAIDEN` will still leave six
+maidens randomized in m28.
+
+**Config cost, as shipped:** one more positional string, 85 characters, and
+row 16's line retired with its UI row. `defaults.cfg` goes from 478 to **555**
+bytes of its 1024-byte buffer — the estimate of 556 above was one byte out, and
+`pool_verify.py selftest` now pins the real figure. The file is `key=value` with
+unknown keys ignored, so dropping a line costs nothing: only the selection
+*values* are positional.
+
+**Answered — row 16's wizard row went.** Recorded as spec 032 D1 and shipped on
+2026-09-19. Reference parity survives as a configuration rather than as a
+checkbox: ticking the two chime maiden rows reproduces the setting, Yahar'gul
+override included. The saved value was deliberately **not** migrated, so anyone
+who had the flag on loses it silently once and has to re-tick — accepted as the
+cheaper of the two options, and called out in `docs/user-guide.md`.
+
 ---
 
 ## 4. Items and shop (2 remaining)
@@ -124,14 +200,14 @@ written up as `docs/deferred-ideas.md §2`.
 
 ---
 
-## 5. Enemy and boss pool (5 remaining)
+## 5. Enemy and boss pool (4 remaining)
 
 | # | Feature | Reference flag | What it does | Status | Cost |
 |---|---|---|---|---|---|
 | 13 | Bosses Can Replace Enemies | `insertBossesBool` | Lets boss identities into the ordinary enemy pool, so bosses appear as world mobs | **TODO** | Medium. Tangled with `excludeBossesBool` and the oops-all lists; needs a fairness decision |
 | 14 | Include Lesser Bosses in Boss Pool | `lesserBossesBool` | Adds sub-boss / mini-boss placements (e.g. `c5070`, `c4030_0000`) to the boss pool | **TODO** | Low. Three call sites in the boss eligibility checks |
 | 15 | Randomize NPCs | `includeNPCs` | Treats hostile human NPCs (`c0000` models with a real think ID) as randomizable placements | **TODO** | Medium. Own MSB pass, keyed off `UnkT07` against a hostile-NPC list |
-| 16 | Unchanged Bell Maidens | `bellMaidenBool` | Adds `c1050`, `c1051`, `c1055` to the exclusion list so bell maidens stay put | **TODO** | **Trivial.** Three strings appended to the exclusion list |
+| 16 | Unchanged Bell Maidens | `bellMaidenBool` | Added `c1050`, `c1051`, `c1055` to the exclusion list so bell maidens stayed put | **OUT** — shipped and hardware-verified, then **retired by row 32** on 2026-09-19. Its effect survives as two ticks on `ENEMIES SKIPPED`, Yahar'gul exception included. **The saved value was deliberately not migrated** (spec 032 D1): an existing `defaults.cfg` keeps its `unchanged_bell_maidens` line, the key is ignored, and the maidens randomize again until the two rows are ticked | The reference deliberately re-randomizes six Yahar'gul maidens even with the flag on; reproducing that override was the bulk of the work, and it survives row 32 unchanged |
 | 17 | Per-zone boss toggles | `bossHemwick`, `bossCentralYharnam`, … (14 zones) | Chooses which zones' bosses take part, one flag per zone | **TODO** | Low logic, but 14 rows of UI — wants a sub-screen, same as the pickers in §3 |
 
 ---
@@ -216,11 +292,11 @@ belongs at the end, not the front, and it needs its own spec.
 | Ready (code exists, needs a row) | 0 |
 | Enemy / boss pickers (new) | 0 |
 | Items and shop | 1 real + 1 dead |
-| Enemy and boss pool | 5 |
+| Enemy and boss pool | 4 |
 | Difficulty helpers | 4 |
 | Scaling | 2 |
 | Combat and cosmetic params | 8 |
-| **Total actionable** | **20** |
+| **Total actionable** | **19** |
 | Out of scope (chalice) | 3 |
 
 ## 11. Suggested order
@@ -231,10 +307,11 @@ Grouped so each block reuses one piece of machinery and can share a validator:
 2. **`EquipParamWeapon` block** (24, 25) — movesets, in a param already proven.
 3. **`ShopLineupParam` / `NpcParam` block** (11, 27) — shop armour and
    consumables, plus no-team-type.
-4. **MSB pokes block** (16, 18, 19, 20, 21) — bell maidens and all four easy
-   modes, all the same three-field write.
-5. **Pool scope block** (~~9~~, ~~10~~, 13, 14, 17) — the pickers and the pool-shape
-   flags, which all touch the same eligibility code and want the same sub-screen.
+4. **MSB pokes block** (~~16~~, 18, 19, 20, 21) — bell maidens (shipped, then
+   retired into row 32) and all four easy modes, all the same three-field write.
+5. **Pool scope block** (~~9~~, ~~10~~, ~~32~~, 13, 14, 17) — the pickers and
+   the pool-shape flags, which all touch the same eligibility code and want the
+   same sub-screen. All three pickers are done; 13, 14 and 17 remain.
 6. **Scaling** (22, 23).
 7. **Cosmetic params** (26, 28, 29, 30, 31).
 8. **Key items with logic** (12) — own spec, last.

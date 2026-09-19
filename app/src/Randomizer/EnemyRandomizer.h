@@ -23,6 +23,18 @@ struct EnemyRandomizerResult {
     int enemiesRandomized = 0;
     int npcParamsScaled = 0; // see BossParamScaling.h
     int bossesRandomized = 0;
+
+    // Feature 032 D4. The run's selection left the candidate pool empty -
+    // every enemy the run was allowed to draw was also one it was told to
+    // leave alone - so the pool half of that instruction yielded and the run
+    // drew from the selection anyway rather than ending in a Fail after the
+    // mirror phase had already written most of the tree. The placement half
+    // still holds: skipped placements stay frozen. The UI reports this,
+    // because in this one configuration a skipped creature does appear
+    // somewhere new and a silent run would contradict the setting.
+    bool poolFellBack = false;
+    int poolSize = 0; // distinct candidates actually drawn from
+
     int treasuresRandomized = 0;
 
     // Item-data archive diagnostics, populated whenever the archive is
@@ -82,6 +94,21 @@ struct EnemyRandomizerOptions {
     // as arenas are assigned, so a one-model selection means every boss
     // arena gets that model - see BossRandomizer.cpp's DrainPool.
     BossPoolSelection bossesIncluded;
+
+    // ENEMIES SKIPPED - the OPPOSITE of enemiesIncluded in both respects, and
+    // worth reading twice before touching either.
+    //
+    // enemiesIncluded says what may be drawn AS a replacement and does not
+    // protect anything. This says leave the creature out of the run
+    // altogether: it filters the pool AND pins its own placements, so a
+    // ticked creature neither moves nor arrives. Nothing ticked by default,
+    // which is why its selection type carries DefaultSelected = false.
+    //
+    // One exception, spec 032 D4: if everything enemiesIncluded allows is
+    // also ticked here, the pool half yields for that run and the placement
+    // half still holds - see StepBuildPool. Replaces UNCHANGED BELL MAIDENS,
+    // whose saved value was deliberately NOT migrated (D1).
+    EnemySkipSelection enemiesSkipped;
 
     // Cuts the scripted darkness in Mergo's Loft by disarming one instruction
     // in event/common.emevd.dcx - see PermaDarkness.h and

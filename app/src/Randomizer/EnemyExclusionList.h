@@ -67,11 +67,62 @@ inline const std::array<const char*, 103>& EnemyExclusionList() {
 // docs/enemy-exclusion-history.md. Re-add individual entries there with a
 // stated reason rather than restoring the list wholesale.
 
+// UNCHANGED BELL MAIDENS used to append three patterns here - "c1050",
+// "c1051", "c1055" - when its checkbox was on. Feature 032 D1 retired that
+// setting without migrating saved values; its effect is now two ticks on the
+// ENEMIES SKIPPED list (EnemySkipTable.h), which reaches the same two models
+// and 52 more besides. The Yahar'gul override below is untouched and still
+// unconditional, so that exception survives the retirement intact.
+//
+// The third pattern, "c1055", matched ZERO placements in any of the 43
+// .msb.dcx files - it was inert for its whole life. The fact is worth keeping
+// even though the data is gone, so a pool_verify selftest case pins it: if a
+// future data set ever contains c1055, that is noticed rather than silently
+// changing behaviour.
+
+// The six m28 (Yahar'gul) chime-maiden placements the reference tool forces
+// back into randomization, in the reference's own order
+// (RandomizeFunctions.cs:289-320). The reference sets changeData = true for
+// these unconditionally - the block is not guarded by bellMaidenBool - so the
+// override applies whether or not the exclusion above is active, and it
+// overrides BOTH the exclusion test and the zone-chance roll, being the last
+// writer to changeData before the write gate at RandomizeFunctions.cs:322.
+//
+// This is placements only. The reference's pool generation (GenerateEnemyList
+// in MainWindow.xaml.cs) applies noNoList plainly with no such override, so
+// with the exclusion active c1050/c1051 leave the pool INCLUDING for these six
+// - which is what makes "all 12 forced placements differ from vanilla"
+// deterministic rather than probabilistic.
+inline const std::array<const char*, 6>& M28ForcedMaidenList() {
+    static const std::array<const char*, 6> kList = {
+        "c1050_0117", "c1050_0115", "c1050_0119",
+        "c1050_0110", "c1050_0112", "c1050_0114",
+    };
+    return kList;
+}
+
 // Enemy Part.Name substring match, mirroring the reference tool's
 // `Name.Contains(nonoList[j])` check exactly (plain substring test, not
 // exact/prefix equality).
+//
+// This is what the REFERENCE always excludes, and nothing else. What the USER
+// chose to leave alone is a separate test in EnemySkipList.h, applied beside
+// this one at both call sites. Keeping them apart is deliberate: they have
+// different provenance, different lifetimes, and only one of them is allowed
+// to yield when the pool would otherwise be empty.
 inline bool IsExcludedEnemyName(const std::string& name) {
     for (const char* pattern : EnemyExclusionList()) {
+        if (name.find(pattern) != std::string::npos) return true;
+    }
+    return false;
+}
+
+// Substring match against the six forced m28 maidens. Caller is responsible
+// for checking that the map is m28 - the reference's override is inside an
+// `if (currentMap.Contains("m28"))` block, and these names are not scoped to
+// that map by themselves.
+inline bool IsM28ForcedMaidenName(const std::string& name) {
+    for (const char* pattern : M28ForcedMaidenList()) {
         if (name.find(pattern) != std::string::npos) return true;
     }
     return false;

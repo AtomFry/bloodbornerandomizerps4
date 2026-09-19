@@ -88,6 +88,18 @@ struct RandomizerDefaults {
     // The same, for RANDOMIZE BOSSES. Independent of the enemy list.
     BossPoolSelection bossesIncluded;
 
+    // Which enemies RANDOMIZE ENEMIES must leave alone - the opposite of
+    // enemiesIncluded in both directions, and nothing ticked by default. An
+    // absent or wrong-length enemies_skipped line therefore leaves NOTHING
+    // skipped, which is the same run the app made before this existed.
+    //
+    // This replaced UNCHANGED BELL MAIDENS, and the old saved value is
+    // deliberately NOT migrated (feature 032 D1): a defaults.cfg still
+    // carrying unchanged_bell_maidens=1 loads fine with that key ignored, and
+    // the maidens randomize again until the two chime maiden rows are ticked
+    // here. That loss is intended and documented.
+    EnemySkipSelection enemiesSkipped;
+
     // Cuts the scripted darkness in Mergo's Loft - see
     // docs/plans/mergo-darkness.md. Unlike every other field here this is
     // not a randomizer: it is a single fixed edit to event/common.emevd.dcx,

@@ -46,10 +46,12 @@ SCREENS = [
     #   heading_bottom (lowest y+h of anything above the list),
     #   footer_top (highest y of anything below)
     # counts track SetupDefaultsScreen::kItemCount and kSaveDataRowCount, which
-    # grow by one per settings row - 14 since BOSSES INCLUDED.
-    ("Setup Defaults",  300, 90, 870, 4, 14, 180 + glyph_h(5), SCREEN_H - 130),
-    ("Wizard SaveData", 420, 90, 870, 4, 14, 260 + glyph_h(4), SCREEN_H - 130),
-    ("Wizard Confirm",  420, 90, 870, 4, 14, 260 + glyph_h(4), SCREEN_H - 130),
+    # grow by one per settings row. Still 15 after feature 032: D1 removed
+    # UNCHANGED BELL MAIDENS and ENEMIES SKIPPED took its place, so these
+    # three entries are unchanged by that feature.
+    ("Setup Defaults",  300, 90, 870, 4, 15, 180 + glyph_h(5), SCREEN_H - 130),
+    ("Wizard SaveData", 420, 90, 870, 4, 15, 260 + glyph_h(4), SCREEN_H - 130),
+    ("Wizard Confirm",  420, 90, 870, 4, 15, 260 + glyph_h(4), SCREEN_H - 130),
     # Progress: worst case is the finished state (no live line, footer present).
     ("Progress log",    300, 70, 920, 3, 16, 200 + glyph_h(4), SCREEN_H - 130),
     # The enemy picker (UI/EnemyPicker.cpp): 82 rows is far too many at the
@@ -59,6 +61,13 @@ SCREENS = [
     ("Enemy picker",    280, 52, 900, 3, 82, 185 + glyph_h(3), SCREEN_H - 130),
     # Same component, same band, shorter list - 17 bosses over two pages.
     ("Boss picker",     280, 52, 900, 3, 17, 185 + glyph_h(3), SCREEN_H - 130),
+    # ENEMIES SKIPPED, same component again but with an instruction line, so
+    # the list band starts at 332 instead of 280 and fits 11 rows instead of
+    # 12 (spec 032 F13 option B). The thing above the list is no longer the
+    # count line at 185 but the instruction at y=235, and the clearance this
+    # checks - 332 - 46 = 286 against 259 - is the reason option B was chosen
+    # over moving the heading. 85 rows is 8 pages at 11 and at 12 alike.
+    ("Skipped picker",  332, 52, 900, 3, 85, 235 + glyph_h(3), SCREEN_H - 130),
 ]
 
 failures = []

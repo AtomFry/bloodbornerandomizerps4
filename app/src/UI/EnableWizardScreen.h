@@ -53,7 +53,8 @@ public:
     ScreenId RequestedScreen() const override { return requestedScreen_; }
 
 private:
-    enum class Step { SaveData, SelectReplace, EditSeed, EnemyPicker, BossPicker,
+    enum class Step { SaveData, SelectReplace, EditSeed, EnemyPicker, SkipPicker,
+                      BossPicker,
                       Confirm, Progress };
     enum class ReplaceChoice { NewSaveData, LeaveExisting, SelectFromBackup };
 
@@ -61,6 +62,7 @@ private:
     void UpdateSelectReplace(const ButtonEdges& input);
     void UpdateEditSeed(const ButtonEdges& input);
     void UpdateEnemyPicker(const ButtonEdges& input);
+    void UpdateSkipPicker(const ButtonEdges& input);
     void UpdateBossPicker(const ButtonEdges& input);
     void ReturnFromPicker(int row);
     void UpdateConfirm(const ButtonEdges& input);
@@ -70,6 +72,7 @@ private:
     void DrawSelectReplace(Renderer& renderer);
     void DrawEditSeed(Renderer& renderer);
     void DrawEnemyPicker(Renderer& renderer);
+    void DrawSkipPicker(Renderer& renderer);
     void DrawBossPicker(Renderer& renderer);
     void DrawConfirm(Renderer& renderer);
     void DrawProgress(Renderer& renderer);
@@ -116,7 +119,11 @@ private:
     // freely, and NOT written back (only lastSeed is - see StartCommit).
     EnemyPoolSelection enemiesIncluded_;
     BossPoolSelection  bossesIncluded_;
-    // One instance drives both lists - only one can be open at a time.
+    // ENEMIES SKIPPED - the opposite of enemiesIncluded_ and nothing ticked
+    // by default. Replaces unchangedBellMaidens_, whose saved value is
+    // deliberately not migrated (feature 032 D1).
+    EnemySkipSelection enemiesSkipped_;
+    // One instance drives all three lists - only one can be open at a time.
     ModelPicker        picker_;
 
     // Always a concrete value - there is no "random" mode. Left/right on the

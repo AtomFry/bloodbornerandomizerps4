@@ -10,6 +10,21 @@
 // All-enabled is the default and is exactly the behaviour that existed before
 // the pickers, so a config written before they existed, or one whose value is
 // the wrong length, reads as "everything on" and changes nothing.
+//
+// POLARITY IS A TEMPLATE PARAMETER, NOT A CONVENTION. Feature 032's
+// ENEMIES SKIPPED is the mirror image of the two pickers above: a ticked row
+// means "leave this creature alone", so it must construct to NOTHING ticked,
+// an unknown model must read as NOT ticked, and a stale saved value must leave
+// NOTHING ticked. Those are the same three fail-safes as here, pointing the
+// other way.
+//
+// The alternative - reuse ModelPoolSelection<85> and have every call site read
+// "enabled" as "skipped" - was rejected deliberately: it constructs to
+// EVERYTHING skipped, which freezes the whole game, and each of the three
+// fail-safes would then depend on a caller remembering to invert. Making the
+// default a parameter puts the polarity in the type, where it cannot be
+// forgotten. DefaultSelected defaults to true, so ModelPoolSelection<82> and
+// ModelPoolSelection<17> spell and behave exactly as they always have.
 #pragma once
 
 #include <string>
@@ -27,11 +42,17 @@ struct ModelPoolEntry {
 // itself is passed to IsModelEnabled rather than stored, so this stays a
 // plain value type that RandomizerDefaults can copy freely (the Setup
 // Defaults screen keeps a whole working copy of it).
-template <int N>
+//
+// DefaultSelected is the polarity described above: the state a fresh object
+// starts in, and the answer IsModelEnabled gives for a model that is not in
+// the table at all.
+template <int N, bool DefaultSelected = true>
 struct ModelPoolSelection {
     bool enabled[N];
 
-    ModelPoolSelection() { EnableAll(); }
+    ModelPoolSelection() {
+        if (DefaultSelected) EnableAll(); else DisableAll();
+    }
 
     void EnableAll()  { for (int i = 0; i < N; i++) enabled[i] = true; }
     void DisableAll() { for (int i = 0; i < N; i++) enabled[i] = false; }
@@ -54,11 +75,21 @@ struct ModelPoolSelection {
             if (model == table[i].model) return enabled[i];
         }
         // Not in the table at all, which means the table is stale relative to
-        // the pool rules. Silently dropping the model would quietly shrink the
-        // pool, so allow it through - that is the behaviour these features had
-        // before they existed. The *_pool_verify.py table check is what is
-        // supposed to catch this.
-        return true;
+        // the pool rules. Both answers here are "do what this feature did
+        // before it existed", which is why the fallback is the polarity and
+        // not a literal: for an inclusion list that means allowing the model
+        // through rather than quietly shrinking the pool, and for a skip list
+        // it means not freezing a creature the user never saw a row for.
+        // The *_pool_verify.py table check is what is supposed to catch this.
+        return DefaultSelected;
+    }
+
+    // Reads correctly at a skip-list call site. Same test, same table; the
+    // name is the whole point, because "IsModelEnabled" at a site deciding
+    // whether to LEAVE A CREATURE ALONE invites exactly the inversion bug the
+    // polarity parameter exists to prevent.
+    bool IsModelSkipped(const std::string& model, const ModelPoolEntry* table) const {
+        return IsModelEnabled(model, table);
     }
 
     // "0110111..." - one character per table row, positional. Deliberately not

@@ -23,6 +23,10 @@ const int kBackupToggleRow     = 0;
 const int kReplaceRow          = 1;
 const int kSeedRow             = 2;
 const int kRandomizeEnemiesRow = 3;
+// These indices are also the POSITION of each entry in the DrawSaveData and
+// DrawConfirm `items` vectors, which Controls.cpp's DrawMenuList pairs with
+// `selected == i` - an entry added to either list out of order compiles,
+// passes ui_scroll_verify.py and mislabels every row below it.
 const int kRandomizeBossesRow  = 4;
 const int kRandomizeTreasureRow = 5;
 const int kRandomizeWorkshopToolsRow = 6;
@@ -33,10 +37,35 @@ const int kShopWeaponsRow      = 10;
 // Appended rather than grouped with the RANDOMIZE rows: it is not a
 // randomizer, and going last means no existing row index has to move.
 const int kDisableMergoDarknessRow = 11;
-// Drill-in, not a toggle: 82 rows cannot live inline (see EnemyPicker.h).
+// Drill-ins, not toggles: 82 and 85 rows cannot live inline.
+// ENEMIES SKIPPED sits directly after ENEMIES INCLUDED (feature 032 P16) -
+// the two enemy lists differ by one word and must be read side by side.
+// UNCHANGED BELL MAIDENS used to be row 4; D1 retired it, every row below it
+// moved up one, and the new row lands here. Still 15 rows in total, so no
+// geometry moves and ui_scroll_verify.py's 15-row entries stand.
 const int kEnemiesIncludedRow  = 12;
-const int kBossesIncludedRow   = 13;
-const int kSaveDataRowCount    = 14;
+const int kEnemiesSkippedRow   = 13;
+const int kBossesIncludedRow   = 14;
+const int kSaveDataRowCount    = 15;
+
+// The four strings feature 032 puts on the commit screen, named rather than
+// inlined so pool_verify.py selftest case 6 can parse them out of this file
+// and assert what they have to satisfy.
+//
+// Font8x8.cpp's glyph table is 42 characters - A-Z, 0-9, space and ' ( ) - ,
+// and nothing else. There is no lowercase and no ':'. DrawText8x8 advances
+// the cursor for a character it cannot render, so an unrenderable one is a
+// full-width BLANK column, not a missing one: a line can be well inside every
+// width budget and still show the player nothing. Hence the prefix's ' - ',
+// which is already this screen's separator elsewhere.
+//
+// Budget: 71 characters fit a line at scale 3. The prefix takes 29, leaving
+// 42 for whatever EnemyRandomizer's Fail() put in result.error - which is why
+// those two messages are named constants over there as well.
+const char* const kEnemyFailPrefix = "ENEMY RANDOMIZATION FAILED - ";
+const char* const kPoolFellBackLine1 = "ALL SELECTED ENEMIES WERE ALSO SKIPPED";
+const char* const kPoolFellBackLine2 = "SKIPPED ENEMIES WERE USED AS REPLACEMENTS FOR THIS RUN";
+const char* const kNothingRandomizedLine = "NO ENEMIES WERE RANDOMIZED - EVERY ENEMY WAS SKIPPED";
 
 // One unified list: the two fixed actions, then whatever randomizer save
 // backups exist. The backups are stub entries - Save Data backup isn't a
@@ -88,6 +117,7 @@ EnableWizardScreen::EnableWizardScreen(RandomizerDefaults& defaults)
       enableMergoDarkness_(defaults.enableMergoDarkness),
       enemiesIncluded_(defaults.enemiesIncluded),
       bossesIncluded_(defaults.bossesIncluded),
+      enemiesSkipped_(defaults.enemiesSkipped),
       seed_(defaults.lastSeed) {
     // 0 means defaults.cfg has never carried a seed, so roll one immediately -
     // the row should never come up blank or showing a meaningless zero.
@@ -133,6 +163,7 @@ void EnableWizardScreen::Update(const ButtonEdges& input) {
         case Step::SelectReplace: UpdateSelectReplace(input); break;
         case Step::EditSeed:      UpdateEditSeed(input); break;
         case Step::EnemyPicker:   UpdateEnemyPicker(input); break;
+        case Step::SkipPicker:    UpdateSkipPicker(input); break;
         case Step::BossPicker:    UpdateBossPicker(input); break;
         case Step::Confirm:       UpdateConfirm(input); break;
         case Step::Progress:      UpdateProgress(input); break;
@@ -192,8 +223,8 @@ void EnableWizardScreen::UpdateSaveData(const ButtonEdges& input) {
         Log(randomizeShopWeapons_ ? "enable wizard: randomize shop weapons = YES"
                                    : "enable wizard: randomize shop weapons = NO");
     }
-    // No left/right branch for kEnemiesIncludedRow - it is a drill-in, not a
-    // toggle, so there is nothing to cycle through.
+    // No left/right branch for the three drill-in rows - they are not
+    // toggles, so there is nothing to cycle through.
     if ((input.left || input.right) && selected_ == kDisableMergoDarknessRow) {
         enableMergoDarkness_ = !enableMergoDarkness_;
         Log(enableMergoDarkness_ ? "enable wizard: enable mergo darkness = YES"
@@ -255,6 +286,9 @@ void EnableWizardScreen::UpdateSaveData(const ButtonEdges& input) {
             picker_.Reset();
             Log("enable wizard: opening enemy picker");
             GoToStep(Step::EnemyPicker);
+        } else if (selected_ == kEnemiesSkippedRow) {
+            picker_.Reset();
+            GoToStep(Step::SkipPicker);
         } else if (selected_ == kBossesIncludedRow) {
             picker_.Reset();
             Log("enable wizard: opening boss picker");
@@ -344,15 +378,22 @@ void EnableWizardScreen::ReturnFromPicker(int row) {
 }
 
 void EnableWizardScreen::UpdateEnemyPicker(const ButtonEdges& input) {
-    if (picker_.Update(input, EnemyPoolTable().data(), kEnemyPoolModelCount,
-                       enemiesIncluded_.enabled)) {
+    if (picker_.Update(input, kEnemiesIncludedStrings, EnemyPoolTable().data(),
+                       kEnemyPoolModelCount, enemiesIncluded_.enabled)) {
         ReturnFromPicker(kEnemiesIncludedRow);
     }
 }
 
+void EnableWizardScreen::UpdateSkipPicker(const ButtonEdges& input) {
+    if (picker_.Update(input, kEnemiesSkippedStrings, EnemySkipTable().data(),
+                       kEnemySkipModelCount, enemiesSkipped_.enabled)) {
+        ReturnFromPicker(kEnemiesSkippedRow);
+    }
+}
+
 void EnableWizardScreen::UpdateBossPicker(const ButtonEdges& input) {
-    if (picker_.Update(input, BossPoolTable().data(), kBossPoolModelCount,
-                       bossesIncluded_.enabled)) {
+    if (picker_.Update(input, kBossesIncludedStrings, BossPoolTable().data(),
+                       kBossPoolModelCount, bossesIncluded_.enabled)) {
         ReturnFromPicker(kBossesIncludedRow);
     }
 }
@@ -510,6 +551,8 @@ void EnableWizardScreen::StartCommit() {
         // Meaningless without randomizeTreasure (D3), so it deliberately does
         // NOT appear in the big || above - ticking it alone must not start a
         // run that does nothing.
+        // Meaningless without randomizeEnemies for the same reason (D3), so it
+        // is likewise absent from the big || above.
         options.randomizeWorkshopTools = randomizeWorkshopTools_;
         options.randomizeEnemyDrops = randomizeEnemyDrops_;
         options.randomizeStartingWeapons = randomizeStartingWeapons_;
@@ -518,6 +561,7 @@ void EnableWizardScreen::StartCommit() {
         options.enableMergoDarkness = enableMergoDarkness_;
         options.enemiesIncluded = enemiesIncluded_;
         options.bossesIncluded = bossesIncluded_;
+        options.enemiesSkipped = enemiesSkipped_;
         job_.reset(new EnemyRandomizerJob(kVanillaSourceDir, outputDir, seed, options));
     } else {
         FinishCommit();
@@ -531,8 +575,28 @@ void EnableWizardScreen::FinishCommit() {
         const EnemyRandomizerResult& result = job_->Result();
         if (result.success) {
             if (randomizeEnemies_) {
-                AddProgressLine("RANDOMIZED " + std::to_string(result.enemiesRandomized) +
-                                " ENEMIES ACROSS " + std::to_string(result.mapsProcessed) + " MAPS");
+                // D5 again: extend this line rather than add a SKIPPING one.
+                // No parentheses - the 8x8 font has no punctuation glyphs.
+                std::string line = "RANDOMIZED " + std::to_string(result.enemiesRandomized) +
+                                   " ENEMIES ACROSS " + std::to_string(result.mapsProcessed) +
+                                   " MAPS";
+                AddProgressLine(line);
+
+                // Feature 032 D4. Everything the run was allowed to draw was
+                // also something it was told to leave alone, so the pool half
+                // of that instruction yielded. Said in two short lines rather
+                // than one long one, matching the shape StartCommit already
+                // uses for NO ENEMIES SELECTED. Without it the run silently
+                // contradicts the setting.
+                if (result.poolFellBack) {
+                    AddProgressLine(kPoolFellBackLine1);
+                    AddProgressLine(kPoolFellBackLine2);
+                }
+                // The every-row-skipped case: the run succeeded and genuinely
+                // changed nothing, which a bare success line would not say.
+                if (result.enemiesRandomized == 0) {
+                    AddProgressLine(kNothingRandomizedLine);
+                }
             }
             if (randomizeBosses_) {
                 AddProgressLine("RANDOMIZED " + std::to_string(result.bossesRandomized) +
@@ -577,6 +641,13 @@ void EnableWizardScreen::FinishCommit() {
                                 std::to_string(enemiesIncluded_.CountEnabled()) + " OF " +
                                 std::to_string(kEnemyPoolModelCount) + " ENEMIES");
             }
+            // Only when it did something: nothing skipped is the default and
+            // saying so every run is noise, exactly like the pool line above.
+            if (randomizeEnemies_ && enemiesSkipped_.CountEnabled() > 0) {
+                AddProgressLine(std::to_string(enemiesSkipped_.CountEnabled()) + " OF " +
+                                std::to_string(kEnemySkipModelCount) +
+                                " ENEMIES SKIPPED");
+            }
             if (randomizeBosses_ && !bossesIncluded_.AllEnabled()) {
                 AddProgressLine("BOSS POOL LIMITED TO " +
                                 std::to_string(bossesIncluded_.CountEnabled()) + " OF " +
@@ -591,7 +662,7 @@ void EnableWizardScreen::FinishCommit() {
                                 std::to_string(result.itemDataWrittenBytes / 1048576) + " MB");
             }
         } else {
-            AddProgressLine("ENEMY RANDOMIZATION FAILED: " + result.error);
+            AddProgressLine(kEnemyFailPrefix + result.error);
             failed = true;
         }
         job_.reset();
@@ -618,6 +689,7 @@ void EnableWizardScreen::Draw(Renderer& renderer) {
         case Step::SelectReplace: DrawSelectReplace(renderer); break;
         case Step::EditSeed:      DrawEditSeed(renderer); break;
         case Step::EnemyPicker:   DrawEnemyPicker(renderer); break;
+        case Step::SkipPicker:    DrawSkipPicker(renderer); break;
         case Step::BossPicker:    DrawBossPicker(renderer); break;
         case Step::Confirm:       DrawConfirm(renderer); break;
         case Step::Progress:      DrawProgress(renderer); break;
@@ -646,6 +718,11 @@ void EnableWizardScreen::DrawSaveData(Renderer& renderer) {
         std::string("ENEMIES INCLUDED   ") +
             std::to_string(enemiesIncluded_.CountEnabled()) + " OF " +
             std::to_string(kEnemyPoolModelCount),
+        // Position 13, matching kEnemiesSkippedRow. DrawSaveData's and
+        // DrawConfirm's lists must stay identical in shape.
+        std::string("ENEMIES SKIPPED   ") +
+            std::to_string(enemiesSkipped_.CountEnabled()) + " OF " +
+            std::to_string(kEnemySkipModelCount),
         std::string("BOSSES INCLUDED   ") +
             std::to_string(bossesIncluded_.CountEnabled()) + " OF " +
             std::to_string(kBossPoolModelCount),
@@ -699,12 +776,17 @@ void EnableWizardScreen::DrawEditSeed(Renderer& renderer) {
 }
 
 void EnableWizardScreen::DrawEnemyPicker(Renderer& renderer) {
-    picker_.Draw(renderer, "ENEMIES INCLUDED", EnemyPoolTable().data(),
+    picker_.Draw(renderer, kEnemiesIncludedStrings, EnemyPoolTable().data(),
                  kEnemyPoolModelCount, enemiesIncluded_.enabled);
 }
 
+void EnableWizardScreen::DrawSkipPicker(Renderer& renderer) {
+    picker_.Draw(renderer, kEnemiesSkippedStrings, EnemySkipTable().data(),
+                 kEnemySkipModelCount, enemiesSkipped_.enabled);
+}
+
 void EnableWizardScreen::DrawBossPicker(Renderer& renderer) {
-    picker_.Draw(renderer, "BOSSES INCLUDED", BossPoolTable().data(),
+    picker_.Draw(renderer, kBossesIncludedStrings, BossPoolTable().data(),
                  kBossPoolModelCount, bossesIncluded_.enabled);
 }
 
@@ -730,6 +812,11 @@ void EnableWizardScreen::DrawConfirm(Renderer& renderer) {
         std::string("ENEMIES INCLUDED   ") +
             std::to_string(enemiesIncluded_.CountEnabled()) + " OF " +
             std::to_string(kEnemyPoolModelCount),
+        // Position 13, matching kEnemiesSkippedRow. DrawSaveData's and
+        // DrawConfirm's lists must stay identical in shape.
+        std::string("ENEMIES SKIPPED   ") +
+            std::to_string(enemiesSkipped_.CountEnabled()) + " OF " +
+            std::to_string(kEnemySkipModelCount),
         std::string("BOSSES INCLUDED   ") +
             std::to_string(bossesIncluded_.CountEnabled()) + " OF " +
             std::to_string(kBossPoolModelCount),

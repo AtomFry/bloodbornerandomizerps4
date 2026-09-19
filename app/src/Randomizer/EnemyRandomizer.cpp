@@ -18,9 +18,26 @@
 //    (StartFunctions.cs), cross-checked against the actual file listing in
 //    the reference install's dvdroot_ps4/map/mapstudio/.
 //  - The m28-specific "re-include these 6 c1050_* instances" override in
-//    the reference Randomize() is skipped: it only matters when
-//    bellMaidenBool has added "c1050"/"c1051"/"c1055" to the exclusion
-//    list, and bellMaidenBool isn't a setting we expose (defaults false).
+//    the reference Randomize() IS reproduced, and like the reference's it is
+//    unconditional. Those six Yahar'gul placements bypass the fixed exclusion
+//    test, the user's ENEMIES SKIPPED list and the zone-chance roll alike, so
+//    ticking the chime maiden rows still leaves those twelve placements free
+//    to change. See EnemyExclusionList.h's M28ForcedMaidenList() and
+//    StepWriteMap below.
+//  - ENEMIES SKIPPED (feature 032) is the port's own setting, not the
+//    reference's: the reference has no per-creature "leave this one alone"
+//    list. It replaces the reference's bellMaidenBool, which this port shipped
+//    as UNCHANGED BELL MAIDENS and then retired - that checkbox's two live
+//    patterns are now two of the 85 rows. See EnemySkipList.h.
+//  - A selection that leaves nothing to draw no longer ends the run. When
+//    every enemy the pool is allowed to contain is also one the run was told
+//    to leave alone, the POOL half of that instruction yields for that run and
+//    the pool is rebuilt without it; the PLACEMENT half still holds, so the
+//    skipped placements stay frozen. That is feature 032 D4, and it exists
+//    because the old Fail fired after StepMirror had already copied all six
+//    folders - see StepBuildPool. An unusable VanillaSource still fails, with
+//    its own message, which is the whole reason the two causes had to be
+//    separated before this could change.
 //  - The reference tool's per-map `cc` flag - which, once ANY enemy in a
 //    map matches the exclusion list, forces every later enemy in that same
 //    map to skip its zone-chance roll and randomize unconditionally for the
@@ -52,6 +69,7 @@
 #include "BossParamScaling.h"
 #include "BossRandomizer.h"
 #include "EnemyExclusionList.h"
+#include "EnemySkipList.h"
 #include "TreasureRandomizer.h"
 
 #include "../Param/ParamBnd.h"
@@ -190,6 +208,22 @@ const std::array<const char*, 6> kMirrorFolders = {{
     "chr", "event", "map", "param", "script", "sfx"
 }};
 
+// The two messages StepBuildPool can fail with. Both reach the TV verbatim,
+// behind EnableWizardScreen's "ENEMY RANDOMIZATION FAILED - " prefix, and
+// Font8x8.cpp's glyph table has no lowercase and no ':' - an unrenderable
+// character draws as a full-width BLANK column rather than as nothing, so a
+// lowercase message satisfies every width budget and still shows the player an
+// empty line. Both are therefore written inside the font's 42-character set,
+// and inside the 42 characters the 29-character prefix leaves on a
+// 71-character line. pool_verify.py selftest case 6 parses these two
+// definitions and asserts both properties; do not inline the strings.
+//
+// The cost is that the text log reads "enemy randomizer: VANILLA SOURCE ..."
+// rather than all-lowercase. See plan 032 section 3.4 (P18) for why the case
+// is fixed here rather than at the UI.
+const char* const kFailNoMapsRead = "VANILLA SOURCE UNREADABLE - NO MAPS FOUND";
+const char* const kFailNoCandidates = "NO ENEMIES FOUND IN THE VANILLA MAPS";
+
 std::string Upper(const std::string& s) {
     std::string out = s;
     for (char& c : out) c = (char)toupper((unsigned char)c);
@@ -217,6 +251,9 @@ struct EnemyRandomizerJob::State {
           const EnemyRandomizerOptions& opts)
         : vanillaDvdrootDir(vanillaDir), outputDvdrootDir(outputDir), rng(seed), options(opts) {
         maps.reserve(kBaseMaps.size());
+        // Once per run rather than once per placement: the ticked rows never
+        // change mid-run, and the write loop asks this question ~2,900 times.
+        skipPatterns = BuildSkipPatterns(options.enemiesSkipped);
     }
 
     // Boss phases address maps by name; the write loop addresses them by index.
@@ -232,6 +269,15 @@ struct EnemyRandomizerJob::State {
         return d(rng);
     }
 
+    // `pool` is guaranteed non-empty here, by StepBuildPool rather than by a
+    // guard on this line: it either failed the run, or chose a vector it had
+    // already checked was non-empty. The one path that reaches StepWriteMap
+    // with an empty pool is "enemies are off", and that loop's whole body is
+    // gated on options.randomizeEnemies, so it never gets this far. That
+    // matters because RandInt(0, -1) is uniform_int_distribution(0, -1), whose
+    // precondition is a <= b: it is undefined behaviour, and the garbage it
+    // returns then indexes an empty vector. Do not make an empty pool
+    // reachable here.
     PoolEntry DrawCandidate() {
         PoolEntry e;
         ParsePoolString(pool[(size_t)RandInt(0, (int)pool.size() - 1)], e);
@@ -277,6 +323,20 @@ struct EnemyRandomizerJob::State {
 
     std::vector<LoadedMap> maps;
     std::vector<std::string> pool;
+
+    // The same pool built WITHOUT the user's own skip choice, i.e. ignoring
+    // ENEMIES SKIPPED. The reference tool's fixed
+    // exclusion list and ENEMIES INCLUDED still apply to it; only the "leave
+    // this creature alone" instruction does not. StepBuildPool draws from it
+    // when `pool` comes out empty, which is feature 032 D4, and frees it
+    // either way. Built during the read phase because contribution-time
+    // filtering and after-the-fact filtering are different rules once the
+    // per-map NPC-id dedupe is in play - see StepReadMap.
+    std::vector<std::string> poolIgnoringSkips;
+
+    // ENEMIES SKIPPED, flattened to the ticked rows' model ids. Empty when
+    // nothing is ticked, which is the default.
+    std::vector<std::string> skipPatterns;
 
     // Does the pool contain anything m24_02 / m35 are allowed to use? Computed
     // once in StepBuildPool; see the reroll loops in StepWriteMaps for why.
@@ -361,7 +421,16 @@ void EnemyRandomizerJob::State::StepReadMap() {
             }
         }
 
+        // Two pools, contributed to in one pass. They differ in exactly one
+        // rule - whether the user's own skip choice applies - and each needs
+        // its OWN dedupe set: contributedNpcIds is what makes a placement's
+        // eligibility depend on which earlier placements contributed, so
+        // sharing one set would make poolIgnoringSkips something other than
+        // "the pool this run would have had without the skip". Building it
+        // consumes no randomness, so a run that skips nothing is byte-for-byte
+        // the run it was before this existed.
         std::set<int32_t> contributedNpcIds;
+        std::set<int32_t> contributedNpcIdsIgnoringSkips;
         for (auto& partBlob : lm.msbb.parts.entries) {
             if (part_fields::GetType(partBlob) != PartsType::kEnemy) continue;
 
@@ -370,10 +439,14 @@ void EnemyRandomizerJob::State::StepReadMap() {
             int32_t npc = part_fields::GetEnemyNPCParamID(partBlob);
             int32_t talk = part_fields::GetEnemyTalkID(partBlob);
 
+            // The reference tool's fixed list is not the user's choice, so
+            // neither pool ignores it. ENEMIES SKIPPED is, and is what
+            // separates the two.
             if (IsExcludedEnemyName(name)) continue;
+            const bool skipped = IsSkippedName(name, skipPatterns);
+
             if (think <= 1) continue;
             if (npc <= 1) continue;
-            if (contributedNpcIds.count(npc)) continue;
             if (name.find("c1110_0000") != std::string::npos && talk != 111010) continue;
             if (name.find("c2561") != std::string::npos) continue;
 
@@ -383,11 +456,24 @@ void EnemyRandomizerJob::State::StepReadMap() {
             // The enemy picker. Filtering here rather than at draw time is
             // what makes the feature one line: everything downstream - the
             // shuffle, the dedupe, the size gate, the per-zone chance - already
-            // works against whatever the pool happens to contain.
+            // works against whatever the pool happens to contain. It is not a
+            // skip, so it applies to both pools.
             if (!options.enemiesIncluded.IsModelEnabled(modelName, EnemyPoolTable().data())) continue;
 
-            contributedNpcIds.insert(npc);
-            pool.push_back(std::to_string(npc) + "*" + std::to_string(think) + "*" + modelName);
+            // The dedupe test used to sit above these rules. Moving it below
+            // them changes nothing - every rule between is a pure predicate on
+            // the placement, and a rejected placement never reached the insert
+            // either way - and it is what lets one pass feed two pools.
+            const std::string entry =
+                std::to_string(npc) + "*" + std::to_string(think) + "*" + modelName;
+            if (!skipped && !contributedNpcIds.count(npc)) {
+                contributedNpcIds.insert(npc);
+                pool.push_back(entry);
+            }
+            if (!contributedNpcIdsIgnoringSkips.count(npc)) {
+                contributedNpcIdsIgnoringSkips.insert(npc);
+                poolIgnoringSkips.push_back(entry);
+            }
         }
 
         maps.push_back(std::move(lm));
@@ -395,22 +481,71 @@ void EnemyRandomizerJob::State::StepReadMap() {
 }
 
 void EnemyRandomizerJob::State::StepBuildPool() {
-    // Only fatal when enemies are actually being randomized - a bosses-only run
-    // never touches this pool.
-    // Load-bearing guard, not defensive tidiness: DrawCandidate() indexes
-    // pool[RandInt(0, size-1)], and on an empty pool that is RandInt(0, -1) ->
-    // uniform_int_distribution(0, -1), whose precondition is a <= b. That is
-    // undefined behaviour, and the garbage it returns then indexes an empty
-    // vector. Do not relax this. The enemy picker made an empty pool reachable
-    // from the UI, so the wizard refuses to commit an empty selection too -
-    // see docs/plans/pickers.md D12 - but this stays as the backstop.
-    if (pool.empty() && options.randomizeEnemies) {
-        Fail("enemy pool is empty - every enemy is excluded, or nothing was eligible");
-        return;
+    // An empty pool used to have one message and one outcome: end the run.
+    // Three different things could cause it, only one of which is a failure,
+    // and the one that is not is the one a player can actually reach. Feature
+    // 032 D4 separates them. In order:
+    //
+    //   1. no map could be read at all       -> FAIL, naming the source
+    //   2. maps read, nothing eligible at all -> FAIL, the residual bad tree
+    //   3. everything selected was skipped    -> fall back, D4
+    //   4. pool empty and enemies are off     -> the log line this always had
+    //   5. otherwise                          -> today's pool, untouched
+    //
+    // Case 3 is the only one that changes a run's outcome rather than its
+    // error message. Before this it ended the run in the single Fail below -
+    // AFTER StepMirror had copied all six folders, so the player was left with
+    // a half-built output tree and an error naming a cause they could not act
+    // on. Confirmed on hardware:
+    // data/runs/Error Log - Chime Maidens/live.log:26394.
+    //
+    // Cases 1 and 2 are why D4 could not simply delete the Fail, and why
+    // feature 016 deferred the same change on 2026-09-16: this was also the
+    // only hard error the enemy path had for an unusable VanillaSource, so
+    // removing it unseparated would report a broken installation as a
+    // successful run that randomized nothing. The two messages are
+    // deliberately different strings.
+    //
+    // The UB hazard the old Fail guarded is closed by construction, not
+    // relaxed - see DrawCandidate(). Cases 1 and 2 return before any draw;
+    // cases 3 and 5 both select a vector already known to be non-empty; case 4
+    // is the only path that reaches StepWriteMap with an empty pool, and that
+    // loop's whole body is gated on options.randomizeEnemies.
+    //
+    // Every case tests options.randomizeEnemies explicitly, exactly as the
+    // single Fail it replaces did. That gate is load-bearing rather than tidy:
+    // StartCommit's empty-selection refusal only fires when enemies are on, so
+    // a bosses-only run committed with an empty saved ENEMIES INCLUDED reaches
+    // here with BOTH vectors empty, and without the gate it would report a
+    // fallback on a run that never intended to randomize an enemy.
+    if (options.randomizeEnemies) {
+        if (maps.empty()) {
+            Fail(kFailNoMapsRead);
+            return;
+        }
+        if (poolIgnoringSkips.empty()) {
+            Fail(kFailNoCandidates);
+            return;
+        }
+        if (pool.empty()) {
+            // D4. The POOL half of the skip instruction yields for this run;
+            // the PLACEMENT half does not, so the skipped placements still
+            // stay frozen in StepWriteMap. This is the one configuration in
+            // which a skipped creature appears somewhere new, which is why
+            // the UI is told about it.
+            pool = poolIgnoringSkips;
+            result.poolFellBack = true;
+            Log("enemy randomizer: every selected enemy was also skipped - "
+                "falling back to the selection for this run");
+        }
     }
-    if (pool.empty()) {
+    if (pool.empty() && !options.randomizeEnemies) {
         Log("enemy randomizer: enemy pool empty and enemies disabled - skipping enemy shuffle");
     }
+
+    // Nothing below reads it, and it is the larger of the two whenever they
+    // differ.
+    std::vector<std::string>().swap(poolIgnoringSkips);
 
     // Fisher-Yates shuffle, then dedupe exact-string duplicates preserving
     // first-occurrence order - mirrors the reference tool's "pick random
@@ -438,6 +573,7 @@ void EnemyRandomizerJob::State::StepBuildPool() {
         if (!ContainsAny(e.model, kBannedM35)) poolHasUnbannedM35 = true;
     }
 
+    result.poolSize = (int)pool.size();
     Log(("enemy randomizer: pool built - " + std::to_string(pool.size()) +
          " distinct candidates from " + std::to_string(maps.size()) + " maps").c_str());
     if (!poolHasUnbannedM2402 || !poolHasUnbannedM35) {
@@ -598,6 +734,7 @@ void EnemyRandomizerJob::State::StepWriteMap() {
 
         bool isM2402 = lm.name.find("m24_02") != std::string::npos;
         bool isM35   = lm.name.find("m35") != std::string::npos;
+        bool isM28   = lm.name.find("m28") != std::string::npos;
 
         // Enemy randomization is independent of the boss pass - with it off the
         // map still gets its model merge, boss assignment, scaling and write.
@@ -608,10 +745,26 @@ void EnemyRandomizerJob::State::StepWriteMap() {
             if (part_fields::GetType(partBlob) != PartsType::kEnemy) continue;
 
             std::string name = part_fields::GetName(partBlob);
-            if (IsExcludedEnemyName(name)) continue;
 
+            // The reference's m28 override: these six placements are forced
+            // back into randomization past every gate below - the fixed
+            // exclusion list, the user's ENEMIES SKIPPED list, and the roll.
+            bool forced = isM28 && IsM28ForcedMaidenName(name);
+
+            if (!forced && IsExcludedEnemyName(name)) continue;
+            // Inside the same !forced, so the m28 Yahar'gul override still
+            // wins - the reference applies it unconditionally and feature 032
+            // F5 requires that to keep holding. Before the roll, so a skipped
+            // placement draws no randomness.
+            if (!forced && IsSkippedName(name, skipPatterns)) continue;
+
+            // The roll is drawn for every non-excluded placement, forced ones
+            // included, and only then ignored. Skipping the draw for forced
+            // placements would remove 12 RandInt calls from the stream and
+            // reshuffle m28 and every map after it on every seed - see
+            // docs/plans/016-unchanged-bell-maidens/plan.md A3.
             int roll = RandInt(0, 100);
-            if (roll >= lm.zoneChance) continue;
+            if (!forced && roll >= lm.zoneChance) continue;
 
             std::string originalModelName =
                 ModelNameAtIndex(lm.msbb.models, part_fields::GetModelIndex(partBlob));

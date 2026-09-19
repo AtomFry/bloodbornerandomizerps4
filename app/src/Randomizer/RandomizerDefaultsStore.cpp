@@ -70,6 +70,12 @@ RandomizerDefaults LoadRandomizerDefaults() {
                 // Wrong length -> left at the all-enabled default. See
                 // EnemyPoolSelection::Decode.
                 defaults.enemiesIncluded.Decode(value);
+            } else if (strcmp(key, "enemies_skipped") == 0) {
+                // Same guard, opposite fail-safe: a wrong-length or
+                // absent value leaves NOTHING skipped, because that is
+                // this type's constructed state - see
+                // ModelPoolSelection's DefaultSelected.
+                defaults.enemiesSkipped.Decode(value);
             } else if (strcmp(key, "enable_mergo_darkness") == 0) {
                 defaults.enableMergoDarkness = (atoi(value) != 0);
             } else if (strcmp(key, "last_seed") == 0) {
@@ -85,9 +91,15 @@ RandomizerDefaults LoadRandomizerDefaults() {
 void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
     sceKernelMkdir("/data/bbrandomizer", 0777);
 
-    // 1024, not 512: the enemies_included row alone is ~99 bytes and the
-    // feature spec has ~20 more settings queued. The clamp below is
-    // still the real guard; this just keeps the margin comfortable.
+    // 1024, not 512: enemies_included is ~99 bytes, enemies_skipped ~102, and
+    // the feature spec has ~20 more settings queued. Worst case today is 555
+    // bytes, pinned by a pool_verify selftest case. The clamp below is still
+    // the real guard; this just keeps the margin comfortable.
+    //
+    // Dropping unchanged_bell_maidens here is genuinely free: the loader above
+    // is key=value with unknown keys ignored, so an existing file that still
+    // carries that line loads fine and every other setting keeps its meaning.
+    // Only the SELECTION VALUES are positional, not the lines themselves.
     char buf[1024];
     int len = snprintf(buf, sizeof(buf),
                         "backup_existing_save=%d\nbloodborne_title_id=%s\nreplace_save_default_is_new=%d\n"
@@ -98,6 +110,7 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
                         "randomize_shop_weapons=%d\nenable_mergo_darkness=%d\n"
                         "bosses_included=%s\n"
                         "enemies_included=%s\n"
+                        "enemies_skipped=%s\n"
                         "last_seed=%u\n",
                         defaults.backupExistingSaveData ? 1 : 0,
                         defaults.bloodborneTitleId.c_str(),
@@ -113,6 +126,7 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
                         defaults.enableMergoDarkness ? 1 : 0,
                         defaults.bossesIncluded.Encode().c_str(),
                         defaults.enemiesIncluded.Encode().c_str(),
+                        defaults.enemiesSkipped.Encode().c_str(),
                         (unsigned)defaults.lastSeed);
     // snprintf returns the length it WOULD have written, which can exceed
     // sizeof(buf) if the format ever outgrows it - clamp so a future setting

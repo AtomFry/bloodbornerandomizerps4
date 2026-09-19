@@ -48,11 +48,18 @@ list — and those are opened with **X**.
 | [Randomize shop weapons](#randomize-shop-weapons) | No | Both |
 | [Enable Mergo darkness](#enable-mergo-darkness) | No | Both |
 | [Enemies included](#enemies-included) | All 82 | Both |
+| [Enemies skipped](#enemies-skipped) | None of 85 | Both |
 | [Bosses included](#bosses-included) | All 17 | Both |
 
-Listed in screen order. Every randomizer setting defaults to **No** and the enemy
-list starts with everything included, so a fresh install with nothing turned on
-produces the normal game.
+Listed in screen order. Every randomizer setting defaults to **No**, the enemy
+list starts with everything included and the skip list starts empty, so a fresh
+install with nothing turned on produces the normal game.
+
+**`UNCHANGED BELL MAIDENS` is gone.** It did one thing — freeze the chime
+maidens — and [Enemies skipped](#enemies-skipped) does that and 83 more
+creatures besides. If you had it turned on, **it will not carry over**: tick
+`C1050 CHIME MAIDEN` and `C1051 CHIME MAIDEN (LIGHT)` in the new list to get
+the same run back. Nothing else in your saved settings is affected.
 
 ---
 
@@ -169,6 +176,88 @@ Two things worth knowing:
 
 If you turn everything off while `RANDOMIZE ENEMIES` is on, the commit will
 refuse to start and tell you to select at least one. Nothing is written.
+
+### Enemies skipped
+
+A list of all **85 creatures that have a placement the randomizer could
+overwrite**. Nothing is ticked by default, which is the normal behaviour.
+
+**This is the opposite of [Enemies included](#enemies-included) in both
+directions, and the two lists sit next to each other for that reason.** Tick a
+creature here and it leaves the run entirely:
+
+- its own placements keep their vanilla identity — they are not replaced;
+- it is never used as a replacement anywhere else.
+
+Tick `C1170 CARRION CROW` and every crow in Yharnam stays a crow, and nothing
+else in the game turns into one. Compare that with unticking the crow in
+`ENEMIES INCLUDED`, which only stops new crows appearing and leaves the
+existing ones to be replaced like anything else.
+
+The screen says so on the line under the count: `SELECT ENEMIES THAT WILL NOT
+BE RANDOMIZED`.
+
+| In the picker | |
+|---|---|
+| Up / Down | Move one row |
+| L1 / R1 | Page back / forward — 8 pages of 11 |
+| X | Skip the highlighted creature, or stop skipping it |
+| Square | Skip everything |
+| Triangle | Skip nothing |
+| O | Back |
+
+#### Why 85 and not 82
+
+The two lists count different things. `ENEMIES INCLUDED` lists what can be used
+as a **replacement**; this lists what can be **replaced**. Three creatures can
+be replaced but never used as replacements, so they appear only here:
+`C1130 OEDON CHAPEL DWELLER`, `C2121 SHADOW OF YHARNAM (SNAKE)` and `C2561`.
+The chapel dweller is the clearest example — a non-combat NPC the randomizer
+would otherwise overwrite, and until this list existed there was no way to stop
+it.
+
+`C2561` has no name because the game data has none for it. It is shown by its
+model id rather than given an invented label.
+
+#### Four things worth knowing
+
+- **Six Yahar'gul chime maidens still change, even with both maiden rows
+  ticked.** The original tool deliberately re-randomizes those six regardless
+  of any setting, and this port matches it. Yahar'gul is the exception, not a
+  failure.
+- **Some creatures also have placements the randomizer never touches anyway.**
+  Six of the 85 — Brainsucker, Blood Starved Beast, Witch of Hemwick, Shadow of
+  Yharnam, Small Celestial Emissary, Father Gascoigne — own both kinds. Ticking
+  them protects the ordinary ones; the others were already protected.
+- **With `RANDOMIZE BOSSES` on, this list does not filter the boss pool.**
+  Blood Starved Beast and Father Gascoigne exist in both, so ticking them here
+  still leaves a boss arena able to become one. Their ordinary placements
+  freeze as promised. Turn bosses off if you want a creature gone completely.
+- **A skipped creature changes the seed's meaning.** Skipped placements draw no
+  randomness, so the same seed with a different skip list is a different world.
+  That is intended; it is not a reason to expect two runs to match.
+
+#### If you skip everything you selected
+
+Tick every creature that `ENEMIES INCLUDED` allows and there is nothing left to
+place. The run does **not** fail — it finishes, drawing from your selection for
+that one run, and tells you so:
+
+```
+ALL SELECTED ENEMIES WERE ALSO SKIPPED
+SKIPPED ENEMIES WERE USED AS REPLACEMENTS FOR THIS RUN
+```
+
+This is the one case where a skipped creature does appear somewhere new. The
+frozen half still holds: the original placements stay put.
+
+Skip **all 85** and nothing is randomized at all. That run also completes, and
+says `NO ENEMIES WERE RANDOMIZED - EVERY ENEMY WAS SKIPPED` rather than
+reporting a plain success.
+
+Expect either of those runs to take noticeably longer in the write phase. That
+is the randomizer exhausting its retry loop on placements it cannot fill well,
+not a hang.
 
 ### Randomize bosses
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generate the pickers' baked tables: EnemyPoolTable.h and BossPoolTable.h.
+"""Generate the baked model tables: EnemyPoolTable.h, BossPoolTable.h,
+EnemySkipTable.h.
 
 The PS4 app must not parse Characters.json or rebuild a pool just to draw a
 menu, so each list is baked exactly like ModelSizeTable.h and NpcScalingTable.h.
@@ -12,7 +13,9 @@ catch a changed order. If the order ever has to change, change the config key
 name at the same time.
 
 Usage:
-    python gen_pool_table.py enemy|boss|both <vanilla_dvdroot> [--check]
+    python gen_pool_table.py enemy|boss|skip|both <vanilla_dvdroot> [--check]
+
+`both` stays enemy+boss, so every existing invocation means what it did.
 
 --check exits non-zero if the file on disk differs from what would be
 generated, without writing anything - for the *_pool_verify.py table checks.
@@ -22,7 +25,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from enemy_lookup import engine_pool, engine_pool_models  # noqa: E402
+from enemy_lookup import (engine_pool, engine_pool_models,  # noqa: E402
+                          overwritable_models, overwritable_counts)
 from boss_verify import build_pool, load_maps, boss_pool_models  # noqa: E402
 from names import model_name  # noqa: E402
 
@@ -34,7 +38,27 @@ SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "Ran
 RENDERABLE = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '()-,")
 
 
+# Names this project owns, consulted BEFORE Characters.json. Each entry needs
+# a reason a reader can check, because overriding the community data set is
+# exactly the kind of edit that looks like a mistake later.
+#
+#   c1130 - Characters.json calls it "Labyrinth Ritekeeper", but
+#           docs/enemy-exclusion-history.md:118-122 identifies c1130_0000 - the
+#           only retail-loaded one of its two placements - as the Oedon Chapel
+#           dweller: ThinkParamID 0, no combat AI, DemonsFanatic in the
+#           external data sheet. Settled by the developer as spec 032 D6.
+#
+# Applied for every Kind, which is safe and worth stating: c1130 occurs zero
+# times in EnemyPoolTable.h and zero times in BossPoolTable.h, so those two
+# files cannot change because of anything in here.
+NAME_OVERRIDES = {
+    "c1130": ("OEDON CHAPEL DWELLER", "spec 032 D6 - see NAME_OVERRIDES"),
+}
+
+
 def display_name(model):
+    if model in NAME_OVERRIDES:
+        return NAME_OVERRIDES[model][0]
     name = (model_name(model) or model).upper()
     bad = sorted({c for c in name if c not in RENDERABLE})
     if bad:
@@ -72,6 +96,13 @@ def boss_weights(root):
     return w
 
 
+def skip_weights(root):
+    """NOT a draw weight - nothing ever draws from the skip table. This is how
+    many placements a ticked row protects, which is the only number that means
+    anything for a list you cannot be replaced FROM."""
+    return overwritable_counts(root)
+
+
 KINDS = {
     "enemy": Kind(
         "enemy", "EnemyPoolTable.h", "EnemyPoolTable", "kEnemyPoolModelCount",
@@ -89,6 +120,23 @@ KINDS = {
          "//",
          "// Note this pool is DRAINED and refilled as bosses are assigned, so a",
          "// selection of one model means every boss arena gets that model."]),
+    "skip": Kind(
+        "skip", "EnemySkipTable.h", "EnemySkipTable", "kEnemySkipModelCount",
+        overwritable_models, skip_weights,
+        ["// Every model the ENEMY randomizer is allowed to OVERWRITE - the other",
+         "// side of the pool. A row ticked in ENEMIES SKIPPED leaves that creature",
+         "// out of the run in both directions: its own placements are never",
+         "// rewritten, and it never arrives as a replacement. See feature 032.",
+         "//",
+         "// This is NOT EnemyPoolTable.h with extra rows and must never be derived",
+         "// from it. The two answer different questions - what can be REPLACED",
+         "// versus what can REPLACE - and they carry different per-row numbers.",
+         "// The 82 pool models are a strict subset of these 85; the three extras",
+         "// are c1130, c2121 (both ThinkParamID <= 1, so neither can enter the",
+         "// pool) and c2561 (dropped by an explicit name test in the pool loop).",
+         "//",
+         "// `poolEntries` therefore counts PLACEMENTS PROTECTED, not draw weight:",
+         "// nothing draws from this table. The column sums to 2269."]),
 }
 
 
@@ -111,10 +159,11 @@ def build(kind, root):
     L.append("// Names are from tools/data/Characters.json (Smithbox, MIT) and are the")
     L.append("// community's labels, not From Software's - treated the same way every")
     L.append("// other name in this project is: useful, not authoritative.")
-    L.append("//")
-    L.append("// `poolEntries` is how many distinct stat/AI variants that model")
-    L.append("// contributes, i.e. its relative draw weight. Unused by the app today;")
-    L.append("// baked because it is free here and docs/deferred-ideas.md §2 needs it.")
+    if kind.key != "skip":
+        L.append("//")
+        L.append("// `poolEntries` is how many distinct stat/AI variants that model")
+        L.append("// contributes, i.e. its relative draw weight. Unused by the app today;")
+        L.append("// baked because it is free here and docs/deferred-ideas.md §2 needs it.")
     L.append("#pragma once")
     L.append("")
     L.append("#include <array>")
@@ -128,7 +177,10 @@ def build(kind, root):
     L.append("inline const std::array<ModelPoolEntry, %d>& %s() {" % (len(rows), kind.func))
     L.append("    static const std::array<ModelPoolEntry, %d> kTable = {{" % len(rows))
     for mdl, name, w in rows:
-        L.append('        { "%s", %-*s %3d },' % (mdl, width + 3, '"%s",' % name, w))
+        row = '        { "%s", %-*s %3d },' % (mdl, width + 3, '"%s",' % name, w)
+        if mdl in NAME_OVERRIDES:
+            row += "  // name is OURS, not Characters.json: %s" % NAME_OVERRIDES[mdl][1]
+        L.append(row)
     L.append("    }};")
     L.append("    return kTable;")
     L.append("}")
@@ -163,9 +215,11 @@ def run(kind, root, check):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     check = "--check" in sys.argv[1:]
-    if len(args) < 2 or args[0] not in ("enemy", "boss", "both"):
+    if len(args) < 2 or args[0] not in ("enemy", "boss", "skip", "both"):
         print(__doc__)
         return 2
+    # `both` stays enemy+boss on purpose: it is what every existing script and
+    # doc means by it, and silently widening it would regenerate a third file.
     kinds = ["enemy", "boss"] if args[0] == "both" else [args[0]]
     rc = 0
     for k in kinds:

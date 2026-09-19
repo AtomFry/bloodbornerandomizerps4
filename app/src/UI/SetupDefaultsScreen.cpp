@@ -37,12 +37,20 @@ char CycleDigit(char c, int dir) {
 
 void SetupDefaultsScreen::Update(const ButtonEdges& input) {
     if (mode_ == Mode::EnemyPicker) {
-        if (picker_.Update(input, EnemyPoolTable().data(), kEnemyPoolModelCount,
+        if (picker_.Update(input, kEnemiesIncludedStrings, EnemyPoolTable().data(),
+                           kEnemyPoolModelCount,
                            working_.enemiesIncluded.enabled)) mode_ = Mode::List;
         return;
     }
+    if (mode_ == Mode::SkipPicker) {
+        if (picker_.Update(input, kEnemiesSkippedStrings, EnemySkipTable().data(),
+                           kEnemySkipModelCount,
+                           working_.enemiesSkipped.enabled)) mode_ = Mode::List;
+        return;
+    }
     if (mode_ == Mode::BossPicker) {
-        if (picker_.Update(input, BossPoolTable().data(), kBossPoolModelCount,
+        if (picker_.Update(input, kBossesIncludedStrings, BossPoolTable().data(),
+                           kBossPoolModelCount,
                            working_.bossesIncluded.enabled)) mode_ = Mode::List;
         return;
     }
@@ -53,6 +61,11 @@ void SetupDefaultsScreen::Update(const ButtonEdges& input) {
 std::string SetupDefaultsScreen::EnemiesIncludedText() const {
     return std::to_string(working_.enemiesIncluded.CountEnabled()) + " OF " +
            std::to_string(kEnemyPoolModelCount);
+}
+
+std::string SetupDefaultsScreen::EnemiesSkippedText() const {
+    return std::to_string(working_.enemiesSkipped.CountEnabled()) + " OF " +
+           std::to_string(kEnemySkipModelCount);
 }
 
 std::string SetupDefaultsScreen::BossesIncludedText() const {
@@ -121,7 +134,7 @@ void SetupDefaultsScreen::UpdateList(const ButtonEdges& input) {
     // see ButtonEdges::options.
     if ((input.left || input.right) &&
         selected_ != kTitleIdRow && selected_ != kEnemiesIncludedRow &&
-        selected_ != kBossesIncludedRow) {
+        selected_ != kEnemiesSkippedRow && selected_ != kBossesIncludedRow) {
         ToggleRow(selected_);
     }
 
@@ -140,6 +153,9 @@ void SetupDefaultsScreen::UpdateList(const ButtonEdges& input) {
         } else if (selected_ == kEnemiesIncludedRow) {
             picker_.Reset();
             mode_ = Mode::EnemyPicker;
+        } else if (selected_ == kEnemiesSkippedRow) {
+            picker_.Reset();
+            mode_ = Mode::SkipPicker;
         } else if (selected_ == kBossesIncludedRow) {
             picker_.Reset();
             mode_ = Mode::BossPicker;
@@ -188,10 +204,13 @@ void SetupDefaultsScreen::UpdateEditTitleId(const ButtonEdges& input) {
 
 void SetupDefaultsScreen::Draw(Renderer& renderer) {
     if (mode_ == Mode::EnemyPicker) {
-        picker_.Draw(renderer, "ENEMIES INCLUDED", EnemyPoolTable().data(),
+        picker_.Draw(renderer, kEnemiesIncludedStrings, EnemyPoolTable().data(),
                      kEnemyPoolModelCount, working_.enemiesIncluded.enabled);
+    } else if (mode_ == Mode::SkipPicker) {
+        picker_.Draw(renderer, kEnemiesSkippedStrings, EnemySkipTable().data(),
+                     kEnemySkipModelCount, working_.enemiesSkipped.enabled);
     } else if (mode_ == Mode::BossPicker) {
-        picker_.Draw(renderer, "BOSSES INCLUDED", BossPoolTable().data(),
+        picker_.Draw(renderer, kBossesIncludedStrings, BossPoolTable().data(),
                      kBossPoolModelCount, working_.bossesIncluded.enabled);
     } else if (mode_ == Mode::List) {
         DrawList(renderer);
@@ -221,6 +240,9 @@ void SetupDefaultsScreen::DrawList(Renderer& renderer) {
         std::string("RANDOMIZE SHOP WEAPONS   ") + (working_.randomizeShopWeapons ? "YES" : "NO"),
         std::string("ENABLE MERGO DARKNESS   ") + (working_.enableMergoDarkness ? "YES" : "NO"),
         std::string("ENEMIES INCLUDED   ") + EnemiesIncludedText(),
+        // Position 13, matching kEnemiesSkippedRow - see the header. Directly
+        // after ENEMIES INCLUDED, which it is the opposite of.
+        std::string("ENEMIES SKIPPED   ") + EnemiesSkippedText(),
         std::string("BOSSES INCLUDED   ") + BossesIncludedText(),
     };
     DrawScrollableList(renderer, kListLayout, items, selected_, scrollOffset_, kItemScale,
