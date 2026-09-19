@@ -10,6 +10,7 @@ spec, the plan, the reviews, and the append-only `log.md`.
 | 18 | Easy Shadows (covers rows 19–21: Easy Rom, Easy Failures, Easy Emissary) | **APPROVED** | [018-easy-shadows/](018-easy-shadows/) | [spec.md](018-easy-shadows/spec.md) | [plan.md](018-easy-shadows/plan.md) — questions answered, awaiting approval | — |
 | 24 | Melee Movesets (covers row 25, Gun Movesets) | **QUESTIONS OPEN** | [024-melee-movesets/](024-melee-movesets/) | [spec.md](024-melee-movesets/spec.md) | — | — |
 | 32 | Bypassed Enemies (`ENEMIES SKIPPED`; supersedes row 16) | **APPROVED** | [032-bypassed-enemies/](032-bypassed-enemies/) | [spec.md](032-bypassed-enemies/spec.md) — refined 2026-09-18, [log.md](032-bypassed-enemies/log.md) | [plan.md](032-bypassed-enemies/plan.md) — **both milestones implemented, hardware-tested and closed 2026-09-19** | [plan-review.md](032-bypassed-enemies/plan-review.md) — CHANGES REQUESTED, answered by the 2026-09-19 refinement |
+| 33 | Protect Caged Dogs (`DO NOT RANDOMIZE CAGED DOGS`) — Central Yharnam **and the Forbidden Woods** | **APPROVED** | [033-protect-caged-dogs/](033-protect-caged-dogs/) | [spec.md](033-protect-caged-dogs/spec.md) — refined 2026-09-19, widened to the Forbidden Woods cages; D1–D8 unchanged, D9–D10 added | — | — |
 
 ## What this index is, and is not
 

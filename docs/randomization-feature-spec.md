@@ -65,7 +65,7 @@ list further down.
 
 ---
 
-## 3. Enemy and boss pickers (0 remaining — all three shipped)
+## 3. Enemy and boss pickers and placement protection (1 remaining — all three pickers shipped)
 
 **Our design, but not new capability.** The reference already has all four
 semantics; what it lacks is a usable front-end. Today you type raw five-character
@@ -84,6 +84,7 @@ and the code chops the string into five-character chunks:
 | 9 | Enemies to include | A checklist of every pool creature, **all ticked by default**. Untick a few to keep them out of the run; untick everything but one and every enemy becomes that creature | **DONE** — shipped as the `ENEMIES INCLUDED` drill-in, 82 rows; see `docs/plans/pickers.md` |
 | 10 | Bosses to include | The same for the boss pool. Leave only Ludwig ticked and every boss arena is Ludwig | **DONE** — shipped as the `BOSSES INCLUDED` drill-in, 17 rows; same component as row 9 |
 | 32 | Bypassed enemies | A checklist of every creature that has a randomizable placement, **none ticked by default**. Tick one and it leaves the randomizer entirely: its own placements keep their vanilla identity, and it is never used as a replacement anywhere | **DONE** — shipped as the `ENEMIES SKIPPED` drill-in, 85 rows, same component as rows 9 and 10; hardware-tested 2026-09-19. **Retired row 16.** Two documented exceptions, both deliberate: the six Yahar'gul maidens still change, and with `RANDOMIZE BOSSES` on the boss pool is not filtered. See `docs/features/032-bypassed-enemies/` |
+| 33 | Protect caged dogs | A **placement** protection, not an enemy one: the ten **Shaggy Hunting Dogs** (`c1240`) wired into the cage scripts in Central Yharnam (six) and the Forbidden Woods (four) keep their vanilla identity, while `c1240`'s other 86 placements stay eligible and the model stays in the pool. Replacements dropped into the Central Yharnam cages misbehave — a Boom Hammer Hunter and a Maneater Boar each caused severe lag, and other replacements take damage but cannot be killed | **TODO** — **NEW**, no reference equivalent. Shipping as `DO NOT RANDOMIZE CAGED DOGS`; spec **APPROVED** 2026-09-19, see `docs/features/033-protect-caged-dogs/` |
 
 Why this is worth building rather than porting the text box:
 
@@ -189,6 +190,42 @@ override included. The saved value was deliberately **not** migrated, so anyone
 who had the flag on loses it silently once and has to re-tick — accepted as the
 cheaper of the two options, and called out in `docs/user-guide.md`.
 
+### Row 33 — the caged dogs, and why row 32 does not cover them
+
+**The creature is the Shaggy Hunting Dog, `c1240` — not `HUNTING DOG`.** This row
+was first written saying "Hunting Dog", which is wrong in a way that matters:
+`HUNTING DOG` is `c1140`, 14 placements, all in Hemwick Charnel Lane and none in
+either cage area, so ticking
+that row in `ENEMIES SKIPPED` would do nothing at all to the caged dogs. The row that
+would is `SHAGGY HUNTING DOG`, 96 placements. Spec 033 §4 F1 established this.
+
+**Two areas, not one.** The row was first written for the Central Yharnam kennel yard
+alone, because that is where the breakage was observed. A game-wide sweep for caged
+dogs found one other cluster — six cages in the Forbidden Woods, four of them holding a
+dog — with structurally identical map and script data, and nothing anywhere else. The
+approved scope covers both: **ten** protected placements, **twenty-six** rows across
+the five map files that hold them. Whether the Forbidden Woods cages actually misbehave
+when randomized is unobserved and is a hardware question by construction; they are in
+scope as a precaution, at a cost of four identifiers and one extra hardware walk.
+
+**Row 32 is keyed on the model; this one is keyed on the placement.** Ticking
+`SHAGGY HUNTING DOG` in `ENEMIES SKIPPED` freezes all 96 of its placements and pulls
+the model out of the pool entirely. The problem being solved is far narrower: **ten**
+placements are wired into the cage scripts, and only those are broken by substitution.
+The other 86 should keep randomizing and the model should stay in the pool.
+
+The protected set comes from **verified placement identifiers in the map data**, and
+spec 033 found that only one identifier gets it exactly: a list of ten entity IDs.
+Placement *names* are not usable — `c1240_0004` and its siblings are reused in
+Cathedral Ward, Yahar'gul and the unprotected halves of both cage areas, so the
+substring match the existing skip gate uses would catch 58 placements across nine map
+files. In each area the dogs that break out of their cages are driven by a different
+event from those that stay penned, but every one of them is addressed by entity ID, so
+one list covers all ten.
+
+The two settings compose rather than compete: the global exclusion still wins where
+it applies, and this one only adds protection where it does not.
+
 ---
 
 ## 4. Items and shop (2 remaining)
@@ -290,13 +327,13 @@ belongs at the end, not the front, and it needs its own spec.
 | Group | Remaining |
 |---|---|
 | Ready (code exists, needs a row) | 0 |
-| Enemy / boss pickers (new) | 0 |
+| Enemy / boss pickers and placement protection (new) | 1 |
 | Items and shop | 1 real + 1 dead |
 | Enemy and boss pool | 4 |
 | Difficulty helpers | 4 |
 | Scaling | 2 |
 | Combat and cosmetic params | 8 |
-| **Total actionable** | **19** |
+| **Total actionable** | **20** |
 | Out of scope (chalice) | 3 |
 
 ## 11. Suggested order
@@ -309,9 +346,10 @@ Grouped so each block reuses one piece of machinery and can share a validator:
    consumables, plus no-team-type.
 4. **MSB pokes block** (~~16~~, 18, 19, 20, 21) — bell maidens (shipped, then
    retired into row 32) and all four easy modes, all the same three-field write.
-5. **Pool scope block** (~~9~~, ~~10~~, ~~32~~, 13, 14, 17) — the pickers and
+5. **Pool scope block** (~~9~~, ~~10~~, ~~32~~, 33, 13, 14, 17) — the pickers and
    the pool-shape flags, which all touch the same eligibility code and want the
-   same sub-screen. All three pickers are done; 13, 14 and 17 remain.
+   same sub-screen. All three pickers are done; 33 reuses row 32's placement gate
+   from the other end, and 13, 14 and 17 remain.
 6. **Scaling** (22, 23).
 7. **Cosmetic params** (26, 28, 29, 30, 31).
 8. **Key items with logic** (12) — own spec, last.
