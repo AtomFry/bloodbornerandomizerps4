@@ -55,6 +55,18 @@
 //  - The reference tool re-reads and re-writes every map file several times
 //    across separate passes (model-list merge, pool generation, mutation).
 //    This port does one read and one write per map.
+//  - The four easy-mode settings (feature 018, EasyModes.h) run as one pass
+//    inside StepWriteMap, AFTER the enemy loop and boss assignment and
+//    BEFORE the BossScalingMaps() loop below. Both halves of that position
+//    are behaviour, and both reproduce the reference's own pass order
+//    (StartFunctions.cs: enemies -> bosses -> AddTheRest -> EasyModes ->
+//    ParamScalingForBosses): running after the randomizers makes the easy
+//    pass the LAST writer of its placements, so an easy setting wins over a
+//    duplicate body that boss randomization or the enemy roll had already
+//    filled; running before scaling means the larva it plants is itself
+//    zone-scaled, which is why the NPCParamID written into a scaled map is
+//    that zone's variant rather than a flat 252100. Moving the call either
+//    way changes the output.
 //
 // After the main mutation pass, this also runs the reference tool's
 // ParamScalingForBosses step (see BossParamScaling.h) - gated there by "No
@@ -68,11 +80,14 @@
 
 #include "BossParamScaling.h"
 #include "BossRandomizer.h"
+#include "CagedDogList.h"
+#include "EasyModes.h"
 #include "EnemyExclusionList.h"
 #include "EnemySkipList.h"
 #include "TreasureRandomizer.h"
 
 #include "../Param/ParamBnd.h"
+#include "HunterTools.h"
 #include "DropRandomizer.h"
 #include "StartingWeapons.h"
 #include "FileIo.h"
@@ -758,6 +773,24 @@ void EnemyRandomizerJob::State::StepWriteMap() {
             // placement draws no randomness.
             if (!forced && IsSkippedName(name, skipPatterns)) continue;
 
+            // DO NOT RANDOMIZE CAGED DOGS (feature 033). Third and last of
+            // the "leave this one alone" tests, and deliberately last of the
+            // three: ENEMIES SKIPPED has already claimed anything it covers,
+            // so this never weakens or reorders it (spec 033 D4). Inside the
+            // same !forced for the same reason as the two above, though no
+            // protected placement is in m28.
+            //
+            // The option is tested before the gate reads anything, so an off
+            // run costs one boolean compare per placement and draws exactly
+            // the RandInt sequence it drew before this existed. Before the
+            // roll, so a protected placement draws no randomness - which is
+            // why turning this on shifts the seed's meaning everywhere.
+            if (!forced && options.doNotRandomizeCagedDogs &&
+                IsProtectedCagedDog(lm.name, part_fields::GetEntityID(partBlob))) {
+                result.cagedDogsProtected++;
+                continue;
+            }
+
             // The roll is drawn for every non-excluded placement, forced ones
             // included, and only then ignored. Skipping the draw for forced
             // placements would remove 12 RandInt calls from the stream and
@@ -831,6 +864,10 @@ void EnemyRandomizerJob::State::StepWriteMap() {
         }
 
         } // if (options.randomizeEnemies)
+
+        // EASY SHADOWS / ROM / FAILURES / EMISSARY (feature 018). Position is
+        // behaviour, not taste - see the file header bullet and EasyModes.h.
+        ApplyEasyModes(lm.name, lm.msbb, options.easyModes, result.easyCounts);
 
         for (const BossScalingMapEntry& scalingEntry : BossScalingMaps()) {
             if (lm.name == scalingEntry.name) {
@@ -911,6 +948,15 @@ void EnemyRandomizerJob::State::StepEmevd() {
     Log(("enemy randomizer: done - " + std::to_string(result.mapsProcessed) + " maps, " +
          std::to_string(result.enemiesRandomized) + " enemies randomized, " +
          std::to_string(result.npcParamsScaled) + " param-scaled").c_str());
+
+    // Feature 033, and only when the setting is on: an off run logs nothing
+    // new. 26 is the expected figure with every map file present - the ten
+    // caged dogs, counted once per map file that holds them.
+    if (options.doNotRandomizeCagedDogs) {
+        Log(("enemy randomizer: caged dogs protected - " +
+             std::to_string(result.cagedDogsProtected) +
+             " placement(s) left unrandomized").c_str());
+    }
 
     if (options.AnyParamFeature()) {
         phase = Phase::ItemData;
@@ -1004,6 +1050,25 @@ void EnemyRandomizerJob::State::StepItemData() {
             result.startingMeleeChanged = weapons.meleeSlotsChanged;
             result.startingGunsChanged = weapons.gunSlotsChanged;
             result.shopWeaponsChanged = weapons.shopRowsChanged;
+        }
+
+        // Last of the param features, and the only one that isn't a
+        // randomizer - it writes the same two item ids every run. Order
+        // doesn't matter here: it touches CharaInitParam, which nothing else
+        // in this phase reads or writes.
+        if (options.startWithHunterTools) {
+            const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
+            if (chara == nullptr) {
+                Fail("CharaInitParam.param not present in gameparam.parambnd.dcx");
+                return;
+            }
+            HunterToolsResult tools;
+            if (!GrantHunterTools(itemDataPlain, *chara, tools, &err)) {
+                Fail("granting hunter tools failed: " + err);
+                return;
+            }
+            result.hunterToolRowsChanged = tools.rowsChanged;
+            result.hunterToolSlotsWritten = tools.slotsWritten;
         }
 
         itemDataStep = 2;

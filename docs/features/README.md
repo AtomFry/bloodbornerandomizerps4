@@ -10,7 +10,8 @@ spec, the plan, the reviews, and the append-only `log.md`.
 | 18 | Easy Shadows (covers rows 19–21: Easy Rom, Easy Failures, Easy Emissary) | **APPROVED** | [018-easy-shadows/](018-easy-shadows/) | [spec.md](018-easy-shadows/spec.md) | [plan.md](018-easy-shadows/plan.md) — questions answered, awaiting approval | — |
 | 24 | Melee Movesets (covers row 25, Gun Movesets) | **QUESTIONS OPEN** | [024-melee-movesets/](024-melee-movesets/) | [spec.md](024-melee-movesets/spec.md) | — | — |
 | 32 | Bypassed Enemies (`ENEMIES SKIPPED`; supersedes row 16) | **APPROVED** | [032-bypassed-enemies/](032-bypassed-enemies/) | [spec.md](032-bypassed-enemies/spec.md) — refined 2026-09-18, [log.md](032-bypassed-enemies/log.md) | [plan.md](032-bypassed-enemies/plan.md) — **both milestones implemented, hardware-tested and closed 2026-09-19** | [plan-review.md](032-bypassed-enemies/plan-review.md) — CHANGES REQUESTED, answered by the 2026-09-19 refinement |
-| 33 | Protect Caged Dogs (`DO NOT RANDOMIZE CAGED DOGS`) — Central Yharnam **and the Forbidden Woods** | **APPROVED** | [033-protect-caged-dogs/](033-protect-caged-dogs/) | [spec.md](033-protect-caged-dogs/spec.md) — refined 2026-09-19, widened to the Forbidden Woods cages; D1–D8 unchanged, D9–D10 added | — | — |
+| 33 | Protect Caged Dogs (`DO NOT RANDOMIZE CAGED DOGS`) — Central Yharnam **and the Forbidden Woods** | **APPROVED** | [033-protect-caged-dogs/](033-protect-caged-dogs/) | [spec.md](033-protect-caged-dogs/spec.md) — refined 2026-09-19, widened to the Forbidden Woods cages; D1–D8 unchanged, D9–D10 added. **D10 needs amending — see plan §9 P11** | [plan.md](033-protect-caged-dogs/plan.md) — questions answered, awaiting approval; [plan-evidence.md](033-protect-caged-dogs/plan-evidence.md) | — |
+| 34 | Start With Hunter Tools (`START WITH HUNTER TOOLS`) | **n/a — skipped** | [034-start-with-hunter-tools/](034-start-with-hunter-tools/) | — | — | — |
 
 ## What this index is, and is not
 
@@ -35,6 +36,13 @@ documents.
 
 `APPROVED` is human gate 0h. An agent never sets it on its own behalf; it
 records that the developer gave it.
+
+**n/a — skipped** is not a pipeline status. It marks an item the developer
+deliberately took outside the pipeline, asking for implementation without a
+spec or a plan. Row 34 is the only one so far: its folder holds an
+`implementation-report.md` written after the fact and nothing else. The
+report says so at the top, because a folder that merely looks thin is
+indistinguishable from one where the stages were forgotten.
 
 ## Layout and naming
 

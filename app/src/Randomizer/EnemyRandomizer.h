@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 
+#include "EasyModes.h"
 #include "EnemyPoolSelection.h"
 
 namespace bbr {
@@ -35,6 +36,13 @@ struct EnemyRandomizerResult {
     bool poolFellBack = false;
     int poolSize = 0; // distinct candidates actually drawn from
 
+    // Feature 033. How many placements DO NOT RANDOMIZE CAGED DOGS held back
+    // this run - 26 when the setting is on and every map file is present, 0
+    // when it is off. Reported to the text log only (plan 033 §9 P12): the
+    // honest figure counts the five map files that hold the same ten dogs,
+    // and a player who walks past ten would read 26 as a defect.
+    int cagedDogsProtected = 0;
+
     int treasuresRandomized = 0;
 
     // Item-data archive diagnostics, populated whenever the archive is
@@ -48,6 +56,28 @@ struct EnemyRandomizerResult {
     int startingMeleeChanged = 0;
     int startingGunsChanged = 0;
     int shopWeaponsChanged = 0;
+
+    // START WITH HUNTER TOOLS. How many CharaInitParam origin rows received
+    // the two workshop key items, and how many item slots that took. Both
+    // blocks of origin rows are written (see HunterTools.cpp), so the honest
+    // figure is larger than the ten origins a player sees - which is why the
+    // UI reports the feature as on rather than reporting this count.
+    int hunterToolRowsChanged = 0;
+    int hunterToolSlotsWritten = 0;
+
+    // EASY SHADOWS / ROM / FAILURES / EMISSARY. How many placements each of
+    // the four settings replaced with the larva - 2 / 60 / 3 / 14 when the
+    // setting is on and every map file is present, 0 when it is off. The UI
+    // prints one line per ENABLED setting: the numbers are fixed, so a 0 or
+    // a wrong number means a pattern list or a map name is wrong.
+    //
+    // Two nearby counters go slightly off on an easy run, and both are
+    // cosmetic and match the reference: npcParamsScaled gains up to 42,
+    // because the scaling pass re-tunes every larva the easy pass planted in
+    // a scaled zone, and enemiesRandomized can double-count a Rom child or
+    // small emissary that the enemy loop randomized and the easy pass then
+    // overwrote. These four counts are the numbers to read instead.
+    EasyModeCounts easyCounts;
 };
 
 // What a run should actually do. Both may be off (the job then just mirrors
@@ -71,9 +101,24 @@ struct EnemyRandomizerOptions {
     bool randomizeStartingGuns = false;
     bool randomizeShopWeapons = false;
 
+    // START WITH HUNTER TOOLS - puts the Blood Gem and Rune Workshop Tools
+    // into every new character's starting inventory, so gems and runes can be
+    // used from the first area instead of being dead weight until their
+    // chests are found. See HunterTools.h, including the unverified
+    // possession-vs-event-flag assumption the whole feature rests on.
+    //
+    // Independent of randomizeWorkshopTools below, which is a different
+    // feature on the same two items: that one puts them into the treasure
+    // shuffle, this one grants them outright. Both may be on.
+    //
+    // Not a randomizer: it draws no randomness and the same seed produces the
+    // same world with it on or off, exactly like enableMergoDarkness.
+    bool startWithHunterTools = false;
+
     bool AnyParamFeature() const {
         return randomizeEnemyDrops || randomizeStartingWeapons ||
-               randomizeStartingGuns || randomizeShopWeapons;
+               randomizeStartingGuns || randomizeShopWeapons ||
+               startWithHunterTools;
     }
 
     // The reference's "Randomize Workshop Tools" setting: when false, the two
@@ -110,6 +155,20 @@ struct EnemyRandomizerOptions {
     // whose saved value was deliberately NOT migrated (D1).
     EnemySkipSelection enemiesSkipped;
 
+    // DO NOT RANDOMIZE CAGED DOGS - a modifier on randomizeEnemies, and a
+    // PLACEMENT protection rather than a creature one, which is what makes it
+    // a different thing from enemiesSkipped rather than a smaller version of
+    // it. It pins ten spots - the caged dogs of the Central Yharnam kennel
+    // yard and the Forbidden Woods cluster, 26 placements across the five map
+    // files that hold them - and changes nothing about the pool: the creature
+    // still arrives everywhere else, and these placements still contribute
+    // (spec 033 D6). See CagedDogList.h.
+    //
+    // false leaves the run identical to today's, roll for roll: the option is
+    // tested before the gate reads anything, so an off run draws the same
+    // sequence of RandInt calls it did before this existed.
+    bool doNotRandomizeCagedDogs = false;
+
     // Cuts the scripted darkness in Mergo's Loft by disarming one instruction
     // in event/common.emevd.dcx - see PermaDarkness.h and
     // docs/plans/mergo-darkness.md. The only option here that isn't a
@@ -121,6 +180,20 @@ struct EnemyRandomizerOptions {
     // reference tool's checkbox, which is named for the resulting state
     // rather than the action.
     bool enableMergoDarkness = false;
+
+    // EASY SHADOWS / EASY ROM / EASY FAILURES / EASY EMISSARY - four
+    // independent settings, all off by default, each turning one multi-body
+    // boss arena into a duel by replacing the duplicate bodies with the
+    // Iosefka's Clinic larva. See EasyModes.h.
+    //
+    // Not randomizers, exactly like enableMergoDarkness: the pass draws NO
+    // randomness, so the same seed produces the same world with any of them
+    // on or off apart from the affected placements, and they apply whether
+    // or not enemy, boss or treasure randomization is on. They also win over
+    // every enemy-side setting, because the pass writes last - a duplicate
+    // slot that boss randomization filled, or that ENEMIES SKIPPED pinned,
+    // becomes a larva anyway.
+    EasyModeOptions easyModes;
 };
 
 // A full run takes 10-20 seconds, which is far too long to spend inside one

@@ -115,6 +115,48 @@ struct RandomizerDefaults {
     // cut the darkness unconditionally (D3 in the plan).
     bool enableMergoDarkness = false;
 
+    // DO NOT RANDOMIZE CAGED DOGS - a modifier on randomizeEnemies that pins
+    // the ten caged-dog spots of the Central Yharnam kennel yard and the
+    // Forbidden Woods cluster, so whatever else the run does those cages keep
+    // what the game put in them. It is a PLACEMENT protection, not a creature
+    // one: the creature still arrives elsewhere and still feeds the pool
+    // (spec 033 D6), which is what makes it a different thing from
+    // enemiesSkipped. See Randomizer/CagedDogList.h.
+    //
+    // "No" is the struct's own default (spec 033 D2), so a defaults.cfg
+    // written before this field existed reads as off and the run is the one
+    // the app made before this existed, roll for roll.
+    bool doNotRandomizeCagedDogs = false;
+
+    // START WITH HUNTER TOOLS - grants the Blood Gem and Rune Workshop Tools
+    // at character creation so gems and runes are usable from the first area
+    // rather than sitting unusable in the inventory until their chests turn
+    // up. See Randomizer/HunterTools.h.
+    //
+    // Distinct from randomizeWorkshopTools above, which shuffles those same
+    // two items into the treasure pool. They are independent and either,
+    // both, or neither may be on.
+    //
+    // "No" is the struct's own default, so a defaults.cfg written before this
+    // key existed reads as off and nothing about the run changes.
+    bool startWithHunterTools = false;
+
+    // EASY SHADOWS, EASY ROM, EASY FAILURES, EASY EMISSARY - four
+    // independent settings, one per multi-body boss arena, each replacing
+    // that fight's duplicate bodies with the tiny Iosefka's Clinic larva so
+    // the fight plays as a duel. Any combination is valid, including all
+    // four with every randomizer off. See Randomizer/EasyModes.h.
+    //
+    // Not randomizers: they draw no randomness and the same seed gives the
+    // same world with them on or off, apart from the affected placements.
+    //
+    // "No" is each one's own default, so a defaults.cfg written before these
+    // keys existed reads as all four off and nothing about the run changes.
+    bool easyShadows = false;
+    bool easyRom = false;
+    bool easyFailures = false;
+    bool easyEmissary = false;
+
     // The seed the last commit actually used, so the wizard can open showing
     // it and "run that again" is two button presses. Unlike everything else
     // here this is a remembered run artifact rather than a preference, which

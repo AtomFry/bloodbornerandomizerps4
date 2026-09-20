@@ -33,7 +33,7 @@ public:
 private:
     enum class Mode { List, EditTitleId, EnemyPicker, SkipPicker, BossPicker };
 
-    static const int kItemCount = 15;
+    static const int kItemCount = 21;
     static const int kTitleIdRow = 0;
     static const int kBackupRow = 1;
     static const int kReplaceDefaultRow = 2;
@@ -64,6 +64,32 @@ private:
     static const int kEnemiesIncludedRow = 12;
     static const int kEnemiesSkippedRow = 13;
     static const int kBossesIncludedRow = 14;
+    // Appended last, and deliberately not moved up next to RANDOMIZE ENEMIES,
+    // the toggle it modifies: going last is what guarantees no existing row
+    // index moves and so no existing row can be mislabelled (feature 033 P5,
+    // P13). kItemCount goes with it, 15 -> 16, along with
+    // ui_scroll_verify.py's three 15-row entries.
+    static const int kDoNotRandomizeCagedDogsRow = 15;
+    // Appended last for the same reason the row above it was: a new index
+    // at the END cannot mislabel any existing row, whereas inserting one
+    // next to the RANDOMIZE WORKSHOP TOOLS row it is easily confused with
+    // would shift every row below it. The two are different features on the
+    // same two items - that one shuffles them into the treasure pool, this
+    // one grants them at character creation - and they are independent.
+    // kItemCount goes with it, 16 -> 17, along with ui_scroll_verify.py.
+    static const int kStartWithHunterToolsRow = 16;
+    // The four easy-mode settings (feature 018), appended last for the third
+    // time running and for the same reason: an index added at the END cannot
+    // mislabel any existing row, whereas grouping them anywhere more logical
+    // would shift every row below. They go in backlog order - rows 18, 19,
+    // 20, 21 of docs/randomization-feature-spec.md §6 - and the reference
+    // window's left-to-right checkbox layout is treated as layout accident
+    // rather than intent (plan 018 P1). kItemCount goes with them, 17 -> 21,
+    // along with ui_scroll_verify.py's three entries.
+    static const int kEasyShadowsRow = 17;
+    static const int kEasyRomRow = 18;
+    static const int kEasyFailuresRow = 19;
+    static const int kEasyEmissaryRow = 20;
     static const int kTitleIdLen = 9; // 4 letters + 5 digits, the PS4's own title ID shape
 
     void UpdateList(const ButtonEdges& input);

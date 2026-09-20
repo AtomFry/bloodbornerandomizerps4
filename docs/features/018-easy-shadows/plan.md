@@ -1,192 +1,132 @@
 # Plan 018 — Easy Shadows, Easy Rom, Easy Failures, Easy Emissary
 
-**Status: QUESTIONS ANSWERED — awaiting developer approval.** *(all four
-decisions recorded in §9, 2026-09-16.)* The developer answered from a summary of
-the questions rather than from this document, so approval is still theirs to
-give. Nothing here needed a behavioural decision the spec had not already
-taken.
+**Status: Approved** §8 is empty: the
+spec and the repository settled every implementation question.
 
-**Spec:** `docs/features/018-easy-shadows/spec.md` — **APPROVED** (developer, 2026-09-16)
+**Spec:** `docs/features/018-easy-shadows/spec.md` — **APPROVED** (developer,
+2026-09-16). Four binding decisions, §10 D1–D4.
+
+**Evidence:** `docs/features/018-easy-shadows/plan-evidence.md` — the
+measurements, traces and rejected alternatives behind this plan.
+
+**Plan review:** `docs/features/018-easy-shadows/plan-review.md`
+
 **Backlog rows:** `docs/randomization-feature-spec.md` §6, rows **18, 19, 20, 21**
-**Plan review:** `docs/features/018-easy-shadows/plan-review.md` *(once stage 2 has run)*
 
 ---
 
-## 1. What this builds
-
-Four new boolean settings — `EASY SHADOWS`, `EASY ROM`, `EASY FAILURES`,
-`EASY EMISSARY`, all default off — carried through the existing settings chain
-(defaults struct → `defaults.cfg` → Setup Defaults row → Enable wizard row →
-`EnemyRandomizerOptions` → engine), plus **one new table-driven MSB pass** that
-the port does not have in any form today.
-
-The pass is small. For a named set of enemy placements in six named maps it
-overwrites exactly three fields — `NPCParamID`, `ThinkParamID` and the model
-index — with the identity of the Iosefka's Clinic larva (`c2521`, NpcParam
-252100, ThinkParam 252100), and touches nothing else. It draws no randomness.
-
-Everything about *what* the feature does is in the spec. This document is how.
-The four decisions in spec §10 that shape the build:
-
-* **D1** — all four rows are one feature over one shared pass. So: one table,
-  one function, four flags, one milestone.
-* **D2** — the replacement creature is planted as-is, drop intact. So: nothing
-  here touches `NpcParam` or `ItemLotParam`, and §6.2 asserts that as a
-  property rather than assuming it.
-* **D3** — the reference's asymmetric map lists are matched exactly. So:
-  `m27_00_00_00` is **deliberately absent** from the table below even though it
-  holds the same three Shadow placements, and the table carries a comment
-  saying so, so nobody "fixes" it later.
-* **D4** — four independent toggles, labelled from the reference's own checkbox
-  text uppercased.
-
-This plan's own four decisions — build order against plan 016, where the rows
-sit, what the console prints, and baking the replacement identity — are in §9.
+> **This document is the implementation contract.** §1–§7 are what the
+> implementer reads, in order. §8–§10 are the record, not instructions.
+> `plan-evidence.md` holds the investigation; `log.md` holds the history.
 
 ---
 
-## 2. What already exists
+## 1. Objective
 
-### 2.1 The settings chain to copy
-
-`enableMergoDarkness` is the closest neighbour and the exact template: a
-boolean, default off, that is **not a randomizer** — it draws no randomness,
-the same seed gives the same world either way, and it is carried through
-`EnemyRandomizerJob` because that job is what writes the output tree. Its full
-chain, which these four mirror file for file:
-
-| Layer | File | What it holds |
-|---|---|---|
-| Randomizer | `app/src/Randomizer/RandomizerDefaults.h` | the persisted default |
-| Randomizer | `app/src/Randomizer/RandomizerDefaultsStore.cpp` | `enable_mergo_darkness` key, load branch and save `snprintf` |
-| Randomizer | `app/src/Randomizer/EnemyRandomizer.h` | the per-run option in `EnemyRandomizerOptions` |
-| Randomizer | `app/src/Randomizer/PermaDarkness.h/.cpp` | the pass itself, its own file |
-| UI | `app/src/UI/SetupDefaultsScreen.h/.cpp` | row constant, `ToggleRow` branch, `DrawList` entry |
-| UI | `app/src/UI/EnableWizardScreen.h/.cpp` | row constant, member, ctor init, two toggle branches, option assignment, `||` membership, progress line, two list entries |
-
-Three precedents inside that chain matter here and are followed below:
-
-* **It IS in `StartCommit`'s "does anything need doing" `||`**
-  (`EnableWizardScreen.cpp:501-505`), unlike `randomizeWorkshopTools_`, because
-  it is a complete change on its own rather than a modifier on another feature
-  (`mergo-darkness.md` D4). The four easy settings are the same shape: each one
-  alone writes real map files, so ticking one alone must start a run.
-* **It is the last toggle row**, appended after the RANDOMIZE rows and before
-  the two drill-in rows, "because it is not a randomizer and going last means
-  no existing row index has to move" (`mergo-darkness.md` D2, and the identical
-  comment in both screen files).
-* **Its state is pinned to a known value rather than to whatever the user's
-  dump contains** (`EnemyRandomizer.cpp` `StepEmevd`'s header comment). That
-  reasoning is the direct precedent for §3.3's baked replacement identity.
-
-### 2.2 The engine, and where the pass has to go
-
-`EnemyRandomizerJob` is a phase machine
-(`EnemyRandomizer.cpp:205-207`): `Mirror → ReadMaps → BuildPool → MergeModels →
-BossCollect → BossAssign → TreasureCollect → TreasureAssign → WriteMaps →
-Emevd → ItemData → Finished`.
-
-Two properties of that machine do the work for us:
-
-1. **Boss randomization finishes before the first map is written.**
-   `StepBossAssign` mutates `lm.msbb` in memory across the `BossAssign` phase,
-   including the final `AddTheRestInMap` step
-   (`EnemyRandomizer.cpp:575-583`), and only then does `WriteMaps` begin. So a
-   pass added inside `StepWriteMap` **automatically wins over the boss passes**,
-   which is exactly the reference's outcome (spec §3 item 3, spec §7 "Order
-   against the boss passes"). No new phase, no reordering.
-2. **Enemy randomization happens inside `StepWriteMap`**, in the loop at
-   `:606-676`, and the per-zone scaling pass runs at `:682-693`, after it and
-   before serialisation. The reference's order is enemies → bosses →
-   AddTheRest → NPCs → **EasyModes** → … → `ParamScalingForBosses`
-   (`StartFunctions.cs:639`, `:952`, `:980`, `:1225`, `:1239`, `:2457`). So the
-   slot between `} // if (options.randomizeEnemies)` and the scaling loop
-   reproduces the reference's ordering exactly.
-
-Also relevant, and verified rather than assumed:
-
-* **`StepMergeModels` guarantees the replacement model is declared in every
-  map.** It appends every enemy model seen in any of the 24 base maps into every
-  map's `Models` section, and it runs unconditionally on every run
-  (`EnemyRandomizer.cpp:481-499`). `c2521` is declared as an enemy model in
-  **five** of those maps — `m24_00_00_00`, `m24_00_00_01`, `m24_01_00_00`,
-  `m24_01_00_01`, `m24_01_00_11` — measured against
-  `data/vanilla/dvdroot_ps4`. This is the port's equivalent of the reference's
-  model-merge loop and it has no picker-path hole (spec §3 item 2, spec §6).
-* **Every map is written on every run**, including a run with nothing enabled,
-  so an easy-mode-only run has a natural place to live.
-* **`RandInt` is only called from the enemy loop, the pool shuffle and the boss
-  passes.** A pass that draws nothing cannot shift the stream, so spec §7's
-  "not a randomizer" constraint is satisfied by construction as long as the new
-  code contains no `RandInt` call. It does not.
-
-### 2.3 The boss randomizer targets the same placements
-
-`AddTheRestInMap` (`BossRandomizer.cpp:382-425`) replaces
-`c2120_0001`/`c2120_0002` in m27 and `c4030_0001`/`_0002`/`_0003` in m35 with
-random bosses — the same five placements Easy Shadows and Easy Failures target.
-`AssignEligible` (`:65-79`) excludes exactly those five from the main boss pass,
-and `kFixups` (`:141-146`) syncs `c2500_0000` → `c2570_0001`, so the Celestial
-Emissary pair's leader is the one placement Easy Emissary deliberately leaves
-alone. None of that changes; §2.2 item 1 is what makes the easy setting win.
-
-### 2.4 Verifiers that already parse what this needs
-
-* **`app/tools/boss_verify.py`** — its `Msbb` class reads DCX + MSBB and yields
-  `(index, name, npc, think, entityID, modelIndex)` per enemy part, which is
-  every field this feature touches. `compare_trees` already diffs two trees
-  part-for-part. **It also has a problem this feature creates — see §5.4.**
-* **`app/tools/param_offsets.py`** — `load_defs` / `load_param` / `param_rows` /
-  `field_offsets` read `NpcParam` and `ItemLotParam` by field name. Every number
-  in §3.3 and §6.2 came from these.
-* **`app/tools/mergo_darkness_verify.py`** — the shape to copy: a single-purpose
-  verifier for a non-randomizing toggle, with `show` / `verify` / `selftest`
-  subcommands and a docstring that states plainly what the tool cannot prove.
-* **`app/tools/starting_weapons_verify.py`** — the precedent for a verifier that
-  parses the reference C# directly, used in §6.2 case 12.
-* **`app/tools/ui_scroll_verify.py:48-52`** — pins `kItemCount` and
-  `kSaveDataRowCount` at 14 for three screens today. Plan 016 takes them to 15
-  (§9 decision 1), and these four settings rows take them to 19.
-
-### 2.5 Layering
-
-Everything lives in `Randomizer` (a new pass + four option bools) and `UI` (four
-rows on two screens). The new pass depends on `Msb` only. No SDL2 reaches
-`Randomizer`; no AFR path reaches `UI`. No new layer crossing.
-
-### 2.6 Prior plans worth reading first
-
-`docs/plans/mergo-darkness.md` (D2 row placement, D4 the `||`, D5 progress
-reporting, and the "pin the output to a known value" argument),
-`docs/features/016-unchanged-bell-maidens/plan.md` (the most recent settings-chain
-plan, and the one this work collides with — §5.5),
-`docs/plans/boss-randomization.md` §4.4-4.5 (`AddTheRest` and the fixup groups),
-`docs/plans/pickers.md` D12 (why the picker guards do not interact with this).
+Add four on/off settings, all off by default — `EASY SHADOWS`, `EASY ROM`,
+`EASY FAILURES`, `EASY EMISSARY` — each turning one multi-body boss arena into
+a duel by replacing the duplicate bodies with the Iosefka's Clinic larva. One
+new table-driven MSB pass overwrites three fields (`NPCParamID`,
+`ThinkParamID`, model index) on named placements in six named maps: 79
+placements tree-wide, 42 in the maps the retail game loads. It draws no
+randomness and applies whether or not any randomizer is on.
 
 ---
 
-## 3. Approach
+## 2. Approved behaviour
 
-### 3.1 One new file, one table, one function
+| #   | Behaviour | Source |
+| --- | --------- | ------ |
+| B1  | Four independent toggles, one per fight, all default off, labelled `EASY SHADOWS`, `EASY ROM`, `EASY FAILURES`, `EASY EMISSARY`. Any combination is valid, including all four with every randomizer off | spec §10 D4, §7 |
+| B2  | Each setting replaces exactly the placements the reference selects: Shadows `c2120_0001/_0002` in `m27_00_00_01`; Rom every `c1400` in both `m32_00_00_*`; Failures `c4030_0001/_0002/_0003` in `m35_00_00_00`; Emissary the seven existing names of `c2500_0001`…`_0010` in both `m24_02_00_*` | spec §3, §4 |
+| B3  | The replacement is the reference's own creature — model `c2521`, NpcParam 252100, ThinkParam 252100 — planted as-is, drop intact. Relocating One Third of Umbilical Cord is accepted | spec §10 D2 |
+| B4  | Exactly three fields are written per replaced placement. EntityID, part name, position and every index-based cross-reference are untouched | spec §3, §8 criterion 3 |
+| B5  | The reference's asymmetric map lists are matched exactly. `m27_00_00_00` is **not** patched, even though it holds the same three Shadow placements | spec §10 D3 |
+| B6  | Not a randomizer: the pass draws no randomness, so the same seed produces the same world with a setting on or off, apart from the affected placements | spec §7 |
+| B7  | With a setting off, the output tree is what the same seed and settings produce today | spec §8 criterion 4 |
+| B8  | The setting wins over the boss passes: a duplicate slot that boss randomization filled becomes a larva anyway | spec §2, §7 |
+| B9  | The survivors are untouched by this feature: one Shadow (`c2120_0000`), Rom herself, one Living Failure (`c4030_0000`), `c4030_0004`, one small emissary (`c2500_0000`), the Celestial Emissary (`c2570_0001`) and the three `c2500_0011/_0012/_0013` elsewhere in Upper Cathedral Ward | spec §2, §8 criterion 2 |
+| B10 | The four settings are independent: turning one on changes only its own maps | spec §8 criterion 5 |
+| B11 | State persists in the existing `defaults.cfg`; an older file without the keys loads with all four off | spec §7 |
+| B12 | This feature writes no param bytes. NpcParam row 252100 and ItemLotParam row 28040 are unchanged in the output tree whether or not drop randomization is on | spec §8 criterion 6 |
+| B13 | The pass is the last writer of its placements, so an easy setting also wins over `ENEMIES SKIPPED` and any other enemy-side setting: its targets are larvae regardless of what the seed or the skip list did | spec §2, §7 |
 
-Add `app/src/Randomizer/EasyModes.h` / `EasyModes.cpp`, following
-`PermaDarkness` and `BossParamScaling` — each non-randomizing pass in this port
-owns its own file, and a table in a header is what the Python mirror can parse
-(the precedent is `enemy_lookup.py` parsing `EnemyExclusionList.h`).
+---
 
-```
-struct EasyModeOptions { bool shadows, rom, failures, emissary; };   // all false
-struct EasyModeCounts  { int shadows, rom, failures, emissary; };    // all 0
+## 3. Constraints and invariants
 
-int ApplyEasyModes(const std::string& mapName, MsbbFile& msbb,
-                   const EasyModeOptions& options, EasyModeCounts& counts);
-```
+### 3.1 Must be preserved
 
-The table is seven rows, keyed by **exact map name**, with a nullptr-terminated
-pattern array — the same shape as `BossRandomizer.cpp`'s `FixupGroup`:
+* **No `RandInt` call in any new code.** A draw from the stream changes every
+  seed's world (B6).
+* **The pass runs inside `StepWriteMap`, after the enemy loop's closing brace
+  and before the `BossScalingMaps()` loop.** Earlier and the boss passes would
+  overwrite it (B8); later and the written stat row would stop matching the
+  reference.
+* **Exactly three fields per hit, and only on matched placements.** Anything
+  else written breaks B4 and the fight scripts that track each body by entity
+  ID.
+* **The table's map list does not grow or shrink.** `m27_00_00_00` stays out
+  (B5).
+* **UI rows are appended last**, at the end of every row-constant block and at
+  the end of all three `items` vectors, with no existing row index changed. An
+  out-of-order entry compiles, passes `ui_scroll_verify.py` and mislabels every
+  row below it.
+* **`StepMergeModels` stays unconditional.** It is what guarantees `c2521` is
+  declared in every map being written.
+* **`defaults.cfg` stays forward and backward compatible**: unknown keys are
+  ignored on load, an absent key reads as `false`.
+* **"Unchanged" never means byte-identical to vanilla.** The scaling pass runs
+  on every map on every run, and every map is re-serialised and re-compressed.
+* **Nothing in `BossRandomizer.cpp`, `EnemyExclusionList.h`, `EnemyPoolTable.h`,
+  `EnemySkipTable.h`, `BossList.h` or any param table changes.**
+* **Layering**: the pass lives under `app/src/Randomizer/` and depends on `Msb`
+  only; no SDL2 there, and no UI file learns a map name or a placement name.
 
-| Flag | Map | Name patterns | Placements matched (measured) |
-|---|---|---|---|
+### 3.2 Out of scope
+
+* Adding `m27_00_00_00`, or otherwise normalising the map lists.
+* Choosing a different replacement creature, blanking the replaced placements'
+  item lots, or stripping the larva's drop.
+* Extending `DropRandomizer.cpp`'s `IsExcludedNpcRow` to the 31 zone-scaled
+  larva rows `900014601`–`900014631`. They are randomizable today, in the port
+  and in the reference alike; that stays true (`plan-evidence.md` §E5.5).
+* Reproducing the reference's runtime capture of the replacement identity, or
+  its picker-path defect.
+* Any change to how the four fights are randomized — pools, eligibility,
+  fixup groups — and any other multi-body fight.
+* Rows 22 "No Scaling" and 23 "Custom Scaling". Chalice dungeons.
+
+### 3.3 Hazards
+
+| Hazard | What to do | Evidence |
+| ------ | ---------- | -------- |
+| A settings row whose constant and `items` entry disagree compiles, passes `ui_scroll_verify.py` and mislabels every row below it — including two picker rows | Append all four rows last, in the same order, to every constant block and all three `items` vectors in one pass. Change no existing row index | `plan-evidence.md` §E5.2 |
+| Struct layout changes without a clean rebuild have produced a heap-corruption `SIGSEGV` on hardware | `rm -rf src/x64 && make`; three structs gain members | `docs/build.md` §"Clean builds after layout changes" |
+| Asserting that survivors or settings-off maps are byte-identical to vanilla fails on a **correct** build — the unconditional scaling pass rewrites the stat rows of Rom, `c2120_0000`, `c4030_0000`, `c2500_0011/_0012/_0013` and `c2570_0001` | Use `pool_verify._frozen`'s definition everywhere: same model, same think, npc either vanilla or that map's zone-scaled variant | `plan-evidence.md` §E5.3, §E4 M11 |
+| `pool_verify.py`'s worst-case `defaults.cfg` case is an exact equality (611) and fails the moment a key is added | Update it to 669 in the same milestone that adds the four keys | `plan-evidence.md` §E4 M15 |
+| `boss_verify.py verify` reports 37 false `V2 non-boss placement changed` failures on an easy tree | Add the `--easy` flag of §5, suppressing by (map, name) from the table | `plan-evidence.md` §E5.4 |
+| A name pattern matches placements in maps other than its own — `c1400` also matches in two chalice maps, `c2120_0002` in `m26_00_00_00` | Key the table by **exact** map name and assert pattern reach per map, never tree-wide | `plan-evidence.md` §E4 M5 |
+| With `RANDOMIZE ENEMY DROPS` on, larvae in the four scaled maps can drop something other than the cord | Run the cord hardware step with drops **off**; do not treat a missing cord in a drops-on run as a defect | `plan-evidence.md` §E5.5 |
+| `result.npcParamsScaled` gains 42 and `result.enemiesRandomized` can double-count | Cosmetic and what the reference does. Do not "fix" either; the four new result lines are the numbers to read | `plan-evidence.md` §E5.8 |
+| Easy Rom empties a group of thirty rather than thinning it, and Rom may also spawn children dynamically | Expected. A hardware sighting of a real spider is the dynamic-spawn unknown, not a broken rule | `plan-evidence.md` §E5.1 |
+
+---
+
+## 4. Implementation approach
+
+> Chosen: one new pass file holding a six-row table keyed by exact map name,
+> called once per map from inside `StepWriteMap`. Alternatives considered and
+> why they were rejected: `plan-evidence.md` §E3.
+
+### 4.1 The table
+
+`app/src/Randomizer/EasyModes.h` carries the feature's whole data: six rows,
+keyed by exact map name, each with a `nullptr`-terminated pattern array — the
+shape `BossRandomizer.cpp`'s `FixupGroup` already uses.
+
+| Flag | Map | Name patterns | Placements matched |
+| ---- | --- | ------------- | -----------------: |
 | shadows | `m27_00_00_01` | `c2120_0001`, `c2120_0002` | 2 |
 | rom | `m32_00_00_00` | `c1400` | 30 |
 | rom | `m32_00_00_01` | `c1400` | 30 |
@@ -194,72 +134,67 @@ pattern array — the same shape as `BossRandomizer.cpp`'s `FixupGroup`:
 | emissary | `m24_02_00_00` | `c2500_0001` … `c2500_0010` (10 patterns) | 7 |
 | emissary | `m24_02_00_01` | `c2500_0001` … `c2500_0010` (10 patterns) | 7 |
 
-**79 placements across the written tree with all four on**; 42 of them in the
-six maps the retail game actually loads (spec §4). Both numbers are asserted in
-§6.2, because a wrong count is the cheapest possible signal that a pattern list
-was mistyped.
+**Six rows. 79 placements tree-wide, 42 in the retail-loaded maps.** Both
+totals are asserted in §6.
 
-Two deliberate notes belong in the header beside the table:
+Two notes belong in the header beside the table:
 
-* **`m27_00_00_00` is absent on purpose** (spec §10 D3). It holds the same three
-  `c2120` placements with the same values — measured — and the reference still
-  does not patch it. Adding it is a behaviour change, not a tidy-up.
+* **`m27_00_00_00` is absent on purpose** (B5) — it holds the same three
+  `c2120` placements with the same values and the reference still does not
+  patch it, so adding it is a behaviour change.
 * **Matching is substring, not equality** — `name.find(pattern) != npos`,
-  mirroring the reference's `Name.Contains`. Rom's rule *depends* on this: the
-  single pattern `c1400` is what takes all thirty children rather than a chosen
-  few. Verified across all 43 map files that no pattern over-reaches (§6.2
-  case 4).
+  mirroring the reference's `Name.Contains`. Rom's rule depends on it; exact
+  map keying is what keeps it from reaching other maps.
 
-The table being keyed by exact map name is a deliberate tightening of the
-reference, which branched on `currentMap.Contains("m27")` against a full file
-*path*. Behaviour-identical here — the port's 24 map names are unambiguous — and
-it removes a class of accident the reference is exposed to.
+### 4.2 The pass
 
-### 3.2 Where it is called from
+`app/src/Randomizer/EasyModes.h` / `.cpp`, self-contained in the shape of
+`ApplyBossParamScaling`:
 
-One line in `StepWriteMap`, between the enemy loop's closing brace and the
-scaling loop:
+```
+struct EasyModeOptions { bool shadows, rom, failures, emissary; };   // all false
+struct EasyModeCounts  { int shadows, rom, failures, emissary; };    // all 0
+
+// returns how many placements it replaced in this map; counts accumulates per flag
+int ApplyEasyModes(const std::string& mapName, MsbbFile& msbb,
+                   const EasyModeOptions& options, EasyModeCounts& counts);
+```
+
+Behaviour, in order:
+
+1. Return immediately if no flag is set, or if `mapName` matches no table row
+   whose flag is set.
+2. Scan the map's `Models` section for the enemy model named `c2521` and take
+   its index. If it is not there — impossible after `StepMergeModels`, but see
+   §3.1 — log once and leave every placement in that map untouched. Never write
+   a −1 index (a deliberate divergence from the reference, which throws;
+   `plan-evidence.md` §E5.6).
+3. For each enemy part whose name contains one of the row's patterns, write
+   `SetEnemyNPCParamID(252100)`, `SetEnemyThinkParamID(252100)` and
+   `SetModelIndex(<the c2521 index>)`, increment that flag's counter, and log
+   one line in the existing `map name: old -> new` shape.
+
+No `RandInt`, no other field written, no other map touched.
+
+### 4.3 Where it is called from
+
+One line in `StepWriteMap`, between `} // if (options.randomizeEnemies)`
+(`EnemyRandomizer.cpp:853`) and the `for (const BossScalingMapEntry& ...)` loop
+(`:855`):
 
 ```
 ApplyEasyModes(lm.name, lm.msbb, options.easyModes, result.easyCounts);
 ```
 
-`ApplyEasyModes` returns immediately if no flag is set, so a run with all four
-off touches nothing and the output tree is byte-identical to today's for the
-same seed and settings (spec §8 criterion 4).
+That slot reproduces the reference's ordering exactly
+(`plan-evidence.md` §E1.4) and gives B8 for free, because boss assignment
+including `AddTheRestInMap` completes before the first map is written.
 
-Model-index resolution happens inside `ApplyEasyModes` with a local scan for the
-enemy model named `c2521`, the same way `BossRandomizer.cpp`'s
-`FindEnemyModelIndex` does it. If the model is not found — which should be
-impossible after `StepMergeModels`, but see §5.2 — the function logs and leaves
-every placement in that map untouched. It does **not** write a −1 index. This is
-a deliberate divergence from the reference, which throws
-`KeyNotFoundException` from `MSBB.Write` in the same situation
-(`MSBBB.cs:180-190`); a crash mid-run on a console is strictly worse than a
-setting that quietly did nothing, and the condition is already impossible.
+Consequence to expect, not to correct: a larva placed in a scaled map is
+itself scaled, so the written `NPCParamID` is the per-map value §6 case 8
+lists, not a flat 252100.
 
-**Ordering against the scaling pass: before, matching the reference.** The
-reference calls `EasyModes` at `StartFunctions.cs:1239` and
-`ParamScalingForBosses` at `:2457`. So a larva placed in a scaled zone is itself
-scaled: `NPCParamID` 252100 becomes **900014609** in `m27_00_00_01`,
-**900014611** in `m32_00_00_01`, **900014614** in `m24_02_00_01` and
-**900014627** in `m35_00_00_00`, and stays 252100 in `m32_00_00_00` and
-`m24_02_00_00`, which `BossScalingMaps()` does not cover. All 31 scaled variants
-are measured to have **2 HP, 18 echoes, teamType 26, `behaviorVariationId`
-25210 and the same item lot 28040** as the base row, so this cannot change what
-the player fights — but it *is* what the output bytes will say, and §6 asserts
-against that set rather than against 252100 alone.
-
-### 3.3 The replacement identity is baked, not captured
-
-The reference captures three values at runtime from whichever map placement
-happens to carry model `c2521` (`MainWindow.xaml.cs:748-762`), guarded by
-`addedStoneGuyBool` — a field declared in `FieldContainer.cs:60` and **never
-assigned anywhere in the reference**, so the capture re-runs on every match and
-the last one wins. Verified: all three `c2521` placements in the whole 43-file
-tree carry identical values, so the defect is harmless there.
-
-This plan bakes the identity instead:
+### 4.4 The replacement identity is baked
 
 ```
 const int32_t kEasyModeNpcParamId   = 252100;
@@ -267,53 +202,37 @@ const int32_t kEasyModeThinkParamId = 252100;
 const char*   kEasyModeModelName    = "c2521";
 ```
 
-Measured provenance for the header comment: three placements, all named
-`c2521_0000`, in `m24_01_00_00`, `m24_01_00_01` and `m24_01_00_11`, all
-NpcParam 252100 / Think 252100 / model `c2521`, entity ID 2410771.
+Settled by P3. The header comment records the provenance (`plan-evidence.md`
+§E4 M7), and selftest case 5 asserts the triple against the real vanilla tree
+on every run.
 
-Why baked rather than captured — the same argument `StepEmevd`'s comment already
-makes for Mergo darkness: a captured value means "whatever bytes the user's
-VanillaSource happens to hold", which is unknown by construction and differs
-between users whose dumps are different revisions. Baking pins the output to a
-known value. It is also how this port already handles every other piece of
-reference data (`ModelSizeTable.h`, `NpcScalingTable.h`, `EnemyPoolTable.h`,
-`EnemyExclusionList.h`). The one thing baking loses — noticing that a particular
-dump disagrees — is bought back by §6.2 case 5, which asserts the baked triple
-against the real vanilla tree. This was put to the developer as the "match the
-reference or improve on it" call that `CLAUDE.md` §7 reserves for them, and
-baking was chosen — §9 decision 4. The constants above are settled.
+### 4.5 Four flags through the settings chain
 
-Note the reference's own capture already truncates the model name to five
-characters (`Substring(LastIndexOf("*") + 1, 5)`), so the string it writes is
-`"c2521"` exactly — the same literal baked above.
+Four plain bools — `easyShadows`, `easyRom`, `easyFailures`, `easyEmissary` —
+in `RandomizerDefaults` and, grouped into `EasyModeOptions`, in
+`EnemyRandomizerOptions`. `defaults.cfg` keys: `easy_shadows`, `easy_rom`,
+`easy_failures`, `easy_emissary`.
 
-### 3.4 Four flags through the chain
+Row placement on both screens, per P1 and the append-last rule of §3.1: the
+four rows go **after** `kStartWithHunterToolsRow` (16), in backlog order —
+`kEasyShadowsRow` 17, `kEasyRomRow` 18, `kEasyFailuresRow` 19,
+`kEasyEmissaryRow` 20. `kItemCount` (`SetupDefaultsScreen.h`) and
+`kSaveDataRowCount` (`EnableWizardScreen.cpp`) both go **17 → 21**. No
+existing row constant changes. The `items` entries go last in `DrawList`,
+`DrawSaveData` and `DrawConfirm`, in the same order, each with a position
+comment like the two rows above them.
 
-Four plain bools, named `easyShadows`, `easyRom`, `easyFailures`,
-`easyEmissary`, in `RandomizerDefaults` and in `EnemyRandomizerOptions` (the
-latter grouped into the `EasyModeOptions` struct §3.1 defines, so the pass takes
-one argument rather than four). Keys in `defaults.cfg`: `easy_shadows`,
-`easy_rom`, `easy_failures`, `easy_emissary`. Absent key reads as `false`, which
-means off, which means the maps are written exactly as they are today — so an
-older `defaults.cfg` keeps meaning what it meant, with no special handling
-(spec §7).
+All four flags join `StartCommit`'s big `||` (`EnableWizardScreen.cpp:572-576`)
+beside `enableMergoDarkness_` and `startWithHunterTools_`: each one alone
+writes real map files, so ticking one alone must start a run. The two
+`NoneEnabled()` picker guards are untouched — gated on `randomizeEnemies_` /
+`randomizeBosses_`, an easy-only run passes straight through. The store's
+`char buf[1024]` and the 4096-byte load buffer do not grow (611 → 669 bytes).
 
-Four plain bools rather than one bitmask or one nested struct in
-`RandomizerDefaults`, because that is what `randomizeStartingWeapons` /
-`randomizeStartingGuns` / `randomizeShopWeapons` already are: three independent
-bools for one conceptual group.
+### 4.6 Reporting the run
 
-`SaveRandomizerDefaults`'s buffer is 1024 bytes with a current worst case near
-450; four keys add about 80. `LoadRandomizerDefaults` reads into a 4096-byte
-buffer. Neither needs to grow, and the existing `len > sizeof(buf)` clamp still
-covers the failure it was written for.
-
-### 3.5 Reporting the run
-
-`EnemyRandomizerResult` gains four `int`s
-(`easyShadowsReplaced`, `easyRomReplaced`, `easyFailuresReplaced`,
-`easyEmissaryReplaced`) and `FinishCommit` emits one line per **enabled**
-setting:
+`EnemyRandomizerResult` gains an `EasyModeCounts easyCounts;`, and
+`FinishCommit` emits one line per **enabled** setting:
 
 ```
 EASY SHADOWS REPLACED 2 PLACEMENTS
@@ -322,250 +241,55 @@ EASY FAILURES REPLACED 3 PLACEMENTS
 EASY EMISSARY REPLACED 14 PLACEMENTS
 ```
 
-No `SKIPPING` counterparts — off means "leave the maps alone", which is not a
-skipped step worth a line (`mergo-darkness.md` D5). The counts are fixed
-constants, so printing them turns the console into an assertion: a `0` or a
-wrong number is an immediate, unmissable sign that a pattern list or a map name
-is wrong, which is the one failure mode a player could otherwise mistake for
-"the setting does nothing in this fight". Note `EASY ROM` reads **60** and
-`EASY EMISSARY` **14**, because the port writes both variants of those two maps;
-see §5.3 so this is not mistaken for a bug.
+No `SKIPPING` counterparts. The counts are fixed, so a `0` or a wrong number
+on the console means a pattern list or a map name is wrong. `EASY ROM` reads
+60 and `EASY EMISSARY` 14 because the port writes both variants of those two
+areas.
 
-### 3.6 Considered and rejected
+### What this reuses
 
-**A1 — a new job phase (`EasyModes`) between `TreasureAssign` and
-`WriteMaps`.** Rejected: it would need its own map loop, its own progress
-denominator contribution and its own step accounting, to achieve exactly what
-one call inside `StepWriteMap` already achieves. The phases exist because a step
-must fit in one frame; this pass touches at most 30 placements in one map.
-
-**A2 — run the pass after `ApplyBossParamScaling` so the written value is a
-clean 252100 everywhere.** Tempting, because it makes §6 simpler and the output
-more readable. Rejected: it is not what the reference produces
-(`StartFunctions.cs:1239` precedes `:2457`), `CLAUDE.md` §7 says match before
-improving, and the measurement in §3.2 shows the scaled variants are
-indistinguishable in play — so the only thing this would buy is a tidier
-verifier, at the cost of a deliberate deviation.
-
-**A3 — normalise the map lists, adding `m27_00_00_00` for symmetry.**
-Rejected outright: spec §10 D3 forbids it, and §6.2 case 2 asserts the omission
-so nobody re-adds it by accident.
-
-**A4 — reproduce the reference's runtime capture, including the
-`addedStoneGuyBool` guard.** Rejected: the guard is a never-assigned field, i.e.
-a defect, and the port has no `GenerateEnemyList`-equivalent that a picker run
-skips, so the capture would have no hole to reproduce and nothing to gain.
-Spec §6 rules the picker-path defect out of scope explicitly.
-
-**A5 — blank the replaced placements' item lots, or strip the larva's drop, to
-avoid relocating One Third of Umbilical Cord.** Out of scope unconditionally by
-spec §10 D2 and spec §6. `NpcParam` is not touched by this feature at all, and
-§6.2 case 9 asserts that.
-
-**A6 — put the pass in `BossRandomizer.cpp`, beside `AddTheRestInMap`, since it
-targets the same placements.** Rejected: two of the four settings (Rom,
-Emissary) target ordinary randomizable enemies rather than bosses, the pass runs
-whether or not boss randomization is on, and `BossRandomizer`'s phases run
-before the write loop — which is the wrong side of the ordering guarantee in
-§2.2.
-
-**A7 — gate the four settings out of `StartCommit`'s `||`, like
-`randomizeWorkshopTools_`.** Rejected: workshop tools is a *modifier* on
-treasure randomization and does nothing alone, whereas each easy setting alone
-produces a real, different map tree. `mergo-darkness.md` D4 is the matching
-precedent.
+| Existing code or tool | How it is used | Change needed |
+| --------------------- | -------------- | ------------- |
+| `EnemyRandomizer.cpp` `StepWriteMap` / `StepMergeModels` | The call site; and the guarantee that `c2521` is declared in every written map | one call + include |
+| `Msb/Msbb.h` `part_fields` / `model_fields` | `GetName`, `GetType`, `SetEnemyNPCParamID`, `SetEnemyThinkParamID`, `SetModelIndex` | none |
+| `BossParamScaling.h`, `CagedDogList.h` + `caged_dogs_verify.py` | File shape for a non-randomizing pass; baked table in a header with a mirror that parses it | none |
+| `enemy_lookup.py` (`zone_scaled_npc`, `load_map`, `enemies`), `pool_verify.py` `_frozen` | The frozen and zone-scaled comparisons in the new verifier | reuse as-is |
+| `boss_verify.py` `compare_trees`, `ui_scroll_verify.py`, `pool_verify.py` selftest | Post-run diff, row geometry, config budget | see §5 |
 
 ---
 
-## 4. Changes, file by file
+## 5. Files and changes
 
-Two new files. No file-format layout change, but `RandomizerDefaults`,
-`EnemyRandomizerOptions` and `EnemyRandomizerResult` all gain members, so
-**CLAUDE.md §2's full clean rebuild applies** — see §6.1.
+| File | Change | Milestone |
+| ---- | ------ | --------- |
+| `app/src/Randomizer/EasyModes.h` | **New.** `EasyModeOptions`, `EasyModeCounts`, the baked constants of §4.4 with their provenance comment, the six-row table of §4.1 with both header notes, and the `ApplyEasyModes` declaration. Written so `easy_modes_verify.py` can parse the table out of it | 1 |
+| `app/src/Randomizer/EasyModes.cpp` | **New.** The pass of §4.2 | 1 |
+| `app/src/Randomizer/EnemyRandomizer.h` | `EasyModeOptions easyModes;` on `EnemyRandomizerOptions`, with a comment that it draws no randomness and applies regardless of the other settings; `EasyModeCounts easyCounts;` on `EnemyRandomizerResult` | 1 |
+| `app/src/Randomizer/EnemyRandomizer.cpp` | `#include "EasyModes.h"`; the one call of §4.3; a bullet in the file header comment recording that the easy pass runs after enemy/boss randomization and before scaling, and why | 1 |
+| `app/src/Randomizer/RandomizerDefaults.h` | Four `bool … = false;` fields with the standard absent-key comment | 1 |
+| `app/src/Randomizer/RandomizerDefaultsStore.cpp` | Four load branches and four `%d` + arguments in the save `snprintf`. Buffers unchanged | 1 |
+| `app/src/UI/SetupDefaultsScreen.h` | Four row constants appended after `kStartWithHunterToolsRow` (17–20) with the append-last comment; `kItemCount` 17 → 21 | 1 |
+| `app/src/UI/SetupDefaultsScreen.cpp` | Four `ToggleRow` branches with their `defaults: easy … = YES/NO` logs; four `items` entries appended last, in row order | 1 |
+| `app/src/UI/EnableWizardScreen.h` | Four `bool easy…_;` members beside the other per-run toggles | 1 |
+| `app/src/UI/EnableWizardScreen.cpp` | Four row constants in the same positions; `kSaveDataRowCount` 17 → 21; ctor init from defaults; four left/right branches and four X branches; four entries appended last to **both** `DrawSaveData` and `DrawConfirm` (they must stay identical in shape); four `options.easyModes.… = easy…_;` assignments; the four flags added to the big `||`; the four result lines of §4.6 in `FinishCommit` | 1 |
+| `app/tools/easy_modes_verify.py` | **New.** `show` / `verify` / `selftest`, modelled on `caged_dogs_verify.py`, parsing the table and constants out of `EasyModes.h` | 1 |
+| `app/tools/boss_verify.py` | `--easy` flag on `verify`: suppress the `V2 non-boss placement changed` objection for exactly the (map, name) pairs the table selects, and print that it is doing so | 1 |
+| `app/tools/ui_scroll_verify.py` | `Setup Defaults`, `Wizard SaveData`, `Wizard Confirm` counts 17 → 21; `Progress log` budget 16 → 20 for the four new result lines; update the comment that explains both | 1 |
+| `app/tools/pool_verify.py` | Worst-case `defaults.cfg` equality 611 → 669, with the four keys added to the arithmetic and the comment | 1 |
 
-**Every row count and row index below assumes plan 016 has already landed**, per
-§9 decision 1. 016 inserts `UNCHANGED BELL MAIDENS` as row 4 (its §9.1), which
-pushes `kDisableMergoDarknessRow` from 11 to 12 and both drill-in rows up by one
-before this feature adds anything. §5.5 holds the arithmetic. If that ordering
-ever changes, subtract one from every count and index here.
+**Not changed:** any param file or param table, `EnemyExclusionList.h`,
+`EnemyPoolTable.h`, `EnemySkipTable.h`, `BossList.h`, `BossRandomizer.cpp`,
+`gen_pool_table.py`, `DropRandomizer.cpp`, `docs/randomization-feature-spec.md`,
+`docs/user-guide.md`, anything under `reference/`.
 
-| File | Change |
-|---|---|
-| `app/src/Randomizer/EasyModes.h` | **New.** `EasyModeOptions`, `EasyModeCounts`, the baked replacement constants of §3.3 with their measured provenance, the seven-row target table of §3.1 with the `m27_00_00_00`-is-absent-on-purpose comment, and the `ApplyEasyModes` declaration. Written so `easy_modes_verify.py` can parse the table out of it. |
-| `app/src/Randomizer/EasyModes.cpp` | **New.** The pass: early-return when no flag is set; per-map table lookup by exact name; local `c2521` model-index scan with the log-and-skip guard of §3.2; substring match; three field writes per hit; per-flag counters; one `Log` line per replaced placement in the existing `map/name: old -> new` shape. No `RandInt`. |
-| `app/src/Randomizer/EnemyRandomizer.h` | Add `EasyModeOptions easyModes;` to `EnemyRandomizerOptions`, with a comment stating it draws no randomness and applies regardless of the other settings. Add the four `int`s of §3.5 to `EnemyRandomizerResult`. |
-| `app/src/Randomizer/EnemyRandomizer.cpp` | `#include "EasyModes.h"`. One call in `StepWriteMap` between the enemy loop's closing brace and the `BossScalingMaps()` loop (§3.2). Add a bullet to the file header comment recording that the easy pass runs after enemy/boss randomization and before scaling, and why. |
-| `app/src/Randomizer/RandomizerDefaults.h` | Four `bool … = false;` fields with the standard absent-key-means-false comment. |
-| `app/src/Randomizer/RandomizerDefaultsStore.cpp` | Four `else if` load branches (`easy_shadows`, `easy_rom`, `easy_failures`, `easy_emissary`) and four `%d` plus arguments in the save `snprintf`. Buffers unchanged — §3.4. |
-| `app/src/UI/SetupDefaultsScreen.h` | `kItemCount` 15 → 19; four new row constants directly after `kDisableMergoDarknessRow` (row 12), occupying rows 13–16 in the order `EASY SHADOWS`, `EASY ROM`, `EASY FAILURES`, `EASY EMISSARY`; `kEnemiesIncludedRow` 13 → 17 and `kBossesIncludedRow` 14 → 18. Position and order fixed by §9 decision 2. |
-| `app/src/UI/SetupDefaultsScreen.cpp` | Four `ToggleRow` branches with their `defaults: easy … = YES/NO` logs; four entries in `DrawList`'s `items`, in the same order as the row constants. |
-| `app/src/UI/EnableWizardScreen.h` | Four `bool easy…_;` members beside the other per-run toggles. |
-| `app/src/UI/EnableWizardScreen.cpp` | Four row constants in the same order and position as the Setup Defaults screen; `kSaveDataRowCount` 15 → 19; drill-in row constants renumbered; ctor init from defaults; four left/right branches; four X branches; four entries in **both** `DrawSaveData` and `DrawConfirm` item lists (they must stay identical — `ui_scroll_verify` treats them as one shape); four `options.easyModes.… = easy…_;` assignments in `StartCommit`; the four flags **added** to the big `||` (§3.6 A7); four result lines in `FinishCommit` (§3.5). The two `NoneEnabled()` picker guards are untouched — they are gated on `randomizeEnemies_`/`randomizeBosses_` and an easy-only run passes straight through them. |
-| `app/tools/easy_modes_verify.py` | **New.** `show` / `verify` / `selftest`, modelled on `mergo_darkness_verify.py`. §6.2 and §6.3. |
-| `app/tools/boss_verify.py` | Add an `--easy` flag to `verify` that suppresses the V2 non-boss false positives this feature creates, and says in its output that it is doing so. §5.4. |
-| `app/tools/ui_scroll_verify.py` | Row counts 15 → 19 for `Setup Defaults`, `Wizard SaveData`, `Wizard Confirm`; raise the `Progress log` worst-case count to cover the four new result lines; update the comment that states why. |
-
-**Explicitly not changed:** `NpcParam` or any param member (spec §8 criterion 6),
-`EnemyExclusionList.h`, `EnemyPoolTable.h`, `BossList.h`, `BossRandomizer.cpp`,
-`gen_pool_table.py`, `docs/randomization-feature-spec.md`, `docs/user-guide.md`,
-anything under `reference/`.
-
----
-
-## 5. Risks and unknowns
-
-### 5.1 The fights may not end — the one risk no verifier can reach
-
-This is the headline risk and it is stated first because it is the only one that
-could make the feature worthless.
-
-**What is established.** `ApplyEasyModes` writes three fields and nothing else:
-EntityID, position, part name and every index-based cross-reference are left
-exactly as they were. Measured: all three Shadow entity IDs (2700800-2700802)
-appear ~32-33 times each in `event/m27_00_00_00.emevd.dcx`, and all five Living
-Failure IDs (3500850-3500854) ~26-28 times each in
-`event/m35_00_00_00.emevd.dcx`, so the fight logic clearly tracks the individual
-bodies. Leaving those IDs alone leaves that logic intact.
-
-*(Spec §4 quotes 37-39 and 34-37 for these counts. The difference is method: the
-numbers here are a raw four-byte little-endian scan of the compressed-then-
-inflated EMEVD, not an instruction-argument parse, so they undercount arguments
-that are not 4-byte-aligned literals. The conclusion — heavy per-body scripting
-— is identical, and nothing in spec §2 depends on the exact figure.)*
-
-**What is not established.** Whether the game's completion condition is "these
-three entities are dead" (fine) or something tied to the creature's own death
-behaviour (not fine). Only hardware answers it — §6.4 steps 2-4.
-
-**A related unknown specific to Rom.** Rom's children are measured as 30 static
-MSB placements referenced only ~3 times each in
-`event/m32_00_00_00.emevd.dcx` — far lighter scripting than the Shadows or the
-Failures, consistent with a simple enable/disable per wave. Whether her fight
-*also* spawns children dynamically at runtime is not knowable from map data. If
-it does, Easy Rom thins the fight rather than emptying it. Same in the
-reference; recorded so a hardware observation of "some real spiders appeared"
-is read as this rather than as a broken rule.
-
-**Nothing is deleted.** Worth stating explicitly because spec §2's "None of her
-thirty children remain" reads at a glance like removal: all 30 bodies are still
-in the map, still have to be killed, and still carry their entity IDs. Spec §1
-says so; the documentation stage should make sure `docs/user-guide.md` does too.
-
-### 5.2 The replacement model must be declared in the map being written
-
-A placement cannot reference a model name the map's `Models` section does not
-contain. `StepMergeModels` guarantees it for all 24 maps and runs
-unconditionally, and `c2521` is declared in five of them (§2.2). The risk is not
-that this fails today — it is that a future change conditionalises or removes
-the merge and nobody notices until a map fails to load on hardware.
-
-Handled three ways: the log-and-skip guard in §3.2 means a missing model can
-never write a −1 index; §6.2 case 6 asserts `c2521` is declared in at least one
-base map; and spec §7 already records the constraint. Failure on hardware would
-look like a map that does not load at all.
-
-### 5.3 79 replacements, not 42 — do not read the extra as a bug
-
-The port writes **both** variants of Byrgenwerth and Upper Cathedral Ward, so
-with all four settings on the tree contains 79 replaced placements: 2 + 30 + 30
-+ 3 + 7 + 7. The retail game loads one variant of each, so the player meets 42
-(spec §4). Both numbers are asserted separately in §6.2 so that a future count
-mismatch points at which one moved.
-
-### 5.4 `boss_verify.py verify` will report false failures on an easy tree
-
-Concrete and already reasoned through, not speculative.
-`compare_trees` classifies every changed placement, and:
-
-* `c1400_*` and `c2500_0001…_0010` are **not** matched by `BOSS_NAMES`, so
-  without `--enemies-also` each one raises `V2 non-boss placement changed`. That
-  is 67 spurious failures on an all-four-on tree.
-* `c2120_0001/0002` and `c4030_0001…_0003` **are** boss names, and the existing
-  `addtherest` exemption already covers them, so they are quiet.
-* `identity_ok` accepts the larva either way: `(252100, 252100, "c2521")` is a
-  real vanilla triple, and each scaled variant is in the scaling table with
-  `(252100, "c2521")` as a real vanilla think/model pair. So the identity checks
-  pass; only the "may this placement change at all" check misfires.
-
-The fix is the minimal `--easy` flag in §4: suppress the non-boss objection for
-exactly the names and maps the table lists, print that it is doing so, and leave
-the positive assertions to `easy_modes_verify.py`. Keeping the positive work out
-of `boss_verify.py` is deliberate — that tool's V2 semantics are load-bearing
-for boss randomization and should not grow a second meaning.
-
-### 5.5 This collides with plan 016, which is not yet implemented
-
-`docs/features/016-unchanged-bell-maidens/plan.md` is at "QUESTIONS ANSWERED —
-awaiting developer approval" and has not been implemented (no `app/src` change
-is present in the working tree). It touches **six of the same files**:
-`RandomizerDefaults.h`, `RandomizerDefaultsStore.cpp`, both screen headers, both
-screen sources, and `ui_scroll_verify.py`; it also edits the same
-`StepWriteMap` loop this plan appends after, and removes `StepBuildPool`'s
-up-front empty-pool `Fail`.
-
-**016 lands first** (§9 decision 1), so §4 is written for the post-016 tree:
-`kItemCount`/`kSaveDataRowCount` are 15 → 19, and `kDisableMergoDarknessRow` is
-12 rather than 11, because 016 inserts its row at index 4 and shifts everything
-below it down one. Nothing else changes — the two features do not interact
-functionally (016 is an exclusion-list change, this is a placement overwrite;
-`docs/features/016-unchanged-bell-maidens/spec.md` §6 and `docs/features/018-easy-shadows/spec.md` §6 each rule the other out).
-
-The collision is therefore sequencing, not design, and the sequencing is
-settled. What remains is a **precondition on implementation**: before this
-feature is built, confirm that 016 is actually in `app/src` — read
-`kDisableMergoDarknessRow` and `kItemCount` out of `SetupDefaultsScreen.h` and
-check they are 12 and 15. If they are 11 and 14, 016 has not landed after all
-and every index in §4 is one too high.
-
-### 5.6 Smaller risks
-
-* **"Team type 26 means non-hostile" is a byte, not observed behaviour.**
-  Measured: across all 43 map files the creatures sharing teamType 26 are the
-  Doll, Gehrman, Willem, the Messengers and the strapped-down patients. That is
-  strong, and it is still exactly the kind of inference `CLAUDE.md` §5 and the
-  standing note on setting polarity say not to trust without a console. §6.4
-  step 2 is the check.
-* **The umbilical cord relocates.** Accepted by spec §10 D2. Verified here:
-  ItemLot 28040 is the **only** row in `ItemLotParam` granting item 4321, it is
-  referenced by exactly 32 `NpcParam` rows (252100 plus its 31 scaled variants),
-  it carries a single `getItemFlagId` (50001205), and `NpcParam` 252100 is one
-  of the two rows `DropRandomizer.cpp:24`'s `IsExcludedNpcRow` protects. §6.4
-  step 5 is the hardware check that decides which reading of `getItemFlagId` is
-  true; a cord per larva is the trigger for revisiting D2 with evidence.
-* **`result.npcParamsScaled` inflates.** The scaling pass runs after the easy
-  pass and will rewrite every larva it placed in a scaled zone, adding 42
-  to that counter. Cosmetic, it is what the reference does, and the new
-  per-setting lines in §3.5 are the numbers to read instead.
-* **`result.enemiesRandomized` may double-count.** With RANDOMIZE ENEMIES on,
-  the enemy loop can randomize a Rom child or a small emissary and the easy pass
-  then overwrites it; the enemy counter still counts it. Also what the reference
-  does. Cosmetic.
-* **Renumbering the drill-in row constants is safe.** They are compile-time
-  constants carrying no saved meaning. The only row order that is load-bearing
-  for saved configs is `EnemyPoolTable.h`'s, which this feature does not touch
-  (`pickers.md`; plan 016 §5.3).
-* **The four labels render.** Checked against `app/src/Platform/Font8x8.cpp`'s
-  actual glyph table rather than any list written elsewhere: every character in
-  `EASY SHADOWS`, `EASY ROM`, `EASY FAILURES`, `EASY EMISSARY` and in §3.5's
-  result lines is present, space included.
-* **A Python mirror pins the rules, not the C++ implementation of them.** There
-  is no host C++ compiler, so `easy_modes_verify.py` proves that the *table and
-  the identity* are right and that a generated tree has the right *properties*.
-  It cannot prove `ApplyEasyModes` matches it. The two can drift; this is the
-  standing, accepted weakness of this setup.
-
-### 5.7 Nothing here can make a run unwinnable
-
-The affected placements hold no items, gate no progression and are not key-item
-sources. The worst case short of §5.1 is a fight that is easier than intended,
-which is the point of the feature. The one item involved — One Third of
-Umbilical Cord — is optional and, per §5.6, relocated rather than lost.
+**Clean rebuild required**: `RandomizerDefaults`, `EnemyRandomizerOptions` and
+`EnemyRandomizerResult` all gain members.
 
 ---
 
 ## 6. Verification
 
-### 6.1 Build
+### Build
 
 ```
 cd app
@@ -573,219 +297,178 @@ rm -rf src/x64
 make
 ```
 
-**The clean rebuild is required, not optional.** `RandomizerDefaults`,
-`EnemyRandomizerOptions` and `EnemyRandomizerResult` all gain members, which is
-a struct layout change, and `CLAUDE.md` §2 records that a stale partial rebuild
-once produced a real heap-corruption SIGSEGV on hardware.
+The clean rebuild is required, not optional — see §3.3.
 
-### 6.2 `easy_modes_verify.py selftest` — the rules, pinned
+### Automated
 
-`python tools/easy_modes_verify.py selftest ../data/vanilla/dvdroot_ps4`.
-The table and the constants are parsed out of `app/src/Randomizer/EasyModes.h`,
-so the mirror cannot drift from the port. Each case asserts a measured fact, and
-every number below was measured while writing this plan.
+| Check | Command | Asserts |
+| ----- | ------- | ------- |
+| New mirror, rules | `python tools/easy_modes_verify.py selftest ../data/vanilla/dvdroot_ps4` | the twelve cases below |
+| New mirror, output | `python tools/easy_modes_verify.py verify <V> <B> [shadows] [rom] [failures] [emissary]` | the output-tree contract below |
+| UI geometry | `python tools/ui_scroll_verify.py` | 21 rows on three screens, all scroll properties |
+| Picker + config | `python tools/pool_verify.py selftest ../data/vanilla/dvdroot_ps4` | worst-case `defaults.cfg` is 669 bytes and fits `buf[1024]` |
+| Boss rules | `python tools/boss_verify.py selftest ../data/vanilla/dvdroot_ps4` | unchanged, must still pass |
+| Boss output | `python tools/boss_verify.py verify <V> <B> --easy [--enemies-also]` | no boss-rule violation once the easy placements are suppressed |
+| Drops | `python tools/drops_verify.py selftest ../data/vanilla/dvdroot_ps4` | D-I4 still holds |
 
-1. **The table resolves to exactly the expected placement sets.** Per map:
-   m27_00_00_01 → `{c2120_0001, c2120_0002}`; m32_00_00_00 → 30 `c1400_*`;
-   m32_00_00_01 → 30; m35_00_00_00 → `{c4030_0001, _0002, _0003}`;
-   m24_02_00_00 → `{c2500_0001, _0002, _0003, _0006, _0007, _0009, _0010}`;
-   m24_02_00_01 → the same seven. **Totals: 79 tree-wide, 42 in the
-   retail-loaded maps.**
-2. **`m27_00_00_00` is not in the table**, and it holds three `c2120`
-   placements with the same NpcParams as m27_00_00_01 (212700/212710/212720).
-   Spec §10 D3 asserted rather than assumed.
-3. **The survivors are exactly these, and untouched by any pattern:**
-   `c2120_0000` (NpcParam 212700, 1425 HP — the strongest of the three against
-   900 and 800), `c4030_0000` (403000, 320 HP), `c4030_0004` (403050,
-   ThinkParamID **1**, the value the port's own pool rules treat as "not a live
-   enemy"), `c2500_0000` (250080, the Celestial Emissary pair's leader in
-   `BossRandomizer.cpp`'s `kFixups`), and `c2500_0011/_0012/_0013` (250082 —
-   the three elsewhere in Upper Cathedral Ward). Rom herself is a different
-   model and matches no pattern.
-4. **No pattern over-reaches.** Across all 43 `.msb.dcx` files, the set each
-   pattern matches is exactly the set in case 1 — in particular
-   `Contains("c2500_0001")` does not also catch `c2500_0011`. This is the one
-   rule that could silently take more than intended.
-5. **The baked replacement triple is real.** `(252100, 252100, "c2521")` is the
-   identity of all three `c2521_0000` placements in the tree —
-   `m24_01_00_00`, `m24_01_00_01`, `m24_01_00_11`, entity ID 2410771 — and they
-   are identical to each other, which is what makes the reference's
-   never-assigned `addedStoneGuyBool` harmless.
-6. **`c2521` is declared as an enemy model** in at least one of the 24 base maps
-   the port loads — measured, in five: `m24_00_00_00`, `m24_00_00_01`,
-   `m24_01_00_00`, `m24_01_00_01`, `m24_01_00_11`. This is what makes
-   `StepMergeModels` able to satisfy §5.2.
-7. **The replacement cannot be dangerous.** `NpcParam` 252100 has **2 HP, 18
-   blood echoes, teamType 26, hitHeight 1.0, hitRadius 0.2**, and all 31 scaled
-   variants (900014601-900014631) have **identical** HP, echoes, teamType,
-   `behaviorVariationId` (25210) and item lot. Therefore the §3.2 ordering
-   choice cannot change what the player fights.
-8. **The per-zone scaled values are what §3.2 claims:** 252100 sits in
-   `NpcScalingTable.h` immediately before 900014601-900014631, so
-   `m27_00_00_01` (+9) → 900014609, `m32_00_00_01` (+11) → 900014611,
-   `m24_02_00_01` (+14) → 900014614, `m35_00_00_00` (+27) → 900014627, and
-   `m32_00_00_00`/`m24_02_00_00` are absent from `BossScalingMaps()` so they
-   keep 252100.
-9. **The drop is protected on both sides.** ItemLot 28040 is the only row in
-   `ItemLotParam` granting item 4321, with a single `getItemFlagId` 50001205;
-   exactly 32 `NpcParam` rows reference it; and `252100` appears in
-   `DropRandomizer.cpp`'s `IsExcludedNpcRow`, parsed straight out of the C++.
-10. **No pattern matches a boss arena slot the feature must leave alone** —
-    `c2570_0001` (the Celestial Emissary itself) and `c2120_0000` are matched by
-    nothing in the table.
-11. **The reference's own name lists appear verbatim** in
-    `reference/Randomizer/MainWindowComponents/MainWindow.xaml.cs` — a fidelity
-    pin, following `starting_weapons_verify.py`'s precedent of parsing the
-    reference C# directly. Note this couples the selftest to that path, which
-    `CLAUDE.md` §1 already fixes in place.
-12. **Corrupt-and-catch cases**, in `boss_verify.py selftest`'s style, so a
-    validator that has only ever returned PASS is not trusted: a survivor
-    changed → caught; a target left at its vanilla identity → caught; an
-    EntityID changed on a replaced placement → caught; an unmodified tree →
-    clean, no false positives.
+**`easy_modes_verify.py selftest`** parses the table and the constants out of
+`EasyModes.h`, so the mirror cannot drift from the port:
 
-The tool's docstring must state plainly that it pins the rules and the data, not
-the C++ implementation of them (§5.6), and that nothing here can establish that
-the replacement is harmless or that the fights end.
+| # | Case | Asserts |
+| - | ---- | ------- |
+| 1 | The table resolves to the expected placement sets | `m27_00_00_01` → `{c2120_0001, c2120_0002}`; `m32_00_00_00` and `m32_00_00_01` → 30 `c1400_*` each; `m35_00_00_00` → `{c4030_0001, _0002, _0003}`; `m24_02_00_00` and `m24_02_00_01` → `{c2500_0001, _0002, _0003, _0006, _0007, _0009, _0010}`. Totals **79** tree-wide, **42** retail-loaded |
+| 2 | `m27_00_00_00` is not in the table | and it holds three `c2120` placements with NpcParams 212700 / 212710 / 212720 — B5 asserted, not assumed |
+| 3 | The survivors of B9 are matched by no pattern in their own map | and `c2120_0000` is the strongest Shadow, 1425 HP against 900 and 800 |
+| 4 | No pattern over-reaches **inside its own map** | for each row, the set its patterns match in that row's map is exactly case 1's set — in particular `c2500_0001` does not also take `c2500_0011`. Asserted per (map, row), never tree-wide: the same patterns do match in other maps |
+| 5 | The baked triple is real | `(252100, 252100, "c2521")` is the identity of all three `c2521_0000` placements, entity ID 2410771, all identical |
+| 6 | `c2521` is declared as an enemy model | in at least one of the 24 base maps — measured, in five |
+| 7 | The replacement cannot be dangerous | NpcParam 252100: 2 HP, 18 blood echoes, teamType 26, hitHeight 1.0, hitRadius 0.2, `behaviorVariationId` 25210, item lot 28040 — and all 31 scaled variants `900014601`–`900014631` identical in every one of those fields |
+| 8 | The per-map written value is exactly | 900014609 in `m27_00_00_01`, 900014611 in `m32_00_00_01`, 900014614 in `m24_02_00_01`, 900014627 in `m35_00_00_00`, 252100 in `m32_00_00_00` and `m24_02_00_00` |
+| 9 | The drop situation, asserted as it is | ItemLot 28040 is the only `ItemLotParam` row granting item 4321, `getItemFlagId` 50001205; exactly 32 `NpcParam` rows reference it (252100 plus the 31 variants); and `IsExcludedNpcRow`, parsed out of `DropRandomizer.cpp`, holds 252100 and 6071 and **nothing else**, so the 31 variants are deliberately unprotected (§3.2). A change on either side is caught |
+| 10 | No pattern matches an arena leader | `c2120_0000`, `c2500_0000`, `c2570_0001`, `c4030_0000` |
+| 11 | The reference's own name lists appear verbatim | in `reference/Randomizer/MainWindowComponents/MainWindow.xaml.cs`, following `starting_weapons_verify.py`. This couples the selftest to that path, which `CLAUDE.md` §1 already fixes in place |
+| 12 | Corrupt-and-catch, in `boss_verify.py selftest`'s style | a survivor changed → caught; a target left at its vanilla identity → caught; an EntityID changed on a replaced placement → caught; an unmodified tree → clean |
 
-### 6.3 `easy_modes_verify.py verify` — for after a run
+**`easy_modes_verify.py verify`** compares a vanilla tree against an output
+tree and asserts:
 
-```
-python tools/easy_modes_verify.py verify <vanilla_dvdroot> <output_dvdroot> \
-       [shadows] [rom] [failures] [emissary]
-```
+* every placement the named settings select carries model `c2521`,
+  `ThinkParamID` 252100, and the **exact** `NPCParamID` case 8 gives for that
+  map, and keeps its EntityID and its position (the three floats at part
+  entry + 0x28);
+* every survivor of B9 is **frozen** in `pool_verify._frozen`'s sense — same
+  model, same think, and an `NPCParamID` that is either the vanilla value or
+  that map's zone-scaled variant. Never byte equality (§3.3);
+* in a map whose setting is off, every placement is frozen in that same sense
+  when the run had every randomizer off, and otherwise differs only as the
+  enemy and boss passes allow. Never a file-level byte comparison: every
+  `.msb.dcx` is re-serialised and re-compressed on every run;
+* `NpcParam` row 252100 and `ItemLotParam` row 28040 are byte-identical
+  between the two trees, whether or not drop randomization was on (B12).
 
-Asserts spec §8's contract from the two trees:
+The tool's docstring must say plainly that it pins the rules and the data, not
+the C++ implementation of them, and that nothing here can establish that the
+replacement is harmless or that the fights end.
 
-* every placement the named settings' table rows select carries the replacement
-  identity — NpcParam 252100 **or** the map's scaled variant from case 8,
-  ThinkParamID 252100, model `c2521`;
-* every one of them keeps its **EntityID and its position** (the three floats at
-  part entry + 0x28);
-* the survivors of case 3 are **byte-identical** to vanilla in all three written
-  fields;
-* **no other placement in the affected maps differs from vanilla** beyond what
-  enemy/boss randomization legitimately changed, and with every randomizer off,
-  no other placement differs at all;
-* maps whose settings are off are byte-identical to vanilla;
-* `NpcParam` and `ItemLotParam` in the output tree are unchanged in rows 252100
-  and 28040 — spec §8 criterion 6, checked even when drop randomization is on.
+### Hardware
 
-The "unchanged with the setting off" comparison runs **against vanilla**, not
-against a second generated tree. A second tree would only prove the two runs
-agree; vanilla is the only input that can tell "frozen" from "redrew the same
-thing" (`CLAUDE.md` §3).
-
-### 6.4 Other existing verifiers
-
-```
-python tools/ui_scroll_verify.py                                  # 18 rows, three screens
-python tools/boss_verify.py selftest ../data/vanilla/dvdroot_ps4  # must still pass untouched
-python tools/boss_verify.py verify  <V> <B> --enemies-also --easy # §5.4
-python tools/drops_verify.py selftest ../data/vanilla/dvdroot_ps4 # D-I4 still holds
-```
-
-### 6.5 Hardware — what the developer runs
-
-Three trees: vanilla `V`, seed `S` with all four settings **off** giving `A`,
-the same seed `S` with all four **on** giving `B`. Vanilla as the third input is
-mandatory (`CLAUDE.md` §3).
+Three trees: vanilla `V`; seed `S` with all four settings **off** giving `A`;
+the same seed `S` with all four **on** giving `B`. Vanilla as the third input
+is mandatory (`CLAUDE.md` §3).
 
 | # | Step | Pass looks like |
-|---|---|---|
-| 1 | `easy_modes_verify.py verify V B shadows rom failures emissary`, and `boss_verify.py verify V B --easy` | both PASS; the four progress lines on console read 2 / 60 / 3 / 14 |
-| 2 | Play `B`, Shadows of Yharnam | one Shadow fights; two small creatures stand in for the others. **Do they attack?** Do they die in one hit? **Does the fight end after the third body dies, and does the fog lift?** This is the §5.1 inference that matters most |
-| 3 | Play `B`, Rom | every child is a larva; Rom's fight still progresses through her teleports and she dies normally. Note whether any *real* spider appears — see §5.1 |
+| - | ---- | --------------- |
+| 1 | `easy_modes_verify.py verify V B shadows rom failures emissary` and `boss_verify.py verify V B --easy` | both PASS; the four console lines read 2 / 60 / 3 / 14 |
+| 2 | Play `B`, Shadows of Yharnam | one Shadow fights; two small creatures stand in for the others. **Do they attack? Do they die in one hit? Does the fight end after the third body dies, and does the fog lift?** |
+| 3 | Play `B`, Rom | every child is a larva; her fight still progresses through her teleports and she dies normally. Note whether any *real* spider appears |
 | 4 | Play `B`, Living Failures and Celestial Emissary | one opponent each, both fights end normally, and the Emissary still grows out of the surviving small body |
-| 5 | Play `B`, kill the first easy-mode larva you reach, then visit Iosefka's Clinic | **one** One Third of Umbilical Cord in total is the expected result. A cord per larva contradicts §5.6 and is the trigger for revisiting spec §10 D2 with evidence |
-| 6 | Play `A` (all four off) | the four fights are exactly as they were. This is what makes steps 2-5 mean anything |
-| 7 | Run with **only** `EASY SHADOWS` on and every randomizer off | the run starts (§3.6 A7), completes, and only m27_00_00_01 differs from vanilla — the independence claim in spec §8 criterion 5 |
-| 8 | Reopen Setup Defaults after saving | the four new rows persist, and `ENEMIES INCLUDED` still reads `82 OF 82` — a changed count would mean the config string was misread when the four new keys were added |
+| 5 | Play `B` **with `RANDOMIZE ENEMY DROPS` off**, kill the first easy-mode larva you reach, then visit Iosefka's Clinic | **one** One Third of Umbilical Cord in total. A cord per larva is the trigger for revisiting spec §10 D2 with evidence. Drops must be off or the result means nothing (§3.3) |
+| 6 | Play `A` (all four off) | the four fights are exactly as they were. This is what makes steps 2–5 mean anything |
+| 7 | Run with **only** `EASY SHADOWS` on and every randomizer off | the run starts, completes, and only `m27_00_00_01` differs — B10 |
+| 8 | Reopen Setup Defaults after saving | the four new rows persist, and `ENEMIES INCLUDED` still reads `82 OF 82` — a changed count would mean the config string was misread when the four keys were added |
 
-**Failure would look like:** a fight that never ends because a replaced body no
-longer registers as dead; a replacement that is hostile, or tough enough to
-matter; an easy setting losing to boss randomization so the duplicates are still
-bosses; a map that fails to load at all, which would point at the model
-declaration (§5.2); or a wrong count on a progress line, which points at the
-table.
+**Failure would look like:** a fight that never ends; a replacement that is
+hostile or tough enough to matter; an easy setting losing to boss
+randomization; a map that fails to load at all (the model declaration); or a
+wrong count on a progress line (the table).
 
-Building cleanly and passing every selftest means **ready for hardware test**,
-never done.
+A clean build and green selftests mean **ready for hardware test**, never done.
 
 ---
 
-## 7. Milestones
+## 7. Milestones and stop conditions
 
-One milestone, and it **starts after plan 016 is implemented** (§9 decision 1).
-That is a sequencing constraint on when this work begins, not a milestone of its
-own: 016 carries its own build and its own hardware cycle, and this plan's §4
-numbers are written for the tree 016 leaves behind (§5.5).
+### Milestone 1 — the pass, the four settings, and the verifiers
 
-| # | Milestone | Ends with |
-|---|---|---|
-| 1 | `EasyModes.h/.cpp` with its table and baked identity, the call site in `StepWriteMap`, the four flags through defaults/store/both screens, the four result lines, and the three verifier changes. Clean rebuild, §6.2-6.4 green. | `.pkg` built, awaiting the §6.5 hardware test |
+**Goal.** Four working toggles that replace the duplicate bodies in the four
+arenas, with a Python mirror that pins the table and the identity.
 
-**Why not four milestones, one per setting.** They share one table, one
-function, one identity and one settings chain; splitting them would mean
-renumbering the same UI rows four times and four hardware trips to answer
-questions that one trip answers. Spec §10 D1 approved the four as one feature
-and spec §8 already describes the hardware test as a single session covering all
-four.
+**Changes**, in order:
 
-**Why not two — the pass first, the UI second.** A milestone must end in
-something the developer can hardware-test. The pass with no UI has no way to be
-switched on, so the stop would buy a `.pkg` and a console cycle to learn
-nothing.
+1. `EasyModes.h` — constants, structs, the six-row table, both header notes —
+   done when it compiles standalone and the table reads exactly as §4.1.
+2. `EasyModes.cpp` — the pass of §4.2 — done when it builds with no `RandInt`.
+3. `EnemyRandomizer.h` / `.cpp` — option, result counts, include, the call of
+   §4.3 — done when the call sits between the enemy loop's closing brace and
+   the `BossScalingMaps()` loop and the job builds.
+4. `RandomizerDefaults.h` and `RandomizerDefaultsStore.cpp` — four fields,
+   four load branches, four save arguments — done when a save/load round trip
+   preserves all four and a file without the keys still loads.
+5. `SetupDefaultsScreen.h` / `.cpp` — four row constants appended last,
+   `kItemCount` 21, four `ToggleRow` branches, four `items` entries — done
+   when no existing row constant changed and the four entries are last, in row
+   order.
+6. `EnableWizardScreen.h` / `.cpp` — members, constants, `kSaveDataRowCount`
+   21, ctor init, toggle branches, both list vectors, option assignments, the
+   `||`, the four result lines — done when `DrawSaveData` and `DrawConfirm`
+   hold identical shapes and no existing row constant moved.
+7. `app/tools/easy_modes_verify.py` — done when `selftest` passes all twelve
+   §6 cases against `data/vanilla/dvdroot_ps4`.
+8. `boss_verify.py --easy`, `ui_scroll_verify.py` counts, `pool_verify.py`
+   worst case — done when all three tools pass.
+9. Clean rebuild and `.pkg`.
 
-**The honest counter-argument, recorded so it can be overruled:** the biggest
-unknown (§5.1) is per-fight, and Shadows passing does not prove Rom passes. A
-Shadows-only first milestone would fail fast on the *mechanism* — three fields,
-one larva, does the fight end — before the other three rows are wired up. It is
-rejected because the mechanism is identical across the four and the marginal
-cost of the other three rows is small; but if the developer would rather buy
-that de-risking, splitting after §6.2 passes costs nothing but a second UI pass.
+**Invariants** this milestone must not break: every item in §3.1 — in
+particular the RNG stream, the call-site position, the append-last row rule and
+the unconditional model merge.
+
+**Verification:** all of §6's Build and Automated rows.
+
+**Completion gate.** Everything above passes, the `.pkg` builds, and the
+milestone is handed to the developer for the §6 Hardware steps. Do not begin
+any further work.
+
+### Stop conditions
+
+Halt and report rather than deciding, if any of these occur:
+
+* the build fails in a way this plan did not anticipate;
+* a selftest case cannot be made to pass without weakening what it asserts;
+* the measured placement counts differ from §4.1 — that means the data, not the
+  code, disagrees with the plan;
+* `c2521` cannot be resolved in a map being written;
+* making a check pass would require writing a fourth field, a different map, or
+  touching a param file;
+* an existing UI row index would have to move;
+* a §3.1 invariant cannot be preserved, or a change is needed in a file not
+  listed in §5.
+
+---
+
+## 8. Open questions
+
+None — spec §10 D1–D4 and the repository settle every implementation question
+this feature raises.
 
 ---
 
 ## 9. Decisions
 
-*§8 Open questions is deliberately absent. All four questions it held were put to
-the developer and answered on 2026-09-16 and are recorded below. The heading is
-not reused and nothing is renumbered, so other documents can keep citing these
-sections by number. §1–§7 have been reconciled against the answers.*
-
-| Date | Decision |
-| --- | --- |
-| 2026-09-16 | **1. Plan 016 lands first; this feature is built on the tree 016 leaves behind.** The plan's recommendation. The two features do not interact functionally — the collision is purely the arithmetic of UI row indices — but 016 is older, smaller, and changes already-shipped flag-off behaviour, which deserves its own hardware cycle rather than being attributed inside a four-setting build. §4 is written for the post-016 numbers and §5.5 states the precondition to check before starting. |
-| 2026-09-16 | **2. The four rows are appended after `ENABLE MERGO DARKNESS`, in backlog order** — `EASY SHADOWS`, `EASY ROM`, `EASY FAILURES`, `EASY EMISSARY` — ahead of the two drill-in rows, which stay last. This is the placement rule the last non-randomizer already follows (`mergo-darkness.md` D2) and the order the backlog, the spec and its decisions table all use. The reference window's left-to-right checkbox layout (Shadows, Failures, Rom, Emissary) is treated as layout accident, not intent. |
-| 2026-09-16 | **3. One progress line per enabled setting, each carrying its count.** `EASY SHADOWS REPLACED 2 PLACEMENTS`, `EASY ROM REPLACED 60 PLACEMENTS`, `EASY FAILURES REPLACED 3 PLACEMENTS`, `EASY EMISSARY REPLACED 14 PLACEMENTS`. The counts are fixed measured constants, so printing them makes the console a free assertion — a `0` or a wrong number is the one failure a player would otherwise read as "this fight just isn't affected". No `SKIPPING` counterparts (`mergo-darkness.md` D5). |
-| 2026-09-16 | **4. The replacement identity is baked, not captured at runtime.** `252100 / 252100 / "c2521"` as named constants in `EasyModes.h`, with §6.2 case 5 asserting the baked triple against the real vanilla tree on every selftest run. Determinism over a captured value that means "whatever bytes this user's dump holds", consistency with every other baked reference table in the port, and less code. The reference's runtime capture is guarded by `addedStoneGuyBool`, declared and never assigned, so its guard does nothing. |
-
-**Notes carried from the decisions into the body:**
-
-* Decision 1 rewrote every row count and index in §4 to the post-016 values and
-  turned §5.5 from an open collision into a precondition to verify before
-  implementation starts. It also puts a sequencing sentence at the head of §7.
-* Decision 2 fixes the position and the within-group order in §4's two screen
-  rows; nothing else in the plan depended on it.
-* Decision 3 confirms §3.5 as written — four `int`s on `EnemyRandomizerResult`
-  and four `AddProgressLine` calls.
-* Decision 4 confirms §3.3 as written; the alternative (a new job-state field, a
-  scan in `StepReadMap`, and a policy for "no `c2521` placement seen") is now
-  out, and §3.3 no longer presents it as open.
+| # | Date | Decision | Taken by |
+| - | ---- | -------- | -------- |
+| P1 | 2026-09-16 | The four rows are appended **last** on both screens, in backlog order — `EASY SHADOWS`, `EASY ROM`, `EASY FAILURES`, `EASY EMISSARY` — following the placement rule the last three settings already use, so no existing row index moves. The reference window's left-to-right checkbox layout is treated as layout accident, not intent | developer |
+| P2 | 2026-09-16 | One progress line per enabled setting, each carrying its count; no `SKIPPING` counterparts | developer |
+| P3 | 2026-09-16 | The replacement identity is baked as named constants, not captured at runtime from map data | developer |
+| P4 | 2026-09-19 | `ApplyEasyModes` is self-contained and resolves the `c2521` model index itself, rather than taking the caller's `enemyModelIndex` | planner |
 
 ---
 
-## 10. Changes from the plan
+## 10. Changes during implementation
 
-*Left empty until implementation begins.*
+| Date | Change | Reason |
+| ---- | ------ | ------ |
+| 2026-09-19 | `kEasyModeModelName` is declared `const char* const`, not §4.4's `const char*` | A non-const pointer at namespace scope has external linkage, so the plain form is a duplicate symbol as soon as a second translation unit includes the header — and `EnemyRandomizer.cpp` does. Same spelling the port already uses for a named string constant (`EnableWizardScreen.cpp`'s `kEnemyFailPrefix`). Name and value unchanged |
+| 2026-09-19 | `easy_modes_verify.py verify` takes an extra `--no-randomizers` argument beyond §6's `[shadows] [rom] [failures] [emissary]` | §6's third bullet is conditional — settings-off maps are frozen "when the run had every randomizer off", and otherwise differ "as the enemy and boss passes allow". The flag is how the caller says which tree it has. Without it the survivor and settings-off checks are reported and not asserted, so the tool never passes judgement on the enemy pass, which is `boss_verify.py`'s and `pool_verify.py`'s job |
+| 2026-09-19 | The stale worst-case figure in `RandomizerDefaultsStore.cpp`'s buffer comment updated 585 → 669 | One word in the comment directly above the `snprintf` this milestone extends. It was already wrong (611) before this feature and this change would have made it wronger. The buffer itself is unchanged, as §5 requires |
+| 2026-09-19 | `boss_verify.py`'s `--easy` suppression is computed by importing `easy_modes_verify.parse_table`, not by parsing `EasyModes.h` a second time | §5 asks the flag to suppress "exactly the (map, name) pairs the table selects". Two parsers of one header is the drift `§3.3`'s first hazard is about. The import is deferred into the function because `easy_modes_verify` imports `boss_verify` at load time |
 
 ---
 
 <!--
-Not in this document, on purpose:
 
-  - what the feature is and why it exists (that is docs/features/018-easy-shadows/spec.md)
-  - the plan review's findings (stage 2, its own file)
-  - production code
+The spec describes WHAT the feature should do.
+This plan describes WHAT THE IMPLEMENTER DOES, and how it is verified.
+plan-evidence.md describes WHY the plan says what it says.
+log.md describes HOW the plan got here.
+
 -->

@@ -114,6 +114,15 @@ private:
     bool          randomizeStartingGuns_;
     bool          randomizeShopWeapons_;
     bool          enableMergoDarkness_;
+    bool          doNotRandomizeCagedDogs_;
+    bool          startWithHunterTools_;
+    // EASY SHADOWS / ROM / FAILURES / EMISSARY (feature 018) - four
+    // independent per-run toggles like every other bool here, seeded from
+    // defaults and not written back.
+    bool          easyShadows_;
+    bool          easyRom_;
+    bool          easyFailures_;
+    bool          easyEmissary_;
 
     // Per-run like every other toggle here: seeded from defaults, edited
     // freely, and NOT written back (only lastSeed is - see StartCommit).

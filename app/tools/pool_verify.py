@@ -689,17 +689,38 @@ def cmd_selftest(root):
              len("randomize_workshop_tools=1") + 1 + len("randomize_enemy_drops=1") + 1 +
              len("randomize_starting_weapons=1") + 1 + len("randomize_starting_guns=1") + 1 +
              len("randomize_shop_weapons=1") + 1 + len("enable_mergo_darkness=1") + 1 +
+             len("do_not_randomize_caged_dogs=1") + 1 +
+             len("start_with_hunter_tools=1") + 1 +
+             len("easy_shadows=1") + 1 + len("easy_rom=1") + 1 +
+             len("easy_failures=1") + 1 + len("easy_emissary=1") + 1 +
              len("bosses_included=") + 17 + 1 +
              len("enemies_included=") + 82 + 1 +
              len("enemies_skipped=") + 85 + 1 +
              len("last_seed=4294967295") + 1)
-    cases.append(("032: worst-case defaults.cfg is 555 bytes and fits char buf[1024]",
-                  worst == 555 and bufs and worst < max(bufs)))
+    # 555 until feature 033 added the caged-dogs key, which is 30 bytes with
+    # its newline; 585 until START WITH HUNTER TOOLS added 26 more; 611 until
+    # feature 018's four easy-mode keys added 58 (15 + 11 + 16 + 16). This is
+    # an exact equality on purpose: it fails the moment a key is added without
+    # the buffer being thought about.
+    cases.append(("worst-case defaults.cfg is 669 bytes and fits char buf[1024]",
+                  worst == 669 and bufs and worst < max(bufs)))
     cases.append(("032: unchanged_bell_maidens is gone from load AND save (D1)",
                   "unchanged_bell_maidens" not in store.replace(
                       "// Dropping unchanged_bell_maidens here is genuinely free: the loader above", "")))
     cases.append(("032: enemies_skipped is in both load and save",
                   store.count("enemies_skipped") >= 2))
+    # A key written but never read loads as off forever, and a key read but
+    # never written is forgotten on save - both compile and both look fine.
+    # A key written but never read loads as off forever, and a key read but
+    # never written is forgotten on save - the same trap as the caged-dogs
+    # case below.
+    cases.append(("start_with_hunter_tools is in both load and save",
+                  store.count('"start_with_hunter_tools"') == 1 and
+                  "start_with_hunter_tools=%d" in store and
+                  "defaults.startWithHunterTools ? 1 : 0" in store))
+    cases.append(("033: do_not_randomize_caged_dogs is in both load and save",
+                  store.count('"do_not_randomize_caged_dogs"') == 1 and
+                  "do_not_randomize_caged_dogs=%d" in store))
 
     failures = 0
     for name, ok in cases:

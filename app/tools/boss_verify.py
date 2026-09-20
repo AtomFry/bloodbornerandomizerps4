@@ -18,7 +18,7 @@ Two deliberately different mechanisms, per docs/plans/boss-randomization.md §7:
 
 Usage:
     python boss_verify.py pool   <vanilla_dvdroot>
-    python boss_verify.py verify <vanilla_dvdroot> <output_dvdroot> [--enemies-also]
+    python boss_verify.py verify <vanilla_dvdroot> <output_dvdroot> [--enemies-also] [--easy]
     python boss_verify.py selftest <vanilla_dvdroot>
 """
 
@@ -419,7 +419,7 @@ def load_scaling_ids(repo_root):
 
 
 def compare_trees(van_maps, out_maps, enemies_also=False, vanilla_triples=None,
-                  scaling_ids=None, vanilla_think_model=None):
+                  scaling_ids=None, vanilla_think_model=None, easy_suppress=None):
     """V2/V3/V4 property checks. Returns (failures, changed_count).
 
     Never re-derives expected assignments - only checks invariants that hold
@@ -427,6 +427,15 @@ def compare_trees(van_maps, out_maps, enemies_also=False, vanilla_triples=None,
 
     enemies_also: the run under test had enemy randomization on too, so changes
     to non-boss placements are expected rather than a violation.
+
+    easy_suppress: {(map, placement name)} the easy-mode settings (feature 018)
+    deliberately overwrote. Those placements are Rom's children and the small
+    emissaries - not boss names - so each would otherwise raise a V2 non-boss
+    objection on a perfectly correct tree. Only that one question is
+    suppressed; every other property below still applies to them. Nothing
+    POSITIVE about the easy settings is asserted here - easy_modes_verify.py
+    owns that, and V2's semantics are load-bearing for boss randomization and
+    should not grow a second meaning.
     """
     if vanilla_triples is None:
         vanilla_triples = set()
@@ -434,6 +443,8 @@ def compare_trees(van_maps, out_maps, enemies_also=False, vanilla_triples=None,
         scaling_ids = set()
     if vanilla_think_model is None:
         vanilla_think_model = set()
+    if easy_suppress is None:
+        easy_suppress = set()
 
     def identity_ok(npc, think, model):
         # Either the exact vanilla identity, or a scaling variant of a real
@@ -485,7 +496,9 @@ def compare_trees(van_maps, out_maps, enemies_also=False, vanilla_triples=None,
             # changes are the enemy pass doing its job.
             if not is_boss_name(vname):
                 nonboss_changed += 1
-                if not enemies_also:
+                if (map_name, vname) in easy_suppress:
+                    pass  # an easy-mode target - see the docstring
+                elif not enemies_also:
                     failures.append("%s/%s: V2 non-boss placement changed" % (map_name, vname))
                 elif not identity_ok(onpc, othink, omodel):
                     failures.append(
@@ -553,7 +566,26 @@ def compare_trees(van_maps, out_maps, enemies_also=False, vanilla_triples=None,
     return failures, changed_total, nonboss_changed
 
 
-def cmd_verify(vanilla_root, output_root, enemies_also=False):
+def easy_mode_targets(van_maps):
+    """{(map, name)} the feature-018 table selects, within the boss maps.
+
+    Imported lazily and from easy_modes_verify.py rather than parsed again
+    here: EasyModes.h must have exactly one reader on this side, or the two
+    copies drift and the suppression stops matching what the port writes.
+    The import is inside the function because easy_modes_verify imports this
+    module at load time."""
+    from easy_modes_verify import parse_table, matched_in
+    out = set()
+    for _flag, map_name, patterns in parse_table():
+        m = van_maps.get(map_name)
+        if m is None:
+            continue  # not a boss map, so compare_trees never walks it anyway
+        for name in matched_in(m, patterns):
+            out.add((map_name, name))
+    return out
+
+
+def cmd_verify(vanilla_root, output_root, enemies_also=False, easy=False):
     van_maps = load_maps(vanilla_root)
     out_maps = load_maps(output_root)
     triples = all_vanilla_triples(vanilla_root)
@@ -562,9 +594,19 @@ def cmd_verify(vanilla_root, output_root, enemies_also=False):
     scaling = load_scaling_ids(repo_root)
     print("vanilla identity set: %d triples, %d (think, model) pairs; scaling table: %d ids"
           % (len(triples), len(think_model), len(scaling)))
+    suppress = easy_mode_targets(van_maps) if easy else set()
+    if easy:
+        by_map = {}
+        for map_name, name in suppress:
+            by_map[map_name] = by_map.get(map_name, 0) + 1
+        print("--easy: not asking whether %d placement(s) may change - %s"
+              % (len(suppress),
+                 ", ".join("%s x%d" % (mn, n) for mn, n in sorted(by_map.items()))))
+        print("        they are EasyModes.h's own targets. What they were replaced")
+        print("        WITH is easy_modes_verify.py's question, not this tool's.")
     failures, changed_total, nonboss_changed = compare_trees(
         van_maps, out_maps, enemies_also=enemies_also, vanilla_triples=triples,
-        scaling_ids=scaling, vanilla_think_model=think_model)
+        scaling_ids=scaling, vanilla_think_model=think_model, easy_suppress=suppress)
 
     print("compared %d maps; %d boss placements changed, %d non-boss placements changed" %
           (len(out_maps), changed_total, nonboss_changed))
@@ -692,7 +734,8 @@ def main():
         return cmd_pool(sys.argv[2])
     if len(sys.argv) >= 4 and sys.argv[1] == "verify":
         enemies_also = "--enemies-also" in sys.argv[4:]
-        return cmd_verify(sys.argv[2], sys.argv[3], enemies_also)
+        easy = "--easy" in sys.argv[4:]
+        return cmd_verify(sys.argv[2], sys.argv[3], enemies_also, easy)
     if len(sys.argv) >= 3 and sys.argv[1] == "selftest":
         return cmd_selftest(sys.argv[2])
     print(__doc__)

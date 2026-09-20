@@ -420,3 +420,281 @@ pass; the spec, not the backlog, was the thing approved.
 Any change from here that alters an approved decision drops the status back to
 `QUESTIONS ANSWERED — awaiting developer approval` and requires re-approval; a
 correction that alters none keeps `APPROVED` and is recorded as an amendment.
+
+---
+
+## 2026-09-19 — Stage C: the plan
+
+`/plan 33` ran the `planner` subagent against the APPROVED spec and produced
+`plan.md` (the implementation contract, §1–§7) and `plan-evidence.md` (the
+investigation behind it). Two milestones: the protected set plus the engine
+gate plus a new `caged_dogs_verify.py`, then the setting and its two screens.
+
+The planner re-derived the spec's evidence independently rather than citing it
+— all 26 placements, the entity IDs, the stat rows, the 96/70 and 42/32
+placement arithmetic, the pool at 333 across 82 models, the zone-scaled stat
+values and the cage-script families reproduced exactly, and the EMEVD
+behind spec F3/F5/F14 matched object for object.
+
+### Questions put to the developer, and what was decided
+
+**Q1 — on-screen help text.** Spec D10 requires help text naming both areas,
+but the planner found the port has no per-row help facility on either settings
+screen; the only precedents are a detail line under a three-item menu and an
+instruction line above the pickers. Adding one to a 16-row scrolling list is a
+geometry change to every row. The planner flagged this as a **spec gap**
+rather than a plan question, so it was put to the developer as one.
+**Decided: no in-app help text**; D10 is satisfied in `docs/user-guide.md` at
+the documentation stage, naming Central Yharnam and the Forbidden Woods and
+never the words "Hunting Dog". Recorded as P11. **This supersedes spec D10 as
+written, and the spec still needs amending to match** — noted in the pipeline
+index against the spec, not silently absorbed into the plan.
+
+**Q2 — reporting the protection count on screen.** The honest figure is 26,
+where a player expects 10, because the five map files include two variants the
+retail game never loads. **Decided: text log only**, no progress-screen line.
+Recorded as P12, confirming the planner's recommendation.
+
+**Q3 — where the new settings row goes.** Not a §8 question; raised because
+the planner listed its own choice as a risk and offered the alternative. It
+had recommended index 4, directly below `RANDOMIZE ENEMIES`, which renumbers
+eleven constants and three parallel `items` vectors — the failure both screens
+carry a warning comment about, since a constant and its entry that disagree
+compile, pass `ui_scroll_verify.py` and mislabel every row below.
+**Decided: append the row last instead**, accepting the worse list order to
+remove the renumbering hazard entirely. Recorded as P5 (rewritten) and P13.
+
+### What step 7 reconciled
+
+Q3 reversed a planner decision, so most of the reconciliation was its
+consequences:
+
+* `plan.md` §3.3 — the renumbering hazard rewritten as the much narrower check
+  that survives appending.
+* §4.4 — the row-position paragraph rewritten: index 15, no constant changes,
+  the full row list corrected, and the accepted cost stated.
+* §4.2 and §4.4 — `(§8 Q2)` and `(§8 Q1)` repointed to `(§9 P8)` and
+  `(§9 P11)`.
+* §5 — the three UI rows of the files table: no renumbering, entries appended.
+* §7 — milestone 2 steps 3 and 4 rewritten, with "no existing row constant
+  changes" made checkable by `git diff`.
+* §8 — emptied to one line pointing at P11 and P12; heading kept.
+* §9 — P5 rewritten and reattributed to the developer; P8 marked confirmed;
+  P11–P13 added.
+* `plan-evidence.md` — the rejected-alternatives table entry inverted, since
+  appending is now the decision and index-4 insertion the rejected branch; and
+  §E5.1 rewritten as a hazard the decision retired rather than one to accept.
+
+Two §8 references were left alone deliberately: §1's note that §8–§10 are the
+record, and B12's citation of the **spec's** §8.
+
+Contract length after reconciliation: 419 lines for §1–§7.
+
+### Spec issues the planner found
+
+1. **D10 asks for a facility the port does not have** — the Q1 spec gap above.
+   The only place the approved spec asks for something the codebase cannot
+   deliver as written.
+2. **Spec §8's "Automated testing" list is misclassified.** Items 2–6 all need
+   a randomized output tree, and the engine only runs on the PS4. Only items 1
+   and 7 are runnable by an implementer. The plan's §6 moves the rest to
+   post-hardware checks and gives the command that runs them against a
+   captured tree.
+3. **Spec §4 F7's parenthetical is wrong in detail** (harmless). Among enemy
+   parts `m33_00_00_00` has two duplicate entity-ID pairs, not one, and across
+   all part types several maps repeat an ID between an enemy and a non-enemy
+   part. F7's conclusion holds: the ten protected IDs are unique wherever the
+   gate can see them.
+4. **Spec §7's UI budget arithmetic is one character off** — the new row is 33
+   characters including its value against 32 for the current longest, so it is
+   marginally the longest rather than "alongside". The real budget is 53 at
+   scale 4, so nothing is affected.
+5. **Spec §2 and hardware test 1 omit that Central Yharnam has 13 cage props
+   for 6 caged dogs** — the Forbidden Woods' 6/4 asymmetry is documented but
+   Central Yharnam's is not. A tester told "six dogs in cages" will see empty
+   cages and could report a false failure. The correction is in the plan's
+   hardware handoff.
+
+Status left at **QUESTIONS ANSWERED — awaiting developer approval**: the
+developer answered from the summary above, not from the plan itself. Stage D
+(`/review-plan 33`) is theirs to call.
+
+---
+
+## 2026-09-19 — Stage E, milestone 1 implemented (`/implement 33`)
+
+Dispatched with `plan.md` as the contract, alongside `plan-evidence.md`,
+`spec.md` and this log. Plan status on dispatch: **Approved**, §8 empty. Note
+that `plan-review.md` does not exist — stage D was never run for this feature;
+the developer approved the plan directly, which is their gate to hold.
+
+**Milestone 1 — the protected set and the engine gate. Completed.** No stop
+condition fired.
+
+### Changed
+
+Exactly the four files §5 assigns to milestone 1, and no others:
+
+* `app/src/Randomizer/CagedDogList.h` — **new**. Ten `(map prefix, entity ID)`
+  entries and `IsProtectedCagedDog`, which returns false for entity IDs `<= 0`
+  before comparing anything.
+* `app/src/Randomizer/EnemyRandomizer.h` — `doNotRandomizeCagedDogs` (default
+  `false`) on the options struct, `cagedDogsProtected` on the result struct.
+* `app/src/Randomizer/EnemyRandomizer.cpp` — the include, the gate in
+  `StepWriteMap`, and the on-only log line in `StepEmevd`.
+* `app/tools/caged_dogs_verify.py` — **new**; `list`, `protected`, `selftest`.
+
+Plus `implementation-report.md`, and `plan.md` §10 — §1–§7 verified unchanged
+against a pre-dispatch copy.
+
+### Deviations
+
+**None.** Four choices the plan left open were taken by the implementer and
+recorded in `plan.md` §10 and report §3:
+
+1. The gate reads `!forced && options.doNotRandomizeCagedDogs &&
+   IsProtectedCagedDog(...)`, matching the shape of its two siblings. The
+   option is still the first thing the gate itself evaluates, so §3.1's
+   RNG-stream invariant holds by short-circuit.
+2. The per-run log line is emitted after the existing `enemy randomizer: done
+   - …` summary in `StepEmevd`.
+3. `caged_dogs_verify.py` hard-codes the three cage object models as
+   derivation A's input, and also asserts the two cage-prop counts from §3.3.
+4. Header symbols: `CagedDogEntry` / `CagedDogList()` / `IsProtectedCagedDog()`.
+
+### Verification run, and independently re-run by the orchestrator
+
+| Check | Result |
+| ----- | ------ |
+| `make clean && make` | `.pkg` built, 7,143,424 bytes. Re-run from scratch after the report, producing a byte-size-identical `.pkg` — the shipped artifact provably matches the sources |
+| `caged_dogs_verify.py selftest data/vanilla/dvdroot_ps4` | 23/23, exit 0; covers all eight §6 cases. Both geometric derivations return the same 26; bounds 0.899 / 2.671; both EMEVD files framed two ways each; both script families confirmed |
+| `caged_dogs_verify.py protected … "data/runs/20260919-Enemies Only/dvdroot_ps4"` | FAIL as required — 26 of 26 not frozen, exit 1. The check has teeth |
+| `caged_dogs_verify.py list` | 26 rows, 6/6/6/4/4 |
+| `pool_verify.py selftest` | 85/85, no case changed state; config case still 555 bytes, correctly untouched until milestone 2 |
+| `pool_verify.py table enemy` | 82 models, unchanged; selftest confirms the pool is still 333 entries across 82 models |
+| `ui_scroll_verify.py` | passes, unchanged — no UI file was touched this milestone |
+
+§3.1 invariants checked against the diff: `StepReadMap` not touched; the gate
+sits after the `ENEMIES SKIPPED` test and before `RandInt`, inside the same
+`!forced &&`, so the m28 override still outranks it and no existing test moved;
+the gate only `continue`s, writing no name, entity ID, position or collision
+index; `EnemyPoolTable.h` and `EnemySkipTable.h` not regenerated; no SDL2 and
+no UI file learns a map name or an entity ID.
+
+### Not run
+
+All hardware testing, and everything belonging to milestone 2.
+
+### Noted for stage F, not acted on
+
+* In the pre-feature baseline, `m24_01_00_01 c1240_0005` was re-targeted to a
+  different variant of the *same* creature. A freeze test comparing only the
+  model name would pass it; `protected` compares the behaviour row too, so it
+  catches it.
+* `app/tools/names.py`'s `map_is_unused` is internally inconsistent across the
+  two areas (evidence F13). Not touched; the feature covers all five map files
+  regardless.
+
+### Awaiting
+
+Hardware test 1 of §6: seed **1234567890**, `RANDOMIZE ENEMIES` on, everything
+else off, all 82 included, nothing skipped. The output `dvdroot_ps4` must be
+byte-identical to `data/runs/20260919-Enemies Only/dvdroot_ps4`, and `live.log`
+must gain no new line. Milestone 2 does not start until that passes.
+
+---
+
+## 2026-09-19 — Stage E, milestone 2 implemented (`/implement 33 2`)
+
+**Milestone 1's hardware test: PASSED.** The developer confirmed the
+byte-identical seed-1234567890 run when `/implement 33 2` was invoked, before
+milestone 2 was dispatched. The orchestrator stopped and asked rather than
+assuming, because no new capture had appeared in `data/runs/` and the milestone
+gate is what `CLAUDE.md` §4 protects. Recorded here because the confirmation
+was verbal — the captured tree is not in `data/runs/`.
+
+**Milestone 2 — the setting. Completed.** No stop condition fired.
+
+### Changed
+
+Exactly the eight files §5 assigns to milestone 2, and no others:
+
+* `app/src/Randomizer/RandomizerDefaults.h` — `doNotRandomizeCagedDogs`,
+  default `false`.
+* `app/src/Randomizer/RandomizerDefaultsStore.cpp` — the key in the loader's
+  `strcmp` chain, in the save format string and in its argument list.
+* `app/src/UI/SetupDefaultsScreen.h` — `kDoNotRandomizeCagedDogsRow = 15`,
+  `kItemCount` 15 → 16.
+* `app/src/UI/SetupDefaultsScreen.cpp` — `ToggleRow` branch, row appended last
+  in `DrawList`.
+* `app/src/UI/EnableWizardScreen.h` — the per-run member.
+* `app/src/UI/EnableWizardScreen.cpp` — row constant at 15,
+  `kSaveDataRowCount` 16, ctor initialiser, left/right and X branches, row
+  appended last in `DrawSaveData` and `DrawConfirm`, `StartCommit` assignment.
+* `app/tools/ui_scroll_verify.py` — the three 15-row entries → 16.
+* `app/tools/pool_verify.py` — worst case 555 → 585, one new case.
+
+Plus `implementation-report.md` and `plan.md` §10 — §1–§7 verified unchanged
+against a pre-dispatch copy.
+
+### Deviations
+
+**None.** Four choices the plan left open, recorded in `plan.md` §10 and the
+report:
+
+1. The `RandomizerDefaults` field sits after `enableMergoDarkness` and before
+   `lastSeed`, keeping the remembered run artifact last. Presentation only —
+   the struct is not serialised by layout.
+2. `RandomizerDefaultsStore.cpp`'s comment quoting the worst-case config size
+   was updated 555 → 585. Adding the key made the sentence false and it quotes
+   the number `pool_verify.py` now asserts. A fourth touched line in a file §5
+   already names.
+3. The two toggle log lines read `defaults: do not randomize caged dogs = YES`
+   / `enable wizard: … = NO`, the form every other toggle uses.
+4. Milestone 2's report is appended to the same `implementation-report.md`
+   under its own title, and milestone 1's status line there was updated to
+   record the hardware pass.
+
+### Verification run, and independently re-run by the orchestrator
+
+| Check | Result |
+| ----- | ------ |
+| `make clean && make` | `.pkg` built, 7,143,424 bytes, no errors and no `-Wall` warnings. Re-run from scratch by the orchestrator after the report |
+| `ui_scroll_verify.py` | PASSED — Setup Defaults 7 of 16, Wizard SaveData 6 of 16, Wizard Confirm 6 of 16. Diff confirms only those three entries changed; "Progress log" was already 16 |
+| `pool_verify.py selftest` | 86/86 — the 85 existing cases unchanged, the config case now 585, one new case asserting the key is in load *and* save |
+| `pool_verify.py table enemy` | PASS, 82 models |
+| `caged_dogs_verify.py selftest` | 23/23, unchanged |
+| `caged_dogs_verify.py protected …` vs the pre-feature tree | FAIL as required, 26 of 26 |
+
+§3.1 invariants checked against the diff: no pre-existing `k*Row` constant was
+edited on either screen — rows 0–14 are untouched and the new row is 15 with
+both counts at 16; all three `items` vectors carry the new entry last, at the
+index its constant names; `defaults.cfg` stays compatible, since an absent key
+falls through the `strcmp` chain to the struct's own `false`; `ENEMIES SKIPPED`
+is untouched; and no UI file names a map or an entity ID — the UI only sets a
+bool, and `CagedDogList.h` is included by the engine alone. B13 confirmed: the
+words "HUNTING DOG" appear in no user-facing string.
+
+The setting is **absent from `StartCommit`'s big `||`** (verified by reading
+the condition), so ticking it alone cannot start a run that does nothing — B10.
+
+### Not run
+
+Everything needing a console. In particular the `defaults.cfg` round-trip is
+argued from source and pinned by the mirror case, not executed; there is no
+host C++ compiler.
+
+### Noted for stage F, not acted on
+
+* `EnableWizardScreen.cpp`'s anonymous-namespace comment and
+  `SetupDefaultsScreen.h`'s equivalent still narrate feature 032 keeping the
+  count at 15. They describe 032's change rather than today's total, so they
+  were left; a reviewer may prefer them reworded.
+* `StartCommit` carries two stacked "Meaningless without …" comments above
+  `options.randomizeWorkshopTools`, one of which reads as a leftover.
+
+### Awaiting
+
+The six hardware tests of §6, with the setting on and then off. Both captures
+go into `data/runs/` so `caged_dogs_verify.py protected` can be run on each: it
+must pass on the "on" tree and fail on the "off" one.

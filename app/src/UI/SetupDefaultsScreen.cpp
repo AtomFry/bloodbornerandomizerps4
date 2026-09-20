@@ -118,6 +118,30 @@ void SetupDefaultsScreen::ToggleRow(int row) {
         working_.enableMergoDarkness = !working_.enableMergoDarkness;
         Log(working_.enableMergoDarkness ? "defaults: enable mergo darkness = YES"
                                            : "defaults: enable mergo darkness = NO");
+    } else if (row == kDoNotRandomizeCagedDogsRow) {
+        working_.doNotRandomizeCagedDogs = !working_.doNotRandomizeCagedDogs;
+        Log(working_.doNotRandomizeCagedDogs ? "defaults: do not randomize caged dogs = YES"
+                                              : "defaults: do not randomize caged dogs = NO");
+    } else if (row == kStartWithHunterToolsRow) {
+        working_.startWithHunterTools = !working_.startWithHunterTools;
+        Log(working_.startWithHunterTools ? "defaults: start with hunter tools = YES"
+                                           : "defaults: start with hunter tools = NO");
+    } else if (row == kEasyShadowsRow) {
+        working_.easyShadows = !working_.easyShadows;
+        Log(working_.easyShadows ? "defaults: easy shadows = YES"
+                                  : "defaults: easy shadows = NO");
+    } else if (row == kEasyRomRow) {
+        working_.easyRom = !working_.easyRom;
+        Log(working_.easyRom ? "defaults: easy rom = YES"
+                              : "defaults: easy rom = NO");
+    } else if (row == kEasyFailuresRow) {
+        working_.easyFailures = !working_.easyFailures;
+        Log(working_.easyFailures ? "defaults: easy failures = YES"
+                                   : "defaults: easy failures = NO");
+    } else if (row == kEasyEmissaryRow) {
+        working_.easyEmissary = !working_.easyEmissary;
+        Log(working_.easyEmissary ? "defaults: easy emissary = YES"
+                                   : "defaults: easy emissary = NO");
     }
 }
 
@@ -244,6 +268,21 @@ void SetupDefaultsScreen::DrawList(Renderer& renderer) {
         // after ENEMIES INCLUDED, which it is the opposite of.
         std::string("ENEMIES SKIPPED   ") + EnemiesSkippedText(),
         std::string("BOSSES INCLUDED   ") + BossesIncludedText(),
+        // Position 15, matching kDoNotRandomizeCagedDogsRow - appended last,
+        // see the header.
+        std::string("DO NOT RANDOMIZE CAGED DOGS   ")
+            + (working_.doNotRandomizeCagedDogs ? "YES" : "NO"),
+        // Position 16, matching kStartWithHunterToolsRow - appended last,
+        // see the header.
+        std::string("START WITH HUNTER TOOLS   ")
+            + (working_.startWithHunterTools ? "YES" : "NO"),
+        // Positions 17-20, matching kEasyShadowsRow, kEasyRomRow,
+        // kEasyFailuresRow and kEasyEmissaryRow - appended last, in the same
+        // order as the constants, see the header.
+        std::string("EASY SHADOWS   ") + (working_.easyShadows ? "YES" : "NO"),
+        std::string("EASY ROM   ") + (working_.easyRom ? "YES" : "NO"),
+        std::string("EASY FAILURES   ") + (working_.easyFailures ? "YES" : "NO"),
+        std::string("EASY EMISSARY   ") + (working_.easyEmissary ? "YES" : "NO"),
     };
     DrawScrollableList(renderer, kListLayout, items, selected_, scrollOffset_, kItemScale,
                        Palette::Text, Palette::Selected);

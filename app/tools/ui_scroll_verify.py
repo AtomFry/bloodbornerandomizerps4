@@ -46,14 +46,20 @@ SCREENS = [
     #   heading_bottom (lowest y+h of anything above the list),
     #   footer_top (highest y of anything below)
     # counts track SetupDefaultsScreen::kItemCount and kSaveDataRowCount, which
-    # grow by one per settings row. Still 15 after feature 032: D1 removed
-    # UNCHANGED BELL MAIDENS and ENEMIES SKIPPED took its place, so these
-    # three entries are unchanged by that feature.
-    ("Setup Defaults",  300, 90, 870, 4, 15, 180 + glyph_h(5), SCREEN_H - 130),
-    ("Wizard SaveData", 420, 90, 870, 4, 15, 260 + glyph_h(4), SCREEN_H - 130),
-    ("Wizard Confirm",  420, 90, 870, 4, 15, 260 + glyph_h(4), SCREEN_H - 130),
+    # grow by one per settings row. They stayed at 15 through feature 032: D1
+    # removed UNCHANGED BELL MAIDENS and ENEMIES SKIPPED took its place, so
+    # that feature left these three entries alone. Feature 033 appends DO NOT
+    # RANDOMIZE CAGED DOGS last on all three lists, 15 -> 16. START WITH
+    # HUNTER TOOLS appends to the same three, 16 -> 17. Feature 018 appends
+    # four more - EASY SHADOWS, EASY ROM, EASY FAILURES, EASY EMISSARY -
+    # 17 -> 21. The progress log is NOT one of these: its count is a line
+    # budget, not a settings-row count, and feature 018 adds up to four lines
+    # to it, one per enabled setting, 16 -> 20.
+    ("Setup Defaults",  300, 90, 870, 4, 21, 180 + glyph_h(5), SCREEN_H - 130),
+    ("Wizard SaveData", 420, 90, 870, 4, 21, 260 + glyph_h(4), SCREEN_H - 130),
+    ("Wizard Confirm",  420, 90, 870, 4, 21, 260 + glyph_h(4), SCREEN_H - 130),
     # Progress: worst case is the finished state (no live line, footer present).
-    ("Progress log",    300, 70, 920, 3, 16, 200 + glyph_h(4), SCREEN_H - 130),
+    ("Progress log",    300, 70, 920, 3, 20, 200 + glyph_h(4), SCREEN_H - 130),
     # The enemy picker (UI/EnemyPicker.cpp): 82 rows is far too many at the
     # settings screens' scale 4 / 90px pitch, so it runs denser - scale 3 at
     # 52px, which fits 12 and turns 14 pages into 7. Heading at y=120 (scale

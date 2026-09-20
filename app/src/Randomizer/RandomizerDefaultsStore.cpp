@@ -78,6 +78,24 @@ RandomizerDefaults LoadRandomizerDefaults() {
                 defaults.enemiesSkipped.Decode(value);
             } else if (strcmp(key, "enable_mergo_darkness") == 0) {
                 defaults.enableMergoDarkness = (atoi(value) != 0);
+            } else if (strcmp(key, "do_not_randomize_caged_dogs") == 0) {
+                // Absent -> the struct's own false, which is the run the app
+                // made before this key existed (spec 033 D2).
+                defaults.doNotRandomizeCagedDogs = (atoi(value) != 0);
+            } else if (strcmp(key, "start_with_hunter_tools") == 0) {
+                // Absent -> the struct's own false, which is the run the app
+                // made before this key existed.
+                defaults.startWithHunterTools = (atoi(value) != 0);
+            } else if (strcmp(key, "easy_shadows") == 0) {
+                // Same rule for all four: absent -> the struct's own false,
+                // which is the run the app made before these keys existed.
+                defaults.easyShadows = (atoi(value) != 0);
+            } else if (strcmp(key, "easy_rom") == 0) {
+                defaults.easyRom = (atoi(value) != 0);
+            } else if (strcmp(key, "easy_failures") == 0) {
+                defaults.easyFailures = (atoi(value) != 0);
+            } else if (strcmp(key, "easy_emissary") == 0) {
+                defaults.easyEmissary = (atoi(value) != 0);
             } else if (strcmp(key, "last_seed") == 0) {
                 // strtoul, not atoi: a seed can exceed INT_MAX.
                 defaults.lastSeed = (uint32_t)strtoul(value, nullptr, 10);
@@ -92,7 +110,7 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
     sceKernelMkdir("/data/bbrandomizer", 0777);
 
     // 1024, not 512: enemies_included is ~99 bytes, enemies_skipped ~102, and
-    // the feature spec has ~20 more settings queued. Worst case today is 555
+    // the feature spec has ~20 more settings queued. Worst case today is 669
     // bytes, pinned by a pool_verify selftest case. The clamp below is still
     // the real guard; this just keeps the margin comfortable.
     //
@@ -108,6 +126,10 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
                         "randomize_enemy_drops=%d\n"
                         "randomize_starting_weapons=%d\nrandomize_starting_guns=%d\n"
                         "randomize_shop_weapons=%d\nenable_mergo_darkness=%d\n"
+                        "do_not_randomize_caged_dogs=%d\n"
+                        "start_with_hunter_tools=%d\n"
+                        "easy_shadows=%d\neasy_rom=%d\n"
+                        "easy_failures=%d\neasy_emissary=%d\n"
                         "bosses_included=%s\n"
                         "enemies_included=%s\n"
                         "enemies_skipped=%s\n"
@@ -124,6 +146,12 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
                         defaults.randomizeStartingGuns ? 1 : 0,
                         defaults.randomizeShopWeapons ? 1 : 0,
                         defaults.enableMergoDarkness ? 1 : 0,
+                        defaults.doNotRandomizeCagedDogs ? 1 : 0,
+                        defaults.startWithHunterTools ? 1 : 0,
+                        defaults.easyShadows ? 1 : 0,
+                        defaults.easyRom ? 1 : 0,
+                        defaults.easyFailures ? 1 : 0,
+                        defaults.easyEmissary ? 1 : 0,
                         defaults.bossesIncluded.Encode().c_str(),
                         defaults.enemiesIncluded.Encode().c_str(),
                         defaults.enemiesSkipped.Encode().c_str(),

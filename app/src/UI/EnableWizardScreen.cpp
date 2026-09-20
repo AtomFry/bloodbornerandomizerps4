@@ -46,7 +46,27 @@ const int kDisableMergoDarknessRow = 11;
 const int kEnemiesIncludedRow  = 12;
 const int kEnemiesSkippedRow   = 13;
 const int kBossesIncludedRow   = 14;
-const int kSaveDataRowCount    = 15;
+// Appended last, and deliberately not moved up next to RANDOMIZE ENEMIES, the
+// toggle it modifies: going last is what guarantees no existing row index
+// moves and so no existing row can be mislabelled (feature 033 P5, P13).
+const int kDoNotRandomizeCagedDogsRow = 15;
+// Appended last for the same reason, and deliberately NOT placed next to
+// RANDOMIZE WORKSHOP TOOLS: they are different features on the same two items
+// (that one shuffles them into the treasure pool, this one grants them at
+// character creation) and inserting there would shift every row below it.
+// kSaveDataRowCount goes with it, 16 -> 17, along with ui_scroll_verify.py.
+const int kStartWithHunterToolsRow = 16;
+// The four easy-mode settings (feature 018), appended last for the same
+// reason as the two rows above: an index added at the END cannot mislabel an
+// existing row, and both list vectors below must gain their entries in the
+// same order and in the same place. Backlog order - rows 18, 19, 20, 21 of
+// docs/randomization-feature-spec.md §6 (plan 018 P1). kSaveDataRowCount goes
+// with them, 17 -> 21, along with ui_scroll_verify.py.
+const int kEasyShadowsRow      = 17;
+const int kEasyRomRow          = 18;
+const int kEasyFailuresRow     = 19;
+const int kEasyEmissaryRow     = 20;
+const int kSaveDataRowCount    = 21;
 
 // The four strings feature 032 puts on the commit screen, named rather than
 // inlined so pool_verify.py selftest case 6 can parse them out of this file
@@ -115,6 +135,12 @@ EnableWizardScreen::EnableWizardScreen(RandomizerDefaults& defaults)
       randomizeStartingGuns_(defaults.randomizeStartingGuns),
       randomizeShopWeapons_(defaults.randomizeShopWeapons),
       enableMergoDarkness_(defaults.enableMergoDarkness),
+      doNotRandomizeCagedDogs_(defaults.doNotRandomizeCagedDogs),
+      startWithHunterTools_(defaults.startWithHunterTools),
+      easyShadows_(defaults.easyShadows),
+      easyRom_(defaults.easyRom),
+      easyFailures_(defaults.easyFailures),
+      easyEmissary_(defaults.easyEmissary),
       enemiesIncluded_(defaults.enemiesIncluded),
       bossesIncluded_(defaults.bossesIncluded),
       enemiesSkipped_(defaults.enemiesSkipped),
@@ -230,6 +256,36 @@ void EnableWizardScreen::UpdateSaveData(const ButtonEdges& input) {
         Log(enableMergoDarkness_ ? "enable wizard: enable mergo darkness = YES"
                                    : "enable wizard: enable mergo darkness = NO");
     }
+    if ((input.left || input.right) && selected_ == kDoNotRandomizeCagedDogsRow) {
+        doNotRandomizeCagedDogs_ = !doNotRandomizeCagedDogs_;
+        Log(doNotRandomizeCagedDogs_ ? "enable wizard: do not randomize caged dogs = YES"
+                                      : "enable wizard: do not randomize caged dogs = NO");
+    }
+    if ((input.left || input.right) && selected_ == kStartWithHunterToolsRow) {
+        startWithHunterTools_ = !startWithHunterTools_;
+        Log(startWithHunterTools_ ? "enable wizard: start with hunter tools = YES"
+                                   : "enable wizard: start with hunter tools = NO");
+    }
+    if ((input.left || input.right) && selected_ == kEasyShadowsRow) {
+        easyShadows_ = !easyShadows_;
+        Log(easyShadows_ ? "enable wizard: easy shadows = YES"
+                          : "enable wizard: easy shadows = NO");
+    }
+    if ((input.left || input.right) && selected_ == kEasyRomRow) {
+        easyRom_ = !easyRom_;
+        Log(easyRom_ ? "enable wizard: easy rom = YES"
+                      : "enable wizard: easy rom = NO");
+    }
+    if ((input.left || input.right) && selected_ == kEasyFailuresRow) {
+        easyFailures_ = !easyFailures_;
+        Log(easyFailures_ ? "enable wizard: easy failures = YES"
+                           : "enable wizard: easy failures = NO");
+    }
+    if ((input.left || input.right) && selected_ == kEasyEmissaryRow) {
+        easyEmissary_ = !easyEmissary_;
+        Log(easyEmissary_ ? "enable wizard: easy emissary = YES"
+                           : "enable wizard: easy emissary = NO");
+    }
 
     if (input.cross) {
         if (selected_ == kBackupToggleRow) {
@@ -293,6 +349,30 @@ void EnableWizardScreen::UpdateSaveData(const ButtonEdges& input) {
             picker_.Reset();
             Log("enable wizard: opening boss picker");
             GoToStep(Step::BossPicker);
+        } else if (selected_ == kDoNotRandomizeCagedDogsRow) {
+            doNotRandomizeCagedDogs_ = !doNotRandomizeCagedDogs_;
+            Log(doNotRandomizeCagedDogs_ ? "enable wizard: do not randomize caged dogs = YES"
+                                          : "enable wizard: do not randomize caged dogs = NO");
+        } else if (selected_ == kStartWithHunterToolsRow) {
+            startWithHunterTools_ = !startWithHunterTools_;
+            Log(startWithHunterTools_ ? "enable wizard: start with hunter tools = YES"
+                                       : "enable wizard: start with hunter tools = NO");
+        } else if (selected_ == kEasyShadowsRow) {
+            easyShadows_ = !easyShadows_;
+            Log(easyShadows_ ? "enable wizard: easy shadows = YES"
+                              : "enable wizard: easy shadows = NO");
+        } else if (selected_ == kEasyRomRow) {
+            easyRom_ = !easyRom_;
+            Log(easyRom_ ? "enable wizard: easy rom = YES"
+                          : "enable wizard: easy rom = NO");
+        } else if (selected_ == kEasyFailuresRow) {
+            easyFailures_ = !easyFailures_;
+            Log(easyFailures_ ? "enable wizard: easy failures = YES"
+                               : "enable wizard: easy failures = NO");
+        } else if (selected_ == kEasyEmissaryRow) {
+            easyEmissary_ = !easyEmissary_;
+            Log(easyEmissary_ ? "enable wizard: easy emissary = YES"
+                               : "enable wizard: easy emissary = NO");
         }
     }
 
@@ -539,10 +619,15 @@ void EnableWizardScreen::StartCommit() {
     // docs/plans/mergo-darkness.md). There is no asymmetry to worry
     // about because the setting is named for its action - YES is the only
     // state that writes anything, and NO asks for nothing to be done.
+    // The four easy-mode settings are in this list for the same reason
+    // enableMergoDarkness_ is: each one writes real map files on its own and
+    // needs no other feature to mean anything, so ticking one alone must
+    // start a run. They are deliberately NOT gated on randomizeEnemies_.
     if (randomizeEnemies_ || randomizeBosses_ || randomizeTreasure_ ||
         randomizeEnemyDrops_ || randomizeStartingWeapons_ ||
         randomizeStartingGuns_ || randomizeShopWeapons_ ||
-        enableMergoDarkness_) {
+        enableMergoDarkness_ || startWithHunterTools_ ||
+        easyShadows_ || easyRom_ || easyFailures_ || easyEmissary_) {
         std::string outputDir = "/data/GoldHEN/AFR/" + titleId_ + "/dvdroot_ps4";
         EnemyRandomizerOptions options;
         options.randomizeEnemies = randomizeEnemies_;
@@ -559,6 +644,24 @@ void EnableWizardScreen::StartCommit() {
         options.randomizeStartingGuns = randomizeStartingGuns_;
         options.randomizeShopWeapons = randomizeShopWeapons_;
         options.enableMergoDarkness = enableMergoDarkness_;
+        // Meaningless without randomizeEnemies (spec 033 B10), exactly like
+        // randomizeWorkshopTools above, so it too is absent from the big ||:
+        // ticking it alone must not start a run that does nothing. It also
+        // gets no SKIPPING line - NO is simply the run this app already made.
+        options.doNotRandomizeCagedDogs = doNotRandomizeCagedDogs_;
+        // IS in the big || above, unlike the two modifiers either side of it:
+        // this one changes the game on its own - it needs no other feature to
+        // mean anything - so ticking it alone must build a tree, exactly like
+        // enableMergoDarkness_.
+        options.startWithHunterTools = startWithHunterTools_;
+        // Four independent settings on one struct, none of them a
+        // randomizer and none of them a modifier on another feature - they
+        // apply whether or not anything else above is on, and they are the
+        // last writer of the placements they touch. See EasyModes.h.
+        options.easyModes.shadows = easyShadows_;
+        options.easyModes.rom = easyRom_;
+        options.easyModes.failures = easyFailures_;
+        options.easyModes.emissary = easyEmissary_;
         options.enemiesIncluded = enemiesIncluded_;
         options.bossesIncluded = bossesIncluded_;
         options.enemiesSkipped = enemiesSkipped_;
@@ -634,6 +737,37 @@ void EnableWizardScreen::FinishCommit() {
             if (enableMergoDarkness_) {
                 AddProgressLine("MERGO DARKNESS ENABLED - THE WORLD WILL BE DARK");
             }
+            // Reported as a state rather than a count, deliberately: the
+            // honest count covers both blocks of origin rows (HunterTools.cpp)
+            // and a player who picks one origin would read 22 as a defect. No
+            // SKIPPING counterpart, for the same reason enableMergoDarkness
+            // has none - NO means the app left the file alone.
+            if (startWithHunterTools_) {
+                AddProgressLine("STARTING WITH BOTH HUNTER WORKSHOP TOOLS");
+            }
+            // One line per ENABLED easy setting, each carrying its count
+            // (plan 018 P2). No SKIPPING counterparts, for the same reason
+            // the two features above have none. The counts are fixed - 2 /
+            // 60 / 3 / 14 - so a 0 or a wrong number here means a pattern
+            // list or a map name is wrong. EASY ROM reads 60 and EASY
+            // EMISSARY 14 because this port writes both map variants of
+            // those two areas.
+            if (easyShadows_) {
+                AddProgressLine("EASY SHADOWS REPLACED " +
+                                std::to_string(result.easyCounts.shadows) + " PLACEMENTS");
+            }
+            if (easyRom_) {
+                AddProgressLine("EASY ROM REPLACED " +
+                                std::to_string(result.easyCounts.rom) + " PLACEMENTS");
+            }
+            if (easyFailures_) {
+                AddProgressLine("EASY FAILURES REPLACED " +
+                                std::to_string(result.easyCounts.failures) + " PLACEMENTS");
+            }
+            if (easyEmissary_) {
+                AddProgressLine("EASY EMISSARY REPLACED " +
+                                std::to_string(result.easyCounts.emissary) + " PLACEMENTS");
+            }
             // Only when it did something - an all-enabled pool is the default
             // and saying so every run is noise.
             if (randomizeEnemies_ && !enemiesIncluded_.AllEnabled()) {
@@ -656,7 +790,8 @@ void EnableWizardScreen::FinishCommit() {
             // The item-data archive is rewritten once for whichever param
             // features ran, so report it once rather than per feature.
             if (randomizeEnemyDrops_ || randomizeStartingWeapons_ ||
-                randomizeStartingGuns_ || randomizeShopWeapons_) {
+                randomizeStartingGuns_ || randomizeShopWeapons_ ||
+                startWithHunterTools_) {
                 AddProgressLine("ITEM DATA " + std::to_string(result.itemDataMembers) +
                                 " ENTRIES, WROTE " +
                                 std::to_string(result.itemDataWrittenBytes / 1048576) + " MB");
@@ -726,6 +861,24 @@ void EnableWizardScreen::DrawSaveData(Renderer& renderer) {
         std::string("BOSSES INCLUDED   ") +
             std::to_string(bossesIncluded_.CountEnabled()) + " OF " +
             std::to_string(kBossPoolModelCount),
+        // Position 15, matching kDoNotRandomizeCagedDogsRow - appended last,
+        // see the constant. DrawSaveData's and DrawConfirm's lists must stay
+        // identical in shape.
+        std::string("DO NOT RANDOMIZE CAGED DOGS   ")
+            + (doNotRandomizeCagedDogs_ ? "YES" : "NO"),
+        // Position 16, matching kStartWithHunterToolsRow - appended last, see
+        // the constant. DrawSaveData's and DrawConfirm's lists must stay
+        // identical in shape.
+        std::string("START WITH HUNTER TOOLS   ")
+            + (startWithHunterTools_ ? "YES" : "NO"),
+        // Positions 17-20, matching kEasyShadowsRow, kEasyRomRow,
+        // kEasyFailuresRow and kEasyEmissaryRow - appended last, in the same
+        // order as the constants. DrawSaveData's and DrawConfirm's lists must
+        // stay identical in shape.
+        std::string("EASY SHADOWS   ") + (easyShadows_ ? "YES" : "NO"),
+        std::string("EASY ROM   ") + (easyRom_ ? "YES" : "NO"),
+        std::string("EASY FAILURES   ") + (easyFailures_ ? "YES" : "NO"),
+        std::string("EASY EMISSARY   ") + (easyEmissary_ ? "YES" : "NO"),
     };
     DrawScrollableList(renderer, kSettingsLayout, items, selected_, scrollOffset_, kItemScale,
                        Palette::Text, Palette::Selected);
@@ -820,6 +973,24 @@ void EnableWizardScreen::DrawConfirm(Renderer& renderer) {
         std::string("BOSSES INCLUDED   ") +
             std::to_string(bossesIncluded_.CountEnabled()) + " OF " +
             std::to_string(kBossPoolModelCount),
+        // Position 15, matching kDoNotRandomizeCagedDogsRow - appended last,
+        // see the constant. DrawSaveData's and DrawConfirm's lists must stay
+        // identical in shape.
+        std::string("DO NOT RANDOMIZE CAGED DOGS   ")
+            + (doNotRandomizeCagedDogs_ ? "YES" : "NO"),
+        // Position 16, matching kStartWithHunterToolsRow - appended last, see
+        // the constant. DrawSaveData's and DrawConfirm's lists must stay
+        // identical in shape.
+        std::string("START WITH HUNTER TOOLS   ")
+            + (startWithHunterTools_ ? "YES" : "NO"),
+        // Positions 17-20, matching kEasyShadowsRow, kEasyRomRow,
+        // kEasyFailuresRow and kEasyEmissaryRow - appended last, in the same
+        // order as the constants. DrawSaveData's and DrawConfirm's lists must
+        // stay identical in shape.
+        std::string("EASY SHADOWS   ") + (easyShadows_ ? "YES" : "NO"),
+        std::string("EASY ROM   ") + (easyRom_ ? "YES" : "NO"),
+        std::string("EASY FAILURES   ") + (easyFailures_ ? "YES" : "NO"),
+        std::string("EASY EMISSARY   ") + (easyEmissary_ ? "YES" : "NO"),
     };
     DrawScrollableList(renderer, kSettingsLayout, items, -1, scrollOffset_, kItemScale,
                        Palette::Text, Palette::Selected);
