@@ -23,26 +23,31 @@ SaveProbeScreen::SaveProbeScreen(const std::string& titleId)
     lines_.push_back("");
     lines_.push_back("TARGET TITLE " + titleId_);
     lines_.push_back("");
-    lines_.push_back("PRESS X TO RUN THE PROBE");
+    lines_.push_back("PRESS X TO PROBE - MOUNT READ ONLY AND LIST");
+    lines_.push_back("PRESS SQUARE TO PROBE AND BACK UP");
     lines_.push_back("PRESS O TO GO BACK");
     lines_.push_back("");
-    lines_.push_back("THIS MOUNTS SAVE DATA READ ONLY AND LISTS IT.");
-    lines_.push_back("NOTHING IS WRITTEN, DELETED OR MOVED.");
+    lines_.push_back("THE MOUNT IS READ ONLY EITHER WAY.");
+    lines_.push_back("A BACKUP WRITES ONLY INTO");
+    lines_.push_back("/DATA/BBRANDOMIZER/SAVEBACKUPS.");
+    lines_.push_back("SAVE DATA IS NEVER WRITTEN, DELETED OR MOVED.");
 }
 
 void SaveProbeScreen::Update(const ButtonEdges& input) {
     int visible = VisibleRowCount(kLogLayout);
 
-    if (input.cross && !hasRun_) {
+    if ((input.cross || input.square) && !hasRun_) {
         hasRun_ = true;
+        didBackup_ = input.square;
         lines_.clear();
-        Log("saveprobe: X pressed - running probe");
+        Log(didBackup_ ? "saveprobe: SQUARE pressed - probe + backup"
+                       : "saveprobe: X pressed - probe only");
 
         // Runs to completion inside one frame. It is a handful of syscalls and
         // a small directory, so there is nothing to step across frames the way
         // the randomizer job is - and if it hangs or dies, that is itself the
         // finding, recorded in live.log line by line.
-        ProbeSaveData(titleId_, lines_);
+        ProbeSaveData(titleId_, lines_, didBackup_);
 
         // Show the end, which is where the answer is.
         scroll_ = ClampScroll((int)lines_.size(), (int)lines_.size(), visible);
@@ -89,7 +94,8 @@ void SaveProbeScreen::Draw(Renderer& renderer) {
                         (int)lines_.size(), offset, visible);
 
     DrawCenteredLabel(renderer, kScreenHeight - 100,
-                      hasRun_ ? "UP DOWN SCROLL" : "X RUN PROBE   UP DOWN SCROLL",
+                      hasRun_ ? "UP DOWN SCROLL"
+                              : "X PROBE   SQUARE PROBE AND BACK UP",
                       kFooterScale, Palette::Dim);
     DrawCenteredLabel(renderer, kScreenHeight - 50, "O BACK", kFooterScale, Palette::Dim);
 }

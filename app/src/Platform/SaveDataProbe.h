@@ -59,7 +59,14 @@ namespace bbr {
 // Reports what it finds rather than judging it: a mount that fails is a result,
 // not an error to swallow. Never throws, never exits, and unmounts whatever it
 // mounted before returning.
+// `doBackup` false: mount read-only and report. True: additionally copy the
+// save out to /data/bbrandomizer/SaveBackups/<title>_<dir>_<timestamp>/.
+//
+// The mount stays READ-ONLY either way. A backup only ever writes into this
+// app's own folder, never into save data - restoring is a separate, riskier
+// operation and is deliberately not implemented here.
 void ProbeSaveData(const std::string& configuredTitleId,
-                   std::vector<std::string>& outLines);
+                   std::vector<std::string>& outLines,
+                   bool doBackup);
 
 } // namespace bbr

@@ -29,6 +29,7 @@ public:
 
 private:
     std::string              titleId_;
+    bool                     didBackup_ = false;
     std::vector<std::string> lines_;
     bool                     hasRun_ = false;
     int                      scroll_ = 0;
