@@ -683,8 +683,7 @@ def cmd_selftest(root):
     store = open(os.path.join(SRC, "RandomizerDefaultsStore.cpp"), encoding="utf-8").read()
     bufs = [int(x) for x in re.findall(r"char buf\[(\d+)\]", store)]
     # Worst case: every fixed line at its longest, plus all three selections.
-    worst = (len("backup_existing_save=1") + 1 + len("bloodborne_title_id=CUSA00000") + 1 +
-             len("replace_save_default_is_new=1") + 1 + len("randomize_enemies=1") + 1 +
+    worst = (len("bloodborne_title_id=CUSA00000") + 1 + len("randomize_enemies=1") + 1 +
              len("randomize_bosses=1") + 1 + len("randomize_treasure=1") + 1 +
              len("randomize_workshop_tools=1") + 1 + len("randomize_enemy_drops=1") + 1 +
              len("randomize_starting_weapons=1") + 1 + len("randomize_starting_guns=1") + 1 +
@@ -699,11 +698,26 @@ def cmd_selftest(root):
              len("last_seed=4294967295") + 1)
     # 555 until feature 033 added the caged-dogs key, which is 30 bytes with
     # its newline; 585 until START WITH HUNTER TOOLS added 26 more; 611 until
-    # feature 018's four easy-mode keys added 58 (15 + 11 + 16 + 16). This is
-    # an exact equality on purpose: it fails the moment a key is added without
-    # the buffer being thought about.
-    cases.append(("worst-case defaults.cfg is 669 bytes and fits char buf[1024]",
-                  worst == 669 and bufs and worst < max(bufs)))
+    # feature 018's four easy-mode keys added 58 (15 + 11 + 16 + 16), making
+    # 669; 616 once the randomizer-settings-ui spec §4.8 removed
+    # backup_existing_save (23 with its newline) and
+    # replace_save_default_is_new (30). This is an exact equality on purpose:
+    # it fails the moment a key is added or removed without the buffer being
+    # thought about.
+    cases.append(("worst-case defaults.cfg is 616 bytes and fits char buf[1024]",
+                  worst == 616 and bufs and worst < max(bufs)))
+    # The save-data removal, checked the way the two cases below check a key
+    # that must be PRESENT: on the quoted key literal in the load chain, the
+    # "key=%d" fragment of the save format string, and the struct field the
+    # argument list would name. Prose naming the retired keys - the tolerance
+    # comment does, deliberately - therefore cannot make this pass or fail.
+    cases.append(("save data: neither retired key survives in load or save",
+                  '"backup_existing_save"' not in store and
+                  '"replace_save_default_is_new"' not in store and
+                  "backup_existing_save=%d" not in store and
+                  "replace_save_default_is_new=%d" not in store and
+                  "backupExistingSaveData" not in store and
+                  "replaceSaveDefaultIsNew" not in store))
     cases.append(("032: unchanged_bell_maidens is gone from load AND save (D1)",
                   "unchanged_bell_maidens" not in store.replace(
                       "// Dropping unchanged_bell_maidens here is genuinely free: the loader above", "")))

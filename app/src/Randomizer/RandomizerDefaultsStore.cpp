@@ -42,12 +42,8 @@ RandomizerDefaults LoadRandomizerDefaults() {
             *eq = '\0';
             const char* key = line;
             const char* value = eq + 1;
-            if (strcmp(key, "backup_existing_save") == 0) {
-                defaults.backupExistingSaveData = (atoi(value) != 0);
-            } else if (strcmp(key, "bloodborne_title_id") == 0) {
+            if (strcmp(key, "bloodborne_title_id") == 0) {
                 defaults.bloodborneTitleId = value;
-            } else if (strcmp(key, "replace_save_default_is_new") == 0) {
-                defaults.replaceSaveDefaultIsNew = (atoi(value) != 0);
             } else if (strcmp(key, "randomize_enemies") == 0) {
                 defaults.randomizeEnemies = (atoi(value) != 0);
             } else if (strcmp(key, "randomize_bosses") == 0) {
@@ -110,7 +106,7 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
     sceKernelMkdir("/data/bbrandomizer", 0777);
 
     // 1024, not 512: enemies_included is ~99 bytes, enemies_skipped ~102, and
-    // the feature spec has ~20 more settings queued. Worst case today is 669
+    // the feature spec has ~20 more settings queued. Worst case today is 616
     // bytes, pinned by a pool_verify selftest case. The clamp below is still
     // the real guard; this just keeps the margin comfortable.
     //
@@ -118,9 +114,14 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
     // is key=value with unknown keys ignored, so an existing file that still
     // carries that line loads fine and every other setting keeps its meaning.
     // Only the SELECTION VALUES are positional, not the lines themselves.
+    //
+    // backup_existing_save and replace_save_default_is_new were dropped the
+    // same way, and for the same reason it is safe: an existing defaults.cfg
+    // still carrying either line loads with that line ignored and every other
+    // setting honoured. They are simply no longer read and no longer written.
     char buf[1024];
     int len = snprintf(buf, sizeof(buf),
-                        "backup_existing_save=%d\nbloodborne_title_id=%s\nreplace_save_default_is_new=%d\n"
+                        "bloodborne_title_id=%s\n"
                         "randomize_enemies=%d\nrandomize_bosses=%d\nrandomize_treasure=%d\n"
                         "randomize_workshop_tools=%d\n"
                         "randomize_enemy_drops=%d\n"
@@ -134,9 +135,7 @@ void SaveRandomizerDefaults(const RandomizerDefaults& defaults) {
                         "enemies_included=%s\n"
                         "enemies_skipped=%s\n"
                         "last_seed=%u\n",
-                        defaults.backupExistingSaveData ? 1 : 0,
                         defaults.bloodborneTitleId.c_str(),
-                        defaults.replaceSaveDefaultIsNew ? 1 : 0,
                         defaults.randomizeEnemies ? 1 : 0,
                         defaults.randomizeBosses ? 1 : 0,
                         defaults.randomizeTreasure ? 1 : 0,

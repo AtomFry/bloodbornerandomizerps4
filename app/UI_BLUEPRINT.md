@@ -5,6 +5,13 @@ specification the UI is built against going forward. Update this file
 whenever a screen's behavior changes for real — it should never drift from
 the actual app.
 
+> **In progress:** the Enable wizard's settings step is being redesigned around
+> a six-category Settings screen, with Confirm becoming a genuine final review.
+> That work is specified in
+> `docs/features/randomizer-settings-ui/spec.md` (spec stage, questions open).
+> This blueprint still describes the **current** flat-list behaviour and should
+> be updated from that spec only once the change is actually implemented.
+
 ## Relationship to the earlier architecture review
 
 This supersedes the **top-level menu shape** from the earlier

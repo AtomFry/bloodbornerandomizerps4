@@ -55,7 +55,7 @@ LD := $(LLD18_BIN)/ld.lld
 # references have to resolve regardless. -lSceSystemService is what lets
 # main.cpp call sceSystemServiceLoadExec("exit") to end the app, since
 # returning from main() is not a supported exit path on this SDK.
-LIBS := -lc -lkernel -lc++ -lSceVideoOut -lSceSysmodule -lScePad -lSceUserService -lSceAudioOut -lSceSystemService -lSDL2
+LIBS := -lc -lkernel -lc++ -lSceVideoOut -lSceSysmodule -lScePad -lSceUserService -lSceSaveData -lSceAudioOut -lSceSystemService -lSDL2
 
 CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables \
           -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include \

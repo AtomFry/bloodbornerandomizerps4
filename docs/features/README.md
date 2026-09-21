@@ -12,6 +12,8 @@ spec, the plan, the reviews, and the append-only `log.md`.
 | 32 | Bypassed Enemies (`ENEMIES SKIPPED`; supersedes row 16) | **APPROVED** | [032-bypassed-enemies/](032-bypassed-enemies/) | [spec.md](032-bypassed-enemies/spec.md) — refined 2026-09-18, [log.md](032-bypassed-enemies/log.md) | [plan.md](032-bypassed-enemies/plan.md) — **both milestones implemented, hardware-tested and closed 2026-09-19** | [plan-review.md](032-bypassed-enemies/plan-review.md) — CHANGES REQUESTED, answered by the 2026-09-19 refinement |
 | 33 | Protect Caged Dogs (`DO NOT RANDOMIZE CAGED DOGS`) — Central Yharnam **and the Forbidden Woods** | **APPROVED** | [033-protect-caged-dogs/](033-protect-caged-dogs/) | [spec.md](033-protect-caged-dogs/spec.md) — refined 2026-09-19, widened to the Forbidden Woods cages; D1–D8 unchanged, D9–D10 added. **D10 needs amending — see plan §9 P11** | [plan.md](033-protect-caged-dogs/plan.md) — questions answered, awaiting approval; [plan-evidence.md](033-protect-caged-dogs/plan-evidence.md) | — |
 | 34 | Start With Hunter Tools (`START WITH HUNTER TOOLS`) | **n/a — skipped** | [034-start-with-hunter-tools/](034-start-with-hunter-tools/) | — | — | — |
+| — | Font atlas (replaces the 8×8 bitmap font with EB Garamond) | **n/a — skipped** | [font-atlas/](font-atlas/) | — | — | — |
+| — | Randomizer Settings UI (six-category Settings screen; also re-models Setup Defaults and removes the save-data handling) | **APPROVED** | [randomizer-settings-ui/](randomizer-settings-ui/) | [spec.md](randomizer-settings-ui/spec.md) — approved 2026-09-20 | [plan.md](randomizer-settings-ui/plan.md) — **approved 2026-09-20; all four milestones implemented, none hardware tested**; [plan-evidence.md](randomizer-settings-ui/plan-evidence.md), [log.md](randomizer-settings-ui/log.md) | — |
 
 ## What this index is, and is not
 
@@ -39,10 +41,19 @@ records that the developer gave it.
 
 **n/a — skipped** is not a pipeline status. It marks an item the developer
 deliberately took outside the pipeline, asking for implementation without a
-spec or a plan. Row 34 is the only one so far: its folder holds an
-`implementation-report.md` written after the fact and nothing else. The
-report says so at the top, because a folder that merely looks thin is
-indistinguishable from one where the stages were forgotten.
+spec or a plan. Such a folder holds an `implementation-report.md` written after
+the fact and nothing else. The report says so at the top, because a folder that
+merely looks thin is indistinguishable from one where the stages were forgotten.
+
+Two items are marked this way: row 34, and `font-atlas/`.
+
+`font-atlas/` and `randomizer-settings-ui/` are the folders with no `NNN-`
+prefix — every other folder is numbered after a row in
+`docs/randomization-feature-spec.md`, and platform/UI work has no row to be named
+after. `randomizer-settings-ui/` is **not** skipped: it is going through the
+normal spec → plan → review → implementation stages, it simply has no backlog row
+to be numbered after. Two unnumbered folders is the point at which a separate
+platform backlog starts to look justified; a third would settle it.
 
 ## Layout and naming
 

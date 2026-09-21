@@ -23,8 +23,8 @@ int NavigateVertical(int selected, int itemCount, const ButtonEdges& input) {
 }
 
 namespace {
-// Gap between the list and its "MORE ..." hint, and the hint's own scale.
-const int kHintGap   = 46;
+// The hint's own scale. The gap that used to live beside it is now
+// ListLayout::hintGap - see the struct.
 const int kHintScale = 3;
 } // namespace
 
@@ -51,12 +51,12 @@ int ScrollToShow(int offset, int selected, int itemCount, int visible) {
 void DrawScrollHints(Renderer& renderer, const ListLayout& layout, int itemCount,
                       int offset, int visible) {
     if (offset > 0) {
-        DrawCenteredLabel(renderer, layout.firstY - kHintGap, "MORE ABOVE",
+        DrawCenteredLabel(renderer, layout.firstY - layout.hintGap, "MORE ABOVE",
                           kHintScale, Palette::Dim);
     }
     if (offset + visible < itemCount) {
         int lastRowY = layout.firstY + (visible - 1) * layout.spacing;
-        DrawCenteredLabel(renderer, lastRowY + kHintGap, "MORE BELOW",
+        DrawCenteredLabel(renderer, lastRowY + layout.hintGap, "MORE BELOW",
                           kHintScale, Palette::Dim);
     }
 }
@@ -77,6 +77,68 @@ void DrawScrollableList(Renderer& renderer, const ListLayout& layout,
     }
 
     DrawScrollHints(renderer, layout, count, offset, visible);
+}
+
+void DrawLabelLeft(Renderer& renderer, int x, int y, const char* text, int scale,
+                    Color color) {
+    renderer.DrawText(x, y, text, scale, color.r, color.g, color.b);
+}
+
+void DrawLabelRight(Renderer& renderer, int rightX, int y, const char* text, int scale,
+                     Color color) {
+    int x = rightX - renderer.TextWidth(text, scale);
+    renderer.DrawText(x, y, text, scale, color.r, color.g, color.b);
+}
+
+void DrawPaneScrollHints(Renderer& renderer, const ListLayout& layout, int x, int width,
+                          int itemCount, int offset, int visible) {
+    if (offset > 0) {
+        const char* text = "MORE ABOVE";
+        int tx = x + (width - renderer.TextWidth(text, kHintScale)) / 2;
+        DrawLabelLeft(renderer, tx, layout.firstY - layout.hintGap, text, kHintScale,
+                      Palette::Dim);
+    }
+    if (offset + visible < itemCount) {
+        const char* text = "MORE BELOW";
+        int tx = x + (width - renderer.TextWidth(text, kHintScale)) / 2;
+        int lastRowY = layout.firstY + (visible - 1) * layout.spacing;
+        DrawLabelLeft(renderer, tx, lastRowY + layout.hintGap, text, kHintScale,
+                      Palette::Dim);
+    }
+}
+
+std::vector<std::string> WrapText(Renderer& renderer, const char* text, int scale,
+                                   int maxWidth) {
+    std::vector<std::string> lines;
+    if (!text) return lines;
+
+    std::string line;
+    std::string source(text);
+    size_t i = 0;
+    while (i < source.size()) {
+        // One word, plus the single space that will precede it if it is not
+        // first on the line.
+        size_t end = source.find(' ', i);
+        if (end == std::string::npos) end = source.size();
+        std::string word = source.substr(i, end - i);
+        i = end;
+        while (i < source.size() && source[i] == ' ') i++;
+        if (word.empty()) continue;
+
+        if (line.empty()) {
+            line = word;
+            continue;
+        }
+        std::string candidate = line + " " + word;
+        if (renderer.TextWidth(candidate.c_str(), scale) <= maxWidth) {
+            line = candidate;
+        } else {
+            lines.push_back(line);
+            line = word;
+        }
+    }
+    if (!line.empty()) lines.push_back(line);
+    return lines;
 }
 
 } // namespace bbr

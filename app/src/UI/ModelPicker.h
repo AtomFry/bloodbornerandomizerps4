@@ -25,7 +25,9 @@
 // A picker with an instruction line gets 11 visible rows instead of 12: the
 // list starts lower to make room, and the heading and count line do NOT move.
 // That is spec 032 F13's option B, chosen so the two shipped pickers keep
-// their exact pixels and so MORE ABOVE keeps a 27px gap rather than 14px.
+// their exact pixels and so MORE ABOVE keeps clear of the instruction line
+// above it (the 27px-vs-14px figures that used to be quoted here were from
+// the old 8 * scale height model and no longer describe anything).
 // 85 rows is 8 pages at 11 and at 12 alike, so the lost row costs nothing.
 #pragma once
 
@@ -55,10 +57,15 @@ struct PickerStrings {
 // The three lists' vocabulary, defined once because both hosting screens draw
 // the same picker and a second copy is a second thing to forget to change.
 //
-// Every string here must be renderable by Font8x8.cpp - A-Z, 0-9, space and
-// ' ( ) - , and nothing else - and must fit 71 characters at scale 3.
-// pool_verify.py's selftest parses these definitions and asserts both, so
-// they are declared one per line and not assembled at runtime.
+// The atlas draws printable ASCII (32..126) and is proportional, so what a
+// string actually costs is Renderer::TextWidth(), never its length. The two
+// budgets pool_verify.py's selftest still asserts - renderable by
+// Font8x8.cpp (A-Z, 0-9, space and ' ( ) - , and nothing else) and 71
+// characters at scale 3 - pin the FALLBACK path, where the glyph table is
+// smaller and every advance is fixed. They stay because that path is what
+// draws if FontAtlasInit fails. These definitions are therefore still
+// declared one per line and not assembled at runtime, so the selftest can
+// parse them.
 inline constexpr PickerStrings kEnemiesIncludedStrings = {
     "ENEMIES INCLUDED",
     nullptr,

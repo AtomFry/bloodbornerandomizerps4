@@ -16,11 +16,13 @@ const char* kItems[MenuScreen::kItemCount] = {
     "ENABLE RANDOMIZER",
     "DISABLE RANDOMIZER",
     "SETUP DEFAULTS",
+    "SAVE DATA PROBE (TEST)",
     "EXIT",
 };
 const int kEnableIndex  = 0;
 const int kDisableIndex = 1;
 const int kDefaultsIndex = 2;
+const int kProbeIndex    = 3;   // TEMPORARY - see UI/SaveProbeScreen.h
 const int kExitIndex    = MenuScreen::kItemCount - 1;
 
 const int kTitleScale  = 5;
@@ -64,6 +66,8 @@ void MenuScreen::Update(const ButtonEdges& input) {
         } else if (selected_ == kDefaultsIndex) {
             Log("menu: SETUP DEFAULTS selected - switching screen");
             requestedScreen_ = ScreenId::SetupDefaults;
+        } else if (selected_ == kProbeIndex) {
+            requestedScreen_ = ScreenId::SaveDataProbe;
         }
     }
 

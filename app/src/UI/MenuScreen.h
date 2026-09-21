@@ -23,7 +23,9 @@ namespace bbr {
 
 class MenuScreen : public Screen {
 public:
-    static const int kItemCount = 4;
+    // 5 while the TEMPORARY save-data probe row is present; back to 4 when
+    // it is removed (see UI/SaveProbeScreen.h).
+    static const int kItemCount = 5;
 
     MenuScreen();
 

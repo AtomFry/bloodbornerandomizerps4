@@ -36,8 +36,6 @@ list — and those are opened with **X**.
 |---|---|---|
 | [Bloodborne title ID](#bloodborne-title-id) | `CUSA03173` | Defaults |
 | [Seed](#seed) | rolled | Wizard |
-| [Backup existing save](#save-data-settings) | Yes | Both |
-| [Replace save](#save-data-settings) | New save data | Both |
 | [Randomize enemies](#randomize-enemies) | No | Both |
 | [Randomize bosses](#randomize-bosses) | No | Both |
 | [Randomize treasure](#randomize-treasure) | No | Both |
@@ -102,19 +100,21 @@ open-the-wizard-and-commit.
 
 ---
 
-## Save data settings
+## Save data
 
-> ⚠ **Not functional yet.** Both of these are wired into the UI and reported in
-> the progress log, but nothing touches your save data. The log says
-> `(SIMULATED)` where that is the case. **Back your save up yourself before
-> starting a randomized run.**
+**The app does not touch your save data at all.** It never reads it, never
+copies it and never deletes it — a run only builds files under
+`/data/GoldHEN/AFR/`.
 
-**Backup existing save** — will keep a copy of your current save before a run.
+Earlier builds showed **Backup existing save** and **Replace save** rows and
+printed `(SIMULATED)` lines about them in the progress log. Nothing behind
+those rows was ever implemented, so they have been removed rather than left
+looking functional. Backup and restore may return as a designed feature later.
 
-**Replace save** — will choose between starting on new save data, keeping the
-save you have, or restoring one of the app's own earlier backups. The backup
-entries in that list are placeholders. In Setup Defaults this is **Default
-replace save**, and it only pre-fills what the wizard opens on.
+**Back your save up yourself before starting a randomized run.** A randomized
+run is still an ordinary playthrough as far as the game is concerned, but a
+character who dies to something the vanilla game never put there is a character
+you might want a copy of.
 
 ---
 
@@ -401,7 +401,7 @@ the same seed gives the same world whichever way it is set.
 
 If you just want to see what this does:
 
-1. Back up your save yourself (the app cannot do it yet).
+1. Back up your save yourself — the app never touches save data.
 2. **ENABLE RANDOMIZER** → turn on **Randomize enemies** and **Randomize
    bosses**.
 3. Leave the rolled seed alone, or write it down if you want to replay it.

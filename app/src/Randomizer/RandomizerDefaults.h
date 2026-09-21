@@ -30,17 +30,13 @@ struct RandomizerDefaults {
     // Auto-detection/selection from installed titles is a later milestone.
     std::string bloodborneTitleId = "CUSA03173";
 
-    // "Yes" is the struct's own default, not just the store's fallback -
-    // this is what a brand-new install (no defaults.cfg on disk yet) uses.
-    bool backupExistingSaveData = true;
-
-    // Pre-fills the Enable wizard's Screen 1 "Replace Save" choice. Only
-    // two options, deliberately: "select from backup" isn't a sensible
-    // *default* the way it's a sensible one-off choice - a default is what
-    // a brand-new Enable run starts from before any backups necessarily
-    // exist yet. true = NEW SAVE DATA (the struct's own default), false =
-    // LEAVE EXISTING SAVE DATA.
-    bool replaceSaveDefaultIsNew = true;
+    // The two save-data fields that used to sit here are gone. Nothing behind
+    // them was ever implemented: every save-data operation was a simulated
+    // progress line, so the fields only ever decided which line got printed.
+    // Save-data handling is to be redesigned as separate work, and this starts
+    // it from a clean slate rather than a stub (spec randomizer-settings-ui
+    // 9.1b/9.3, §4.8). An older defaults.cfg still carrying their keys loads
+    // fine with those lines ignored - see RandomizerDefaultsStore.cpp.
 
     // First real randomizer setting - deliberately minimal (see the
     // conversation this was scoped down from): the goal is one working

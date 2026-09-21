@@ -20,6 +20,7 @@ enum class ScreenId {
     EnableWizard,
     DisableWizard,
     SetupDefaults,
+    SaveDataProbe,   // TEMPORARY diagnostic - see UI/SaveProbeScreen.h
 };
 
 class Screen {

@@ -18,15 +18,15 @@ const int kFooterScale = 3;
 // 12 visible rows, so seven pages of the 82-row enemy list and two of the
 // 17-row boss list. Checked by ui_scroll_verify.py: every row and both
 // MORE ABOVE / MORE BELOW hints clear the count line above and the footer.
-const ListLayout kPickerLayout = { 280, 52, 900 };
+const ListLayout kPickerLayout = { 280, 52, 900, 52 };
 
 // The same list moved down to clear an instruction line, which costs one
 // visible row: (900 - 332) / 52 + 1 = 11. The heading and the count line are
 // deliberately NOT moved - keeping their constants shared and untouched is
 // what guarantees the two shipped pickers still render pixel for pixel.
-// MORE ABOVE then sits at 332 - 46 = 286, comfortably below the instruction
-// line's 259 bottom. Both bands are asserted by ui_scroll_verify.py.
-const ListLayout kPickerLayoutWithInstruction = { 332, 52, 900 };
+// MORE ABOVE then sits at 332 - 52 = 280, whose ink starts 10px below the
+// instruction line's ink. Both bands are asserted by ui_scroll_verify.py.
+const ListLayout kPickerLayoutWithInstruction = { 332, 52, 900, 52 };
 
 const int kInstructionY = 235;
 
@@ -36,11 +36,18 @@ const ListLayout& LayoutFor(const PickerStrings& strings) {
     return strings.instruction ? kPickerLayoutWithInstruction : kPickerLayout;
 }
 
-std::string PadTo(const std::string& s, int width) {
-    std::string out = s;
-    while ((int)out.size() < width) out += ' ';
-    return out;
-}
+// The band the rows are aligned within: label left at kRowX, flag right at
+// kRowFlagRight. 1080 px wide and centred on the 1920 surface, so the block
+// still sits where the centred list used to.
+//
+// Sized from the widest row any of the three tables can produce - the boss
+// list's "C4520 LADY MARIA OF THE ASTRAL CLOCKTOWER" at 791 px - plus the
+// widest flag word, "SKIPPED" at 127 px, leaving 162 px between them.
+// tools/settings_ui_verify.py case 9 asserts the band against the real tables,
+// so a regenerated table that outgrows it fails there, not silently here.
+const int kRowX         = 420;
+const int kRowFlagRight = 1500;
+const int kRowW         = kRowFlagRight - kRowX;
 
 std::string RowLabel(const ModelPoolEntry& m) {
     std::string label = std::string(m.model) + " " + m.displayName;
@@ -52,20 +59,6 @@ std::string RowLabel(const ModelPoolEntry& m) {
     return label;
 }
 
-// Measured from the table rather than baked as a constant: the enemy list's
-// longest label is 39 characters and the boss list's is 41, and a shared
-// constant would silently clip the day a regenerated table grows past it.
-// Every row is then padded to the same width so all rows render the same
-// pixel width - the lists are drawn centred, so equal widths are what puts
-// the YES/NO into a fixed column without a left-aligned draw path.
-int NameFieldWidth(const ModelPoolEntry* table, int count) {
-    int w = 0;
-    for (int i = 0; i < count; i++) {
-        int len = (int)RowLabel(table[i]).size();
-        if (len > w) w = len;
-    }
-    return w;
-}
 } // namespace
 
 void ModelPicker::Reset() {
@@ -124,17 +117,13 @@ bool ModelPicker::Update(const ButtonEdges& input, const PickerStrings& strings,
     return false;
 }
 
+// Does NOT clear: the host draws the background before calling this, so the
+// picker can be drawn over a dimmed parent screen instead of replacing it.
+// Both remaining call sites therefore start with their own Clear.
 void ModelPicker::Draw(Renderer& renderer, const PickerStrings& strings,
                        const ModelPoolEntry* table, int count, const bool* enabled) {
-    renderer.Clear(20, 24, 28);
-
     int on = 0;
     for (int i = 0; i < count; i++) if (enabled[i]) on++;
-
-    if (pending_ != Pending::None) {
-        DrawConfirm(renderer, strings, count, on);
-        return;
-    }
 
     DrawCenteredLabel(renderer, 120, strings.heading, kTitleScale, Palette::Heading);
 
@@ -156,34 +145,49 @@ void ModelPicker::Draw(Renderer& renderer, const PickerStrings& strings,
                           Palette::Text);
     }
 
-    int width = NameFieldWidth(table, count);
-    // The flag column is as wide as the longer of the two words, so the rows
-    // stay a fixed width whichever vocabulary the host passed.
-    int flagWidth = (int)strlen(strings.flagOn);
-    if ((int)strlen(strings.flagOff) > flagWidth) flagWidth = (int)strlen(strings.flagOff);
-    std::vector<std::string> items;
-    items.reserve((size_t)count);
-    for (int i = 0; i < count; i++) {
-        items.push_back(PadTo(RowLabel(table[i]), width) + "   " +
-                        PadTo(enabled[i] ? strings.flagOn : strings.flagOff, flagWidth));
+    // Drawn a row at a time, label left and flag right, rather than assembled
+    // into one padded string and centred. Space padding only lines columns up
+    // in a monospace font; the atlas font is proportional, so the old approach
+    // put the flags in a ragged column that moved with each name's width.
+    int offset = ClampScroll(scroll_, count, visible);
+
+    for (int row = 0; row < visible; row++) {
+        int index = offset + row;
+        if (index >= count) break;
+
+        int   y     = layout.firstY + row * layout.spacing;
+        Color color = (index == cursor_) ? Palette::Selected : Palette::Text;
+
+        DrawLabelLeft(renderer, kRowX, y, RowLabel(table[index]).c_str(), kItemScale, color);
+        DrawLabelRight(renderer, kRowFlagRight, y,
+                       enabled[index] ? strings.flagOn : strings.flagOff, kItemScale, color);
     }
 
-    DrawScrollableList(renderer, layout, items, cursor_, scroll_, kItemScale,
-                       Palette::Text, Palette::Selected);
+    DrawPaneScrollHints(renderer, layout, kRowX, kRowW, count, offset, visible);
 
     DrawCenteredLabel(renderer, kScreenHeight - 130,
                       "UP DOWN MOVE   L1 R1 PAGE   X TOGGLE", kFooterScale, Palette::Dim);
     DrawCenteredLabel(renderer, kScreenHeight - 80, strings.footer, kFooterScale,
                       Palette::Dim);
+
+    // The prompt goes last, over the list it is asking about, so the counts
+    // it quotes can be read against the rows they came from.
+    if (pending_ != Pending::None) DrawConfirm(renderer, strings, count, on);
 }
 
-// A full-screen prompt rather than a panel over the list: Renderer has no
-// filled-rectangle call (Clear, DrawText, TextWidth is the whole API), and
-// drawing over the list without one would leave rows showing through the text.
-// Adding FillRect to the Platform layer for one modal is not worth it - and a
-// question that takes over the screen is harder to answer without reading.
+// An overlay over the still-drawn list rather than a screen that replaces it:
+// the question is about the list, so losing sight of it to answer was always
+// the wrong trade. It was a full-screen prompt only because Renderer had no
+// way to fill a rectangle. Now it does, and the dim is what keeps the prompt
+// readable against the rows underneath.
+//
+// FillRectBlend is the one SDL entry point in this screenful that has never
+// run on a PS4. If the list behind the prompt is not visibly dimmed, or is
+// invisible, alpha blending is unavailable here - see the plan's 4.3.
 void ModelPicker::DrawConfirm(Renderer& renderer, const PickerStrings& strings, int count,
                               int enabledCount) {
+    renderer.FillRectBlend(0, 0, kScreenWidth, kScreenHeight, 0, 0, 0, kPromptAlpha);
+
     bool enabling = (pending_ == Pending::EnableAll);
 
     // The verbs carry their own "ALL"/"NONE", because a skip list's two

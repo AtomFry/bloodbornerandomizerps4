@@ -7,6 +7,7 @@
 #include "UI/MenuScreen.h"
 #include "UI/PlaceholderScreen.h"
 #include "UI/ScreenManager.h"
+#include "UI/SaveProbeScreen.h"
 #include "UI/SetupDefaultsScreen.h"
 
 #include <memory>
@@ -28,6 +29,8 @@ std::unique_ptr<Screen> MakeScreen(ScreenId id, RandomizerDefaults& defaults) {
         case ScreenId::EnableWizard:  return std::make_unique<EnableWizardScreen>(defaults);
         case ScreenId::DisableWizard: return std::make_unique<PlaceholderScreen>("DISABLE RANDOMIZER");
         case ScreenId::SetupDefaults: return std::make_unique<SetupDefaultsScreen>(defaults);
+        // TEMPORARY - see UI/SaveProbeScreen.h
+        case ScreenId::SaveDataProbe: return std::make_unique<SaveProbeScreen>(defaults.bloodborneTitleId);
         default:                      return nullptr;
     }
 }
@@ -44,8 +47,7 @@ void Application::Run() {
     // Loaded once for the life of the process; SetupDefaultsScreen edits a
     // working copy and only writes back here (and to disk) on SAVE.
     RandomizerDefaults defaults = LoadRandomizerDefaults();
-    Log(defaults.backupExistingSaveData ? "defaults: loaded (backup existing save = YES)"
-                                         : "defaults: loaded (backup existing save = NO)");
+    Log(("defaults: loaded (bloodborne title id = " + defaults.bloodborneTitleId + ")").c_str());
 
     ScreenManager screens;
     screens.SetScreen(std::make_unique<MenuScreen>());
