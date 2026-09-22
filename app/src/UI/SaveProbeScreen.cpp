@@ -23,14 +23,26 @@ SaveProbeScreen::SaveProbeScreen(const std::string& titleId)
     lines_.push_back("");
     lines_.push_back("TARGET TITLE " + titleId_);
     lines_.push_back("");
-    lines_.push_back("PRESS X TO PROBE - MOUNT READ ONLY AND LIST");
-    lines_.push_back("PRESS SQUARE TO PROBE AND BACK UP");
-    lines_.push_back("PRESS O TO GO BACK");
+    lines_.push_back("X        PROBE - MOUNT READ ONLY AND LIST");
+    lines_.push_back("SQUARE   PROBE AND BACK UP");
+    lines_.push_back("TRIANGLE WRITE PROBE - RESTORE VERIFY DELETE");
+    lines_.push_back("O        GO BACK");
     lines_.push_back("");
-    lines_.push_back("THE MOUNT IS READ ONLY EITHER WAY.");
-    lines_.push_back("A BACKUP WRITES ONLY INTO");
-    lines_.push_back("/DATA/BBRANDOMIZER/SAVEBACKUPS.");
-    lines_.push_back("SAVE DATA IS NEVER WRITTEN, DELETED OR MOVED.");
+    lines_.push_back("TRIANGLE WRITES ONLY INTO A SCRATCH SAVE");
+    lines_.push_back("DIRECTORY OF ITS OWN AND DELETES IT AGAIN.");
+    lines_.push_back("");
+    lines_.push_back("ITS LAST STEP MOUNTS THE LIVE SAVE READ-WRITE");
+    lines_.push_back("TO SEE IF THAT IS EVEN PERMITTED. IT OPENS NO");
+    lines_.push_back("FILE AND UNMOUNTS AT ONCE - BUT IT IS THE ONE");
+    lines_.push_back("STEP THAT TOUCHES THE REAL SAVE.");
+    lines_.push_back("");
+    lines_.push_back("TAKE A BACKUP WITH SQUARE FIRST - THAT IS");
+    lines_.push_back("WHAT THE WRITE PROBE RESTORES, AND YOUR");
+    lines_.push_back("RECOVERY IF THE LAST STEP GOES WRONG.");
+    lines_.push_back("");
+    lines_.push_back("R1       DELETE USERDATA FILES - DESTRUCTIVE");
+    lines_.push_back("L1       DELETE BACKUP FILES  - DESTRUCTIVE");
+    lines_.push_back("SCE_SYS IS NEVER TOUCHED BY EITHER. BACK UP FIRST.");
 }
 
 void SaveProbeScreen::Update(const ButtonEdges& input) {
@@ -50,6 +62,35 @@ void SaveProbeScreen::Update(const ButtonEdges& input) {
         ProbeSaveData(titleId_, lines_, didBackup_);
 
         // Show the end, which is where the answer is.
+        scroll_ = ClampScroll((int)lines_.size(), (int)lines_.size(), visible);
+        return;
+    }
+
+    // A separate button from X and SQUARE on purpose: this is the only path in
+    // the app that writes save data, and it should not be reachable by
+    // mistyping the read-only one. Same one-frame shape - it copies ~27MB
+    // twice, so expect the frame to stall for as long as steps 5 and 6 report.
+    if (input.triangle && !hasRun_) {
+        hasRun_ = true;
+        lines_.clear();
+        Log("saveprobe: TRIANGLE pressed - write probe");
+
+        ProbeSaveDataWrite(titleId_, lines_);
+
+        scroll_ = ClampScroll((int)lines_.size(), (int)lines_.size(), visible);
+        return;
+    }
+
+    // Shoulder buttons, not face buttons: these destroy save contents and
+    // should not sit next to the ones someone presses to look around.
+    if ((input.r1 || input.l1) && !hasRun_) {
+        hasRun_ = true;
+        std::string prefix = input.r1 ? "userdata" : "backup";
+        lines_.clear();
+        Log(("saveprobe: DESTRUCTIVE delete-" + prefix + " probe").c_str());
+
+        ProbeDeleteByPrefix(titleId_, prefix, lines_);
+
         scroll_ = ClampScroll((int)lines_.size(), (int)lines_.size(), visible);
         return;
     }
@@ -79,10 +120,15 @@ void SaveProbeScreen::Draw(Renderer& renderer) {
         // seeing, so they are coloured rather than left to be read carefully.
         Color color = Palette::Text;
         if (line.find("FAILED") != std::string::npos ||
-            line.find("CANNOT") != std::string::npos) {
+            line.find("CANNOT") != std::string::npos ||
+            line.find("MISMATCH") != std::string::npos ||
+            line.find("TRIPPED") != std::string::npos ||
+            line.find("REFUSED") != std::string::npos) {
             color = Palette::Bad;
         } else if (line.find(" OK") != std::string::npos ||
-                   line.find("MOUNTED AT") != std::string::npos) {
+                   line.find("MOUNTED AT") != std::string::npos ||
+                   line.find("VERDICT MATCH") != std::string::npos ||
+                   line.find("  ARMED") != std::string::npos) {
             color = Palette::Good;
         }
 
@@ -95,7 +141,7 @@ void SaveProbeScreen::Draw(Renderer& renderer) {
 
     DrawCenteredLabel(renderer, kScreenHeight - 100,
                       hasRun_ ? "UP DOWN SCROLL"
-                              : "X PROBE   SQUARE PROBE AND BACK UP",
+                              : "X PROBE  SQUARE BACKUP  TRIANGLE WRITE  R1 DEL USERDATA  L1 DEL BACKUP",
                       kFooterScale, Palette::Dim);
     DrawCenteredLabel(renderer, kScreenHeight - 50, "O BACK", kFooterScale, Palette::Dim);
 }
