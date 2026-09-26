@@ -66,9 +66,15 @@ See `docs/testing.md` for verification commands, available verifiers, test metho
 
 ## 4. Working agreement
 
-* **Work in small, explicit milestones.** Explain what the milestone accomplishes and the relevant PS4/OpenOrbis concepts. Make the smallest change that reaches the milestone, build the `.pkg`, and stop. Wait for hardware testing and explicit approval before starting the next substantial piece. Do not chain milestones or refactor ahead of the ask.
+* **Milestones describe implementation structure. Gates describe when a human stops to test. They are independent decisions.** A milestone is a meaningful piece of functionality becoming complete — it is not, by itself, a reason to stop. A gate is a deliberate pause for hardware validation, and it is chosen separately, justified, and approved by the developer.
 
-* **This is a learning project.** Explain the underlying mechanisms involved — such as sandboxing, PKG structure, AFR files, and map formats — as part of the work.
+* **Every plan states an execution strategy, and approving the plan approves it.** Near the top of `plan.md`: the milestone structure, the execution mode (continuous or gated), where the human test gates are, and what verification runs between milestones. The default is **continuous execution with a single hardware test at the end**.
+
+* **Never split work to create a test checkpoint.** Choose the decomposition that produces the cleanest implementation. Where functionality divides naturally, document the pieces even when they will be built continuously and tested together. Scaffolding, transitional states and seams that exist only to make an intermediate milestone testable are a defect — they deform the code for a test that usually does not happen.
+
+* **Verify aggressively between milestones even when not stopping.** Build the `.pkg` and run the applicable automated checks after each milestone. That localises a failure to a milestone at almost no cost. Stopping for a *human* test is the expensive part, and it is what gates are for.
+
+* **This is a learning project.** Explain what each milestone accomplishes and the underlying mechanisms involved — sandboxing, PKG structure, AFR files, map formats — as part of the work.
 
 * **Do not create commits or branches without asking.** Leave the working tree for the user to manage.
 
@@ -120,7 +126,10 @@ Important sources:
 
 When sources disagree, use the document's stated authority and status rules in `docs/documentation-guide.md`.
 
-`app/UI_BLUEPRINT.md` contains the current UI blueprint.
+The UI as it ships is described by `docs/user-guide.md` and by
+`docs/features/worlds/spec.md` §2. The older `app/UI_BLUEPRINT.md` is frozen at
+`docs/plans/ui-blueprint-wizards.md` — it describes the Enable/Disable wizards
+and the main menu, all retired on 2026-09-24, and must not be used as current.
 
 See `docs/README.md` for the full documentation map, plan conventions, and status requirements.
 
@@ -146,8 +155,11 @@ Current status:
 * **Stage B — Spec:** built and exercised
 * **Stage C — Plan:** built and exercised
 * **Stage D — Plan review:** built and exercised
-* **Stage E — Implementation:** built; not yet exercised
-* **Stages F–I:** planned, not yet implemented
+* **Stage E — Implementation:** built and exercised — six milestones of the worlds
+  feature, 2026-09-22 to 2026-09-24
+* **Stages F–I:** planned, not yet implemented. Hardware testing has been done by
+  hand (see `docs/features/worlds/hardware-test-plan.md` for the shape that took);
+  stage H would formalise it
 
 Specs and plans are tied to backlog rows in `docs/randomization-feature-spec.md`. Each work item gets one folder, `docs/features/NNN-<slug>/`, holding its `spec.md`, `plan.md`, `plan-evidence.md`, `plan-review.md`, `implementation-report.md` and append-only `log.md`.
 

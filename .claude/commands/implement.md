@@ -1,12 +1,16 @@
 ---
-description: Stage E — build one milestone of an approved plan, verify it, and stop
-argument-hint: <row number> [milestone number]
+description: Stage E — build an approved plan's milestones, verifying after each, stopping where its Execution Strategy says to
+argument-hint: <row number> [milestone | list | range | all]
 ---
 
-Implement **one milestone** of the plan for backlog row **$1**.
+Implement the plan for backlog row **$1** — one milestone, several, or all of
+them, according to the plan's Execution Strategy and the argument given.
 
-`$ARGUMENTS` is the row number, optionally followed by a milestone number. With
-no milestone given, take the first one not yet implemented.
+`$ARGUMENTS` is the row number, optionally followed by which milestones to
+build: a number, a list, a range, or `all`. With nothing given, follow the
+plan's **Execution Strategy** — under continuous execution that means every
+milestone up to the next gate, or all of them when there is none; under gated
+execution it means the first one not yet implemented.
 
 This is stage E of the pipeline in `docs/ai-dev-process.md`. Run it like this:
 
@@ -31,11 +35,22 @@ This is stage E of the pipeline in `docs/ai-dev-process.md`. Run it like this:
    anything live in it, put it to the developer with `AskUserQuestion` and
    record the answer in §9 before dispatching.
 
-4. **Work out which milestone, and that it is the next one.** Read §7 and the
-   feature's `log.md`. Milestones on this project end at a hardware test that
-   only the developer can run, so a milestone whose predecessor is built but not
-   yet tested is **not** ready — starting it chains two milestones, which
-   `CLAUDE.md` §4 exists to prevent. Say so and ask rather than proceeding.
+4. **Read the Execution Strategy, then work out the work order.** It is near
+   the top of `plan.md` and states the structure, the execution mode and where
+   the gates are. `CLAUDE.md` §4: milestones describe implementation structure,
+   gates describe when a human stops to test, and they are independent.
+
+   - **Continuous execution** → dispatch every milestone up to the next gate,
+     or all of them when there is none. A predecessor that is built but not
+     hardware-tested is **not** a reason to stop; that was the waste this
+     process was changed to remove.
+   - **A gate** between what is built and what was asked for → stop and say so.
+     The gate exists because the plan justified it; skipping it is the
+     developer's call to make explicitly, not yours to assume.
+   - The developer can always override in either direction by naming the
+     milestones they want.
+
+   Read §7 and the feature's `log.md` to see what is already built.
 
    Check the milestone's own preconditions too. A plan may require something to
    exist before the first edit — a captured baseline tree, a recorded seed. If

@@ -1,12 +1,13 @@
-// Screen.h - one on-screen thing the app can be showing (main menu, the
-// Enable/Disable wizards, Setup Defaults, ...). A Screen only ever sees
-// Platform's Renderer and ButtonEdges - never SDL2, never OpenOrbis - and
-// never owns app-wide state directly. See UI_BLUEPRINT.md for the full
-// screen inventory this is being built toward.
+// Screen.h - one on-screen thing the app can be showing: the WORLDS tab, the
+// DEFAULTS tab, or the world editor reached from the first of them. A Screen
+// only ever sees Platform's Renderer and ButtonEdges - never SDL2, never
+// OpenOrbis - and never owns app-wide state directly.
 #pragma once
 
 #include "../Platform/Input.h"
 #include "../Platform/Renderer.h"
+
+#include <string>
 
 namespace bbr {
 
@@ -16,11 +17,18 @@ namespace bbr {
 // screen ask for a different one; grow it if a real need shows up.
 enum class ScreenId {
     None,   // no transition requested
-    Menu,
-    EnableWizard,
-    DisableWizard,
-    SetupDefaults,
-    SaveDataProbe,   // TEMPORARY diagnostic - see UI/SaveProbeScreen.h
+
+    // The main screen's two tabs, and the editor reached from the first of
+    // them (worlds B1, B6, B7). These three are the whole app.
+    //
+    // Four ids the worlds model replaced were removed in milestone 6. The
+    // main menu became the WORLDS tab, the Enable wizard became the world
+    // editor (worlds plan P8), Disable became activating Vanilla (B8, B27),
+    // and the save-data probe was the harness that hardware-tested
+    // milestones 1-3 and went with them.
+    Worlds,
+    Defaults,
+    WorldEditor,
 };
 
 class Screen {
@@ -38,6 +46,13 @@ public:
     // (e.g. O pressed inside a submenu, to go back). Checked once per frame
     // by Application, after Update() - see Application.cpp.
     virtual ScreenId RequestedScreen() const { return ScreenId::None; }
+
+    // Which world ScreenId::WorldEditor is being asked for. Empty means a NEW
+    // world, pre-filled from Defaults (worlds B6); a "w-NNNN" means that
+    // world's current settings (B7). Read by Application in the same pass as
+    // RequestedScreen(), because the screen that answered is destroyed
+    // immediately afterwards.
+    virtual std::string RequestedWorldId() const { return std::string(); }
 };
 
 } // namespace bbr

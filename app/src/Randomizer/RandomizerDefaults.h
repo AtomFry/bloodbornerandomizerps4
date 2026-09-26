@@ -1,5 +1,6 @@
 // RandomizerDefaults.h - the baseline a NEW randomizer profile starts from
-// (see UI_BLUEPRINT.md: "Defaults != Profile"). Grows one field per Setup
+// (see docs/plans/ui-blueprint-wizards.md: "Defaults != Profile" - frozen, but
+// that distinction still holds). Grows one field per Setup
 // Defaults row as that screen grows.
 #pragma once
 
@@ -17,15 +18,15 @@ struct RandomizerDefaults {
     //
     // CUSA03173 (Europe / GOTY) is the struct's own default - what a fresh
     // install with no defaults.cfg starts from. It is one of the six real
-    // Bloodborne title IDs listed in Game/GameInfo.cpp, and it is what the
-    // reference tool's own Nexus release targets.
+    // Bloodborne title IDs listed in docs/ps4-homebrew-findings.md section 6,
+    // and it is what the reference tool's own Nexus release targets.
     //
     // This was "CUSA03175" until 2026-09-15, which is NOT a real Bloodborne
     // title ID - a fresh install would have written its output for a title
     // that is not installed, AFR would have had nothing to overlay, and the
     // game would have launched unmodified with no error anywhere. Silent, and
     // indistinguishable from "the randomizer did nothing". If a title ID is
-    // ever changed here again, check it against GameInfo.cpp's list first.
+    // ever changed here again, check it against that list first.
     //
     // Auto-detection/selection from installed titles is a later milestone.
     std::string bloodborneTitleId = "CUSA03173";
@@ -152,6 +153,27 @@ struct RandomizerDefaults {
     bool easyRom = false;
     bool easyFailures = false;
     bool easyEmissary = false;
+
+    // SAVE DATA - the one setting in the world editor's SAVE category
+    // (spec worlds D6). false is KEEP EXISTING and true is START FRESH.
+    //
+    // Unlike every other field here this one is not a preference and not a
+    // randomizer: it decides what happens to SAVE DATA when the world it
+    // belongs to is activated. KEEP EXISTING restores that world's own save,
+    // or adopts the live one if it has none; START FRESH empties the
+    // container so the game starts a new playthrough.
+    //
+    // "KEEP EXISTING" is the struct's own default and is ALWAYS the default
+    // (spec worlds D17). A world left on START FRESH would decline to load
+    // its own save on every future activation, so activation reverts it to
+    // KEEP EXISTING as part of the same transaction - it applies to one
+    // activation and the player chooses it deliberately every time.
+    //
+    // It is stored in the recipe but regeneration ignores it, so it cannot
+    // affect output parity. It is editor-only: the Defaults tab does not show
+    // it, because a per-world save policy is not something a new world starts
+    // from.
+    bool startFreshSave = false;
 
     // The seed the last commit actually used, so the wizard can open showing
     // it and "run that again" is two button presses. Unlike everything else

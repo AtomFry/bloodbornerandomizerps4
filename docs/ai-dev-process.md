@@ -101,7 +101,7 @@ The process itself should not become a large collection of untested automation.
 | B     | Create a feature specification       | **Available and exercised**      |
 | C     | Create an implementation contract    | **Available and exercised**      |
 | D     | Adversarial plan review              | **Available and exercised**      |
-| E     | Implementation                       | **Available, not yet exercised** |
+| E     | Implementation                       | **Available and exercised**      |
 | F     | Code review                          | Planned                          |
 | G     | Verification                         | Planned                          |
 | H     | Hardware test                        | Planned                          |
@@ -378,15 +378,55 @@ Implementation requires an explicitly approved plan.
 
 ## 9. Stage E — Implementation
 
-**Status: Available, not yet exercised**
+**Status: Available and exercised** — the worlds feature's six milestones and the startup screen's two, 2026-09-22 to 2026-09-26.
 
-The implementation stage consumes an approved plan and builds **one milestone** of it.
+The implementation stage consumes an approved plan and builds the milestones its **Execution Strategy** calls for.
+
+### Structure and gates are two decisions
+
+**Milestones describe implementation structure. Gates describe when a human stops to test. They are independent.** (`CLAUDE.md` §4.)
+
+A milestone answers *what meaningful piece of functionality becomes complete here?* — never *what can we make independently testable here?* Splitting work to create a test checkpoint produces scaffolding nobody uses and seams that deform the code.
+
+Every plan carries an **Execution Strategy** block near the top, and approving the plan approves it:
+
+```
+Structure                  4 functional milestones
+Execution                  Continuous
+Human test gates           Final only
+Intermediate verification  Build + automated checks after each milestone
+```
+
+| Setting | Options | Default |
+| --- | --- | --- |
+| Structure | single implementation, N functional milestones, N phases with sub-work | whatever produces the cleanest implementation |
+| Execution | continuous, or gated after named milestones | continuous |
+| Human test gates | final only, after selected milestones, after every milestone | final only |
+| Intermediate verification | which checks run at each boundary | build plus the applicable automated checks |
+
+Gates are classified, and the classification is written into the plan:
+
+* **Required** — data could be corrupted or destroyed; or a later step would make diagnosing a failure here substantially harder; or the next milestone depends on confirming something build and static verification cannot establish.
+* **Optional** — testing here gives useful confidence but nothing depends on it. The developer decides at approval.
+* **No gate** — the default. The feature is completed and validated at the end.
+
+**Continuous execution still verifies at every boundary.** The implementer builds the `.pkg` and runs the applicable checks after each milestone, and a failure ends the run there. That localises a failure to one milestone at almost no cost; only the *human* test cycle is expensive, and that is what a gate spends.
+
+### Why this replaced "every milestone stops"
+
+The original rule made every milestone a hardware-test gate, and the project paid for it twice.
+
+The **worlds** feature built an operations harness — `Platform/SaveDataProbe` and `UI/SaveProbeScreen`, around 400 lines — specifically so milestones 1–3 could be hardware-tested, maintained it across three milestones, then deleted it in milestone 6 before it was ever used for that purpose. Two hardware tests were permanently lost with it.
+
+The **startup screen**'s milestone 1 deliberately kept `DrawStartup` and `FinishStartup` alive so milestone 2 would be distinguishable on a television. That one shaping decision produced a §5/§7 contradiction in the plan, a deferred constant with a compiler-warning workaround, and a latent trap punted to the next milestone instead of solved once — three of the six recorded deviations.
+
+In both cases the developer tested once, at the end, as they had said they would.
 
 ### Command
 
-`/implement NNN [milestone]`
+`/implement NNN [milestone | list | range | all]`
 
-With no milestone given, the first one not yet implemented.
+With nothing given, follow the plan's Execution Strategy: under continuous execution, every milestone up to the next gate, or all of them when there is none.
 
 ### Agent
 
@@ -394,12 +434,12 @@ With no milestone given, the first one not yet implemented.
 
 ### What it does
 
-1. Implement only the approved scope of one milestone.
+1. Implement only the approved scope of the milestones in its work order.
 2. Follow the repository working agreement.
 3. Build the `.pkg`.
-4. Run the plan's §6 automated verification.
+4. Build and run the plan's §6 automated verification **after each milestone**, including ones it does not stop at.
 5. Produce `implementation-report.md`.
-6. Stop at the milestone's completion gate, and hand off the hardware test.
+6. Continue to the next milestone, or stop where the Execution Strategy places a gate and hand off the hardware test.
 
 It does not create a branch or a commit — `CLAUDE.md` §9 leaves the working tree to the developer.
 
@@ -463,9 +503,28 @@ The existing verification philosophy in `docs/testing.md` remains authoritative 
 
 ## 12. Stage H — Hardware testing
 
-**Status: Planned**
+**Status: Planned as a stage. Practised by hand.**
 
-The PS4 is the final runtime authority
+The PS4 is the final runtime authority (`CLAUDE.md` section 3), and no agent can
+reach one, so this stage will never be automated the way B–E are. What it would
+formalise is the handoff: the procedure the developer executes, and where the
+result is recorded.
+
+The shape that practice has settled into, from the worlds feature:
+
+* every milestone's `implementation-report.md` ends with a hardware handoff —
+  what to do, what to expect, what a failure looks like;
+* an item with tests that need sequencing across milestones gets one
+  `hardware-test-plan.md` instead, ordered so each test is safe before the next;
+* the result is appended to `log.md` with the numbers checked independently
+  rather than taken from the tester's summary, and the feature's status lines
+  are updated only then.
+
+**One lesson is worth carrying into the stage when it is built.** The worlds
+feature built a probe harness specifically so milestones 1–3 could be hardware
+tested, then deleted it in milestone 6 — before it had ever been used, because
+testing was deferred to the end. Two tests were lost with it. A milestone's
+test scaffolding has to outlive the milestone that tests through it.
 
 ---
 
@@ -481,14 +540,28 @@ docs/
             spec.md  spec-review.md
             plan.md  plan-evidence.md  plan-review.md
             implementation-report.md
-        016-unchanged-bell-maidens/
+        033-protect-caged-dogs/
             log.md                     append-only history, every stage
             spec.md                    stage B
             plan.md                    stage C — the implementation contract
             plan-evidence.md           stage C — the investigation behind it
             plan-review.md             stage D
             implementation-report.md   stage E, one per milestone
+            hardware-test-plan.md      optional — see below
+            technical-findings.md      optional — see below
 ```
+
+Two further files appear when an item needs them, and neither is produced by a
+stage:
+
+* **`hardware-test-plan.md`** — one ordered procedure covering a whole feature,
+  written when an item has more hardware tests than a single milestone handoff
+  can sensibly carry. `worlds/` has the only one so far. A per-milestone
+  handoff inside `implementation-report.md` remains the default; reach for this
+  only when the tests need sequencing across milestones.
+* **`technical-findings.md`** — hardware facts established by a probe built for
+  this item specifically. Anything of lasting platform value belongs in
+  `docs/ps4-homebrew-findings.md` instead, and should be promoted there.
 
 Each file has one audience and one genre. `plan.md` holds instructions,
 `plan-evidence.md` holds the reasoning that justifies them, and `log.md` holds

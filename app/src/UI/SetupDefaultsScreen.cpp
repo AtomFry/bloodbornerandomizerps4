@@ -14,12 +14,19 @@ namespace bbr {
 
 namespace {
 // --- text scales -----------------------------------------------------------
-const int kTitleScale   = 5;
-
+//
+// No kTitleScale. This screen's title row is the tab strip now: Controls.h's
+// kTabScale draws the two tabs and kTabHeadingScale the active one's name
+// beneath them (worlds B1). The wizard, which is not tabbed, keeps its own
+// title and its own constants - which is why settings_ui_verify.py no longer
+// compares the two screens' title geometry, and pins the wizard's on its own.
 const int kHeadingScale = 4;
 const int kRowScale     = 3;
 const int kFooterScale  = 3;
-const int kEditScale    = 6;
+// The title-ID editor is a full-screen mode of its own, outside the tab frame,
+// and keeps the heading scale the screen title used to have.
+const int kEditTitleScale = 5;
+const int kEditScale      = 6;
 
 // --- the three columns -----------------------------------------------------
 //
@@ -37,7 +44,9 @@ const int kHelpX          = 1420;
 const int kHelpW          = 440;
 
 // --- vertical furniture ----------------------------------------------------
-const int kTitleY       = 36;
+// No kTitleY: see the scales above. The tab strip owns the top of the screen
+// and Controls.h owns its geometry, so both tabbed screens draw the frame in
+// the same place by construction rather than by agreement.
 // No kHeaderY: this screen's header band carries nothing since the title ID
 // moved into the pane. The rule below it stays, because it still separates the
 // screen title from the three columns.
@@ -73,6 +82,13 @@ const Color kRuleColor = { 64, 72, 82 };
 
 const char* const kFooterLine =
     "UP DOWN MOVE   LEFT RIGHT CHANGE   X SELECT   O BACK   OPTIONS SAVE";
+
+// Left/Right mean two different things on this screen and always have: a
+// value change in the pane, and - since the tabs landed - a tab switch on the
+// rail (B31, spec worlds D19). Nothing is re-bound; the rail simply stopped
+// throwing both inputs away.
+const char* const kRailFooterLine =
+    "UP DOWN MOVE   LEFT RIGHT TABS   X SELECT   O BACK   OPTIONS SAVE";
 
 char CycleLetter(char c, int dir) {
     int idx = ((c - 'A') + dir + 26) % 26;
@@ -116,7 +132,7 @@ void SetupDefaultsScreen::UpdateSettings(const ButtonEdges& input) {
         defaults_ = working_;
         SaveRandomizerDefaults(defaults_);
         Log("defaults: saved");
-        requestedScreen_ = ScreenId::Menu;
+        requestedScreen_ = ScreenId::Worlds;
         return;
     }
 
@@ -131,8 +147,20 @@ void SetupDefaultsScreen::UpdateRail(const ButtonEdges& input) {
     // landing on row 0 deliberately does not, so the pane never blanks.
     if (railCursor_ >= 1) lastCategory_ = railCursor_ - 1;
 
-    // Left/Right do nothing anywhere on the rail, on this screen or the
-    // wizard. Row 0's value is only ever changed inside its own editor.
+    // Left/Right switch tabs while focus is on the rail (B31). They were
+    // already doing nothing here - row 0's value is only ever changed inside
+    // its own editor, and a category has no value - so this is the one place
+    // the tab switch could go without a button gaining a second meaning.
+    //
+    // The pane keeps its own Left/Right, which still changes a value.
+    if (input.left || input.right) {
+        // Edits are local until OPTIONS writes them (see the header), so
+        // leaving discards them - exactly as O does, and said out loud for
+        // the same reason.
+        Log("defaults: switching to the WORLDS tab - unsaved changes discarded");
+        requestedScreen_ = ScreenId::Worlds;
+        return;
+    }
 
     if (input.cross) {
         if (railCursor_ == 0) OpenTitleIdEditor();
@@ -140,8 +168,12 @@ void SetupDefaultsScreen::UpdateRail(const ButtonEdges& input) {
     }
 
     if (input.circle) {
+        // O leaves the DEFAULTS tab for the WORLDS tab, which is the only
+        // other screen there is: the main menu it used to return to went with
+        // the wizards it listed (worlds B27, milestone 6 step 5). Exiting the
+        // app is O on the WORLDS rail, one press further on.
         Log("defaults: cancelled - no changes saved");
-        requestedScreen_ = ScreenId::Menu;
+        requestedScreen_ = ScreenId::Worlds;
     }
 }
 
@@ -253,7 +285,12 @@ void SetupDefaultsScreen::Draw(Renderer& renderer) {
 void SetupDefaultsScreen::DrawSettings(Renderer& renderer) {
     renderer.Clear(20, 24, 28);
 
-    DrawCenteredLabel(renderer, kTitleY, "SETUP DEFAULTS", kTitleScale, Palette::Heading);
+    // The tab strip, and the active tab's name as the heading beneath it
+    // (B1). The screen title that used to sit here said SETUP DEFAULTS; the
+    // tab says what this is now, and saying it twice would be furniture.
+    DrawTabs(renderer, kTabDefaults);
+    DrawLabelLeft(renderer, kTabX, kTabHeadingY, TabLabel(kTabDefaults),
+                  kTabHeadingScale, Palette::Heading);
 
     // No header readout. The title ID is shown in the pane when its rail row is
     // selected, the same way the wizard shows the seed - repeating the value
@@ -269,7 +306,9 @@ void SetupDefaultsScreen::DrawSettings(Renderer& renderer) {
     DrawPane(renderer);
     DrawHelp(renderer);
 
-    DrawCenteredLabel(renderer, kFooterY, kFooterLine, kFooterScale, Palette::Dim);
+    DrawCenteredLabel(renderer, kFooterY,
+                      focus_ == Focus::Rail ? kRailFooterLine : kFooterLine,
+                      kFooterScale, Palette::Dim);
 }
 
 void SetupDefaultsScreen::DrawRailRow(Renderer& renderer, int y, const char* text,
@@ -301,7 +340,7 @@ void SetupDefaultsScreen::DrawRail(Renderer& renderer) {
                       kRuleColor.r, kRuleColor.g, kRuleColor.b);
 
     for (int i = 0; i < kCategoryCount; i++) {
-        SettingCategory category = (SettingCategory)i;
+        SettingCategory category = kCategories[i];
         DrawRailRow(renderer, kRailFirstY + i * kRailPitch, CategoryLabel(category),
                     railHasFocus && railCursor_ == i + 1,
                     i == lastCategory_);
@@ -390,7 +429,8 @@ void SetupDefaultsScreen::DrawHelp(Renderer& renderer) {
 void SetupDefaultsScreen::DrawEditTitleId(Renderer& renderer) {
     renderer.Clear(20, 24, 28);
 
-    DrawCenteredLabel(renderer, 300, "BLOODBORNE TITLE ID", kTitleScale, Palette::Heading);
+    DrawCenteredLabel(renderer, 300, "BLOODBORNE TITLE ID", kEditTitleScale,
+                      Palette::Heading);
 
     int totalWidth = renderer.TextWidth(editBuf_, kEditScale);
     int startX     = (kScreenWidth - totalWidth) / 2;

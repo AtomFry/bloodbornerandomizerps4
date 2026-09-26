@@ -11,6 +11,24 @@ traces and rejected alternatives behind this plan
 
 ---
 
+## Execution Strategy
+
+*Approving this plan approves this strategy. `CLAUDE.md` §4: milestones describe
+implementation structure; gates describe when a human stops to test.*
+
+| | |
+| --- | --- |
+| **Structure** | <single implementation \| N functional milestones \| N phases with sub-work> |
+| **Execution** | <continuous \| gated after M<n>> |
+| **Human test gates** | <final only \| after M<n> and M<m>> |
+| **Intermediate verification** | <what builds and runs after each milestone> |
+
+<One line per gate, if any: which milestone, **Required** or **Optional**, and
+what risk it materially reduces. Omit the paragraph entirely when there are no
+gates — "final only" needs no justification, it is the default.>
+
+---
+
 > **This document is the implementation contract.**
 >
 > §1–§7 are what the implementer reads, in order, and they are sufficient to
@@ -143,8 +161,13 @@ implementer cannot run this — it is the handoff, not a step.
 
 ## 7. Milestones and stop conditions
 
-Each milestone is a unit of work that builds, verifies and **stops**
-(`CLAUDE.md` §4). One milestone is a fine answer.
+Each milestone is **a meaningful piece of functionality becoming complete** —
+not a test checkpoint. Whether execution pauses after one is the Execution
+Strategy's business, above, not the milestone's. One milestone is a fine answer,
+and so is five.
+
+Never introduce a seam, a transitional state or scaffolding whose only purpose
+is making an intermediate milestone independently testable (`CLAUDE.md` §4).
 
 ### Milestone 1 — <name>
 
@@ -159,9 +182,9 @@ Each milestone is a unit of work that builds, verifies and **stops**
 
 **Verification:** <the §6 checks that apply here>
 
-**Completion gate.** All of the above pass, the `.pkg` builds, and the milestone
-is handed to the developer for hardware testing. Do not begin the next
-milestone.
+**On completion.** The `.pkg` builds and the checks above pass. Then **continue
+to the next milestone** unless the Execution Strategy places a gate here, in
+which case stop and hand off the hardware test.
 
 ### Milestone 2 — <name>
 

@@ -173,20 +173,37 @@ SCREENS = [
     # kPaneLayout {330, 76, 880, 52} at item scale 3, under the category
     # heading at y=220 (scale 4) and above the single footer line at y=1000.
     ("Setup Defaults",  330, 76, 880, 3, 52, 4, 220, 4, 1000, 1),
-    # The Enable wizard's Settings step, which was the flat "Wizard SaveData"
-    # list until milestone 4. It is now the same categorised screen as Setup
+    # The world editor's Settings step - the Enable wizard's, renamed with the
+    # screen in worlds milestone 5. It is the same categorised screen as Setup
     # Defaults, drawing the same kPaneLayout with the same single footer line -
     # identical numbers on purpose, which settings_ui_verify.py asserts by
-    # parsing both screens' constants and comparing them.
-    ("Wizard Settings", 330, 76, 880, 3, 52, 4, 220, 4, 1000, 1),
-    # Confirm is still a flat review list of the seed row plus all 18 settings,
-    # now generated from SettingsModel rather than hand-written. Its two
-    # footers sit 30px lower than every other screen's. Under the ink box,
-    # kSettingsLayout's last row at y=870 and a footer at SCREEN_H - 130 leave
-    # an EMPTY feasible band for the hint between them: it needs >= 57 to clear
-    # the row and <= 45 to clear the footer. Moving the footer is what keeps
-    # six visible rows instead of five.
-    ("Wizard Confirm",  420, 90, 870, 4, 60, 19, 260, 4, SCREEN_H - 100, 2),
+    # parsing both screens' constants and comparing them. Only the RAIL beside
+    # it differs, and a rail is not a scrolling list.
+    ("Editor Settings", 330, 76, 880, 3, 52, 4, 220, 4, 1000, 1),
+    # Confirm is still a flat review list, and in worlds milestone 6 it became
+    # the ACTIVATION confirmation (B10): EIGHT head rows now, not three - NAME,
+    # SEED, TARGET, then what is deactivated, where its save goes, what is
+    # activated, what happens to the incoming save and roughly how long it
+    # takes - followed by all 19 settings. Its two footers sit 30px lower than
+    # every other screen's. Under the ink box, kSettingsLayout's last row at
+    # y=870 and a footer at SCREEN_H - 130 leave an EMPTY feasible band for the
+    # hint between them: it needs >= 57 to clear the row and <= 45 to clear the
+    # footer. Moving the footer is what keeps six visible rows instead of five.
+    #
+    # What sits above the list is no longer the state line at y=260: it is the
+    # second line of the wrapped sentence under it, at kConfirmSentenceY +
+    # kConfirmSentencePitch = 366, at the row scale.
+    ("Editor Confirm",  470, 80, 870, 4, 60, 27, 352, 3, SCREEN_H - 100, 2),
+    # The editor's revision list (kHistoryLayout). It HAS a cursor, unlike
+    # Confirm, because selecting a revision is what makes it current again -
+    # so it runs at the row scale and the scroll properties below are the ones
+    # that matter. What sits above it is the HISTORY sub-heading at y=240.
+    #
+    # THE COUNT IS A STAND-IN, not an inventory: a world's history is
+    # append-only and unbounded (spec worlds D2). 24 is comfortably past the
+    # rows the band fits, so the window is exercised rather than trivially
+    # satisfied.
+    ("Editor history",  340, 60, 820, 3, 50, 24, 240, 4, SCREEN_H - 130, 2),
     # Progress: worst case is the finished state (no live line, footer present).
     ("Progress log",    300, 70, 920, 3, 50, 18, 200, 4, SCREEN_H - 130, 2),
     # The enemy picker (UI/ModelPicker.cpp): 82 rows is far too many at the
@@ -196,6 +213,30 @@ SCREENS = [
     ("Enemy picker",    280, 52, 900, 3, 52, 82, 185, 3, SCREEN_H - 130, 2),
     # Same component, same band, shorter list - 17 bosses over two pages.
     ("Boss picker",     280, 52, 900, 3, 52, 17, 185, 3, SCREEN_H - 130, 2),
+    # The WORLDS tab's rail (UI/WorldsScreen.cpp kRailLayout). Same band and
+    # same pitch as the settings pane opposite it, so switching tabs moves the
+    # content and not the furniture. What sits above it in that column is the
+    # active tab's name at y=118 (scale 5, Controls.h kTabHeadingY) and the
+    # header rule below that.
+    #
+    # THE COUNT IS A STAND-IN, not an inventory: the rail is "+ NEW WORLD",
+    # "VANILLA" and however many worlds the player made, which is unbounded.
+    # 24 is picked to be comfortably past the 8 rows the band fits, so the
+    # scroll properties below are exercised rather than trivially satisfied.
+    ("Worlds rail",     330, 76, 880, 3, 52, 24, 118, 5, 1000, 1),
+    # The WORLDS tab's details pane (kDetailLayout). Denser than a settings
+    # pane - these are readouts and wrapped sentences, not editable rows - so
+    # it fits eleven lines where the settings pane fits eight. It has NO
+    # CURSOR, so the count here is the worst case the screen can build (seven
+    # label/value rows for a world plus a three-line note) rather than a list
+    # the player can scroll: settings_ui_verify.py is what pins that worst
+    # case to the strings, and this is what pins the band it has to fit.
+    ("Worlds details",  330, 52, 880, 3, 44, 11, 220, 4, 1000, 1),
+    # The WORLDS tab's startup log - reconciliation and first-run capture -
+    # drawn with the wizard's progress-log geometry, listed separately because
+    # a shared set of numbers that nothing checks twice is a shared set of
+    # numbers one of the two screens can walk away from.
+    ("Worlds startup",  300, 70, 920, 3, 50, 18, 200, 4, SCREEN_H - 130, 2),
     # ENEMIES SKIPPED, same component again but with an instruction line, so
     # the list band starts at 332 instead of 280 and fits 11 rows instead of
     # 12 (spec 032 F13 option B). The thing above the list is no longer the

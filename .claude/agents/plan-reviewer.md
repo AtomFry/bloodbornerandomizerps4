@@ -75,6 +75,22 @@ In rough order of how often each one actually bites on this project:
 - **Missing edge cases** — empty collections, absent config keys, the first run,
   a saved config from an older build.
 - **Unnecessary complexity.** New abstraction earning nothing.
+- **A decomposition shaped by testing rather than by the work.** `CLAUDE.md`
+  §4 separates the two: a milestone is a meaningful piece of functionality
+  becoming complete, and a gate is where a human stops to test. Look for a
+  milestone boundary that exists so an intermediate state can be told apart on
+  a television — a symbol kept alive for one milestone, a transitional code
+  path, a harness built to test milestones that will later be deleted. This
+  project has paid for that twice: the worlds harness was maintained across
+  three milestones and deleted before it was ever used for its purpose, and the
+  startup screen's milestone 1 kept two functions alive purely so milestone 2
+  would look different, which produced three deviations. **Flag it, and say
+  what the cleaner decomposition would have been.**
+- **Gates that are not justified.** Every gate should be classified Required or
+  Optional, and a Required one should name the risk it materially reduces —
+  data that could be destroyed, a failure that becomes undiagnosable later, or
+  something the next milestone depends on that build and static verification
+  cannot establish. "Useful confidence" is an Optional gate at best.
 - **Risks the planner did not identify**, especially anything that could corrupt
   a save, make a run unwinnable, or silently change already-shipped output.
 - **A contract an implementer cannot execute.** Judged in §6 and described

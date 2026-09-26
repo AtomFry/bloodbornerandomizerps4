@@ -14,19 +14,74 @@ real game at launch. Every run rebuilds that folder from the clean source, so
 settings never pile up on top of each other — what you see on the settings
 screen is exactly what you get.
 
-## The menu
+## Worlds
 
-| Item | What it does |
+A **world** is one playthrough: a name, a seed, a set of settings, and the save
+data you made playing it. One world is active at a time, and **Vanilla is a
+world** — activating it removes the randomizer's files and gives you the normal
+game back.
+
+Switching worlds swaps the randomizer files *and* the save data together, as one
+operation that either finishes or is rolled back. So you can keep several runs
+going at once and move between them without losing progress in any of them.
+
+## The screen
+
+Two tabs across the top. **Left/Right switches tabs while you are on the left
+rail**; inside a settings pane Left/Right changes a value instead.
+
+| Tab | What it is |
 |---|---|
-| **ENABLE RANDOMIZER** | The wizard: pick a seed and settings, then commit. This is where runs are made |
-| **DISABLE RANDOMIZER** | **Not built yet.** To go back to the normal game, delete the `/data/GoldHEN/AFR/<title id>/` folder yourself |
-| **SETUP DEFAULTS** | Sets what a *new* wizard run starts from. Editing here changes nothing until you run the wizard |
-| **EXIT** | Closes the app |
+| **WORLDS** | The list: `+ NEW WORLD`, `VANILLA`, then your worlds, most recently played first. The middle column describes the highlighted world, the right column explains what the row does |
+| **DEFAULTS** | What a **new** world starts from, plus the Bloodborne title ID. Editing here changes nothing about worlds that already exist |
 
-Both settings screens use the same controls: **left/right or X** toggles the
-highlighted row, **O** goes back. In Setup Defaults, **OPTIONS** saves — X does
-not. Two rows are drill-ins rather than toggles — the title ID and the enemy
-list — and those are opened with **X**.
+From the `WORLDS` rail: **X** opens a world in the editor (or creates one on
+`+ NEW WORLD`), **TRIANGLE** deletes one, **O** exits the app.
+
+## The world editor
+
+`X` on any world opens it. The rail has `NAME`, `SEED`, the settings categories,
+`SAVE`, and `HISTORY`.
+
+* **Left/Right or X** changes the highlighted setting; drill-in rows — the enemy
+  and boss lists — open with **X**.
+* **OPTIONS** saves the world and opens the confirmation.
+* The confirmation tells you exactly what is about to happen: which world is
+  being deactivated and where its save is going, which is being activated, what
+  happens to your save data, and roughly how long it will take. **Nothing is
+  written until you press OPTIONS there.**
+
+### Save data
+
+The `SAVE` category has one setting, and it is the one to read carefully.
+
+| `SAVE DATA` | What happens when you activate |
+|---|---|
+| **KEEP EXISTING** (always the default) | If the world already has a save, that save is restored. If it does not, it adopts whatever save is currently live |
+| **START FRESH** | Your current save is backed up first, then the game's save files are removed so Bloodborne starts a new playthrough |
+
+**Whatever you choose, the outgoing save is always backed up first**, into
+`/data/bbrandomizer/SaveBackups/`, timestamped and never overwritten or deleted.
+
+**`START FRESH` never sticks.** It applies to one activation and then goes back
+to `KEEP EXISTING`, so you have to choose it deliberately every time.
+
+### History
+
+A world's settings are never overwritten. Editing one **appends a revision** and
+makes it current; the old ones stay. `HISTORY` lists them newest first, and
+picking an old one makes it current by appending it again — so the list only
+ever grows. Renaming a world appends nothing.
+
+This is how you re-roll a run while keeping your progress: change the seed,
+activate with `KEEP EXISTING`, and your character carries over into freshly
+shuffled enemies.
+
+### Deleting
+
+`TRIANGLE` on a world, then confirm. **Its save data is kept** as a safety
+backup regardless. Vanilla cannot be deleted, and neither can the active world —
+activate something else first.
 
 ---
 
@@ -34,8 +89,8 @@ list — and those are opened with **X**.
 
 | Setting | Default | Where |
 |---|---|---|
-| [Bloodborne title ID](#bloodborne-title-id) | `CUSA03173` | Defaults |
-| [Seed](#seed) | rolled | Wizard |
+| [Bloodborne title ID](#bloodborne-title-id) | `CUSA03173` | Defaults only |
+| [Seed](#seed) | rolled | Editor only |
 | [Randomize enemies](#randomize-enemies) | No | Both |
 | [Randomize bosses](#randomize-bosses) | No | Both |
 | [Randomize treasure](#randomize-treasure) | No | Both |
@@ -49,7 +104,7 @@ list — and those are opened with **X**.
 | [Enemies skipped](#enemies-skipped) | None of 85 | Both |
 | [Bosses included](#bosses-included) | All 17 | Both |
 
-Listed in screen order. Every randomizer setting defaults to **No**, the enemy
+Listed in screen order. **Both** means the setting appears on the `DEFAULTS` tab, as the starting point for new worlds, and again in each world’s own editor. Every randomizer setting defaults to **No**, the enemy
 list starts with everything included and the skip list starts empty, so a fresh
 install with nothing turned on produces the normal game.
 
@@ -86,17 +141,16 @@ The default is `CUSA03173` (Europe / GOTY). Check it matches your copy:
 > **updating the app will not correct it**, because a stored setting always wins
 > over the built-in default. Check this row once after updating.
 
-*Setup Defaults only.*
+*`DEFAULTS` tab only — it is not a per-world setting.*
 
 ### Seed
 
 The number the shuffle is generated from. **The same seed with the same
 settings always produces the same run**, so a seed is how you replay a run or
 hand one to someone else. Left/right rolls a new one, X types one in digit by
-digit. The seed you last committed is remembered, so repeating a run is just
-open-the-wizard-and-commit.
+digit. A world remembers its own seed, and changing it appends a revision.
 
-*Wizard only.*
+*World editor only — each world has its own.*
 
 ---
 
@@ -401,11 +455,18 @@ the same seed gives the same world whichever way it is set.
 
 If you just want to see what this does:
 
-1. Back up your save yourself — the app never touches save data.
-2. **ENABLE RANDOMIZER** → turn on **Randomize enemies** and **Randomize
-   bosses**.
-3. Leave the rolled seed alone, or write it down if you want to replay it.
-4. Commit, wait for the progress screen to finish, and launch Bloodborne.
+1. **Launch the app once before anything else.** On first run it files your
+   existing save into `VANILLA` automatically, so your current playthrough is
+   safe and is a world you can always come back to. Read what it prints.
+2. `X` on **+ NEW WORLD**. Give it a name.
+3. Turn on **Randomize enemies** and **Randomize bosses**.
+4. Leave the rolled seed alone, or write it down if you want to replay it.
+5. Leave `SAVE DATA` on **KEEP EXISTING** — the new world will adopt your current
+   save, so you keep your character.
+6. **OPTIONS**, read the confirmation, **OPTIONS** again. Wait for the progress
+   log, then launch Bloodborne.
 
-Add treasure and weapon settings once you know you like it. A run takes roughly
-10–20 seconds to build.
+To get the normal game back at any point: `X` on **VANILLA** and activate it.
+
+Add treasure and weapon settings once you know you like it. Generating a world
+takes roughly 10–20 seconds; the save swap adds a few seconds more.

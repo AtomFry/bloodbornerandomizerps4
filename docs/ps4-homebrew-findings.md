@@ -204,6 +204,37 @@ open flags correctly.
 Detect an installed title by walking `/user/app`, not with `AppInstUtil` — see
 below.
 
+### The AFR title and the save-data title are independent values
+
+**Hardware-confirmed 2026-09-25** on the reference console, during the worlds
+feature's hardware test.
+
+Neither of these can be derived from the other, and on the reference console they
+are genuinely different:
+
+| | Value there | How it is resolved |
+| --- | --- | --- |
+| **AFR title** — which `/data/GoldHEN/AFR/<title>/dvdroot_ps4` the game reads | `CUSA03173` | The `BLOODBORNE TITLE ID` setting, used exactly as the user entered it. Never inferred, never validated |
+| **Save title** — which `/user/home/<id>/savedata/<title>/` holds the playthrough | `CUSA00207`, directory `SPRJ0005` | Swept for at runtime across the six known SKUs; refuses on zero or more than one |
+
+An implementation that derived either from the other would work on a console
+where they happen to agree and fail on this one.
+
+**Do not use the AFR tree as evidence that a title is installed.** AFR is a
+redirect overlay, so `<title>/dvdroot_ps4/event/common.emevd.dcx` exists because
+the randomizer put it there, not because the game is installed. Removing that
+tree — which is what activating Vanilla does — makes the title look uninstalled.
+This was the B37/B8 one-way door in the worlds feature; the resolution
+(worlds plan §9, P26) was to stop inferring anything and take the setting as
+entered.
+
+### The save container's own numbers
+
+From the same run, for scale: 17 files, 15,153,434 bytes, and a container
+reporting **1136 blocks** of 32 KiB — 37 MB of container for 14.5 MB of save. A
+manifest's `blocks` field records the *container's* reported size, not the
+save's footprint.
+
 ---
 
 ## 7. Dead ends, recorded so they are not retried

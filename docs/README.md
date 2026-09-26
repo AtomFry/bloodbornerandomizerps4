@@ -13,7 +13,10 @@ docs/
     features/                     the formal pipeline — one folder per work item
         README.md                 the pipeline index
         _templates/               spec, plan and review templates
-        NNN-<slug>/               log.md, spec.md, plan.md, plan-review.md
+        NNN-<slug>/               log.md, spec.md, plan.md, plan-evidence.md,
+                                  plan-review.md, implementation-report.md, and
+                                  where an item needs them technical-findings.md
+                                  and hardware-test-plan.md
 
     plans/                        flat plans predating the pipeline — frozen
         ai-dev-process-vision.md  the retired build plan for the pipeline itself
@@ -41,6 +44,12 @@ docs/
 | `ai-dev-process.md` | How the spec → plan → review pipeline runs, and which stages are operational |
 | `enemy-exclusion-history.md` | Why `EnemyExclusionListExtra` was removed |
 
+A feature folder is flat and permanent — items are never moved once created, and
+completion is read from the backlog and from each `plan.md`'s status line, never
+from where the folder sits. (A `Completed/` subfolder was tried and dropped on
+2026-09-25: it broke every link into the two folders it held, and it conflated
+*shipped* with *retired*.)
+
 ## Feature work
 
 Anything that has entered the pipeline lives in `features/NNN-<slug>/`, numbered
@@ -53,5 +62,6 @@ still the best examples of house style, but nothing new is added there.
 ## Elsewhere in the repo
 
 - `CLAUDE.md` — standing rules for working in this repository
-- `app/UI_BLUEPRINT.md` — the current UI blueprint
+- `docs/user-guide.md` and `docs/features/worlds/spec.md` §2 — the UI as it ships.
+  The former `app/UI_BLUEPRINT.md` is frozen at `docs/plans/ui-blueprint-wizards.md`
 - `.claude/commands/`, `.claude/agents/`, `.claude/skills/` — the pipeline tooling

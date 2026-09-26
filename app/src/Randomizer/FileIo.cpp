@@ -23,8 +23,12 @@ bool IsDir(const std::string& path) {
     return ((unsigned)st.st_mode & 0xF000u) == 0x4000u;
 }
 
-// Same on-disk dirent layout Game/GameInfo.cpp already proved correct on
-// hardware for sceKernelGetdents on this (FreeBSD-derived) kernel.
+// BSD dirent layout and open(2) flags, hardware-proved for sceKernelGetdents
+// on this (FreeBSD-derived) kernel - musl's <dirent.h> and <fcntl.h> carry
+// Linux's values and do not match. The table and the reasoning are in
+// docs/ps4-homebrew-findings.md section 1, which is the single source for
+// it; several files carry their own copy rather than share a header that
+// every layer would have to depend on.
 struct BsdDirent {
     uint32_t d_fileno;
     uint16_t d_reclen;

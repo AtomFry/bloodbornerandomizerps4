@@ -18,10 +18,12 @@ The eight cases are the ones plan section 6 names:
   1  every bool settings field appears in exactly one entry, and every entry's
      flag names a field that exists
   2  every SettingId appears exactly once
-  3  the six categories, their order, their membership and the within-category
-     order match spec 7.1 - including the two placements it says must not be
-     "corrected"
-  4  every entry, plus SEED, BLOODBORNE TITLE ID and FINISH, has help text
+  3  the six SETTINGS categories, their order, their membership and the
+     within-category order match spec 7.1 - including the two placements it
+     says must not be "corrected" - and SAVE, the worlds feature's seventh, is
+     in the world editor's category list and not in the DEFAULTS tab's
+  4  every entry, plus SEED, BLOODBORNE TITLE ID, NAME and HISTORY, has help
+     text
   5  every rail row, pane row, heading and help string fits its column, measured
      from the atlas
   6  the vertical constants of plan 4.4 and 4.5 do not overlap, under the same
@@ -30,13 +32,46 @@ The eight cases are the ones plan section 6 names:
   8  a defaults.cfg carrying both retired keys loads with them ignored and
      everything else honoured
 
-Milestone 4 extends 5 and 6 to the Enable wizard, which is the same screen with
-two more rail rows (SEED above the categories, FINISH below them), a two-sided
-header band, and a Confirm list generated from the same table. The wizard keeps
-its OWN copy of the geometry constants - plan 5 gives the two screens no shared
-layout file - so this also parses both screens and fails if any shared constant
+The worlds feature's milestone 4 adds a third screen to 5 and 6 - the WORLDS
+tab - and a tab strip shared by it and the DEFAULTS tab. The worlds screen is
+the same three-column split with a scrolling rail of worlds, a details pane of
+readouts and wrapped notes, and the same help column, so its strings and its
+vertical stack are measured here the same way. Its scroll bands are
+ui_scroll_verify.py's; what is here is what fits, what overlaps, and that the
+three screens have not drifted apart.
+
+Milestone 4 extends 5 and 6 to the Enable wizard, which milestone 5 renames and
+extends into the WORLD EDITOR: the same screen with three more rail rows (NAME
+and SEED above the categories, HISTORY below them), a seventh category, a
+header band and a Confirm list generated from the same table. The editor keeps
+its OWN copy of the geometry constants - plan 5 gives the screens no shared
+layout file - so this also parses both screens and fails if any SHARED constant
 disagrees with its twin. That comparison is the thing standing between "one
 geometry" and two that drift.
+
+The startup-screen feature adds a tenth case to the list, and more work to 5.
+The WORLDS tab's startup sequence now ends in an explicit outcome rather than
+two booleans, and each non-None outcome owns a sentence and a prompt. That
+mapping lives in WorldsScreen.cpp as a TABLE rather than a switch precisely so
+it can be read out here and asserted TOTAL against the enum in WorldsScreen.h
+(startup-screen plan P6): an outcome with no row would be an error screen with
+a blank sentence and no way off it, which compiles perfectly. 10 is that
+totality check; 5 grows the four sentences, the title, the scroll hint and the
+two prompts, all measured against the full 1920 because the error state is
+centred on the screen rather than drawn into a column.
+
+The feature's other state, the loading one, adds to 5 and 6 instead: its two
+words are measured against the 1000px block they are centred in, its four
+elements are checked for order and clearance like any other stack, and the
+bar's arithmetic is checked to divide into five EQUAL cells with no rounding
+drift. What no tool here can see is the bar stepping or the frame it steps on;
+that is the hardware test's, and the plan says so.
+
+The editor's RAIL is deliberately no longer part of that comparison. Ten rows
+do not fit Setup Defaults' 330/76 category band, so the editor runs its own
+uniform 70px grid; the four constants that describe it are pinned against this
+file's own copy instead, exactly as kHeaderY already is. Everything that
+decides where the three COLUMNS are is still shared and still compared.
 
 Usage:
     python settings_ui_verify.py
@@ -49,6 +84,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "src")
 UI = os.path.join(SRC, "UI")
+GAME = os.path.join(SRC, "Game")
 RND = os.path.join(SRC, "Randomizer")
 SPEC = os.path.join(HERE, "..", "..", "docs", "features", "randomizer-settings-ui",
                     "spec.md")
@@ -107,7 +143,7 @@ def parse_model():
     category_labels = STRING_LITERAL.findall(labels.group(1)) if labels else []
 
     rail_help = {}
-    for name in ("kSeedHelp", "kTitleIdHelp", "kFinishHelp"):
+    for name in ("kSeedHelp", "kTitleIdHelp", "kNameHelp", "kHistoryHelp"):
         m = re.search(r"const char\* const %s =(.*?);" % name, src, re.S)
         rail_help[name] = joined_literals(m.group(1)) if m else ""
 
@@ -280,10 +316,17 @@ HEADER_Y, HEADER_SCALE = 118, 4
 HEADER_RULE_Y = 196
 COLUMN_RULE_Y, COLUMN_RULE_H = 210, 750
 RAIL_ROW0_Y = 230
-RAIL_RULE1_Y = 296
-RAIL_FIRST_Y, RAIL_PITCH = 330, 76
-RAIL_RULE2_Y = 778            # wizard only - below the six categories
-FINISH_Y = 806                # wizard only
+# Setup Defaults' rail: row 0, a rule, then six categories at the pane's pitch.
+DEFAULTS_RULE1_Y = 296
+DEFAULTS_FIRST_Y, DEFAULTS_PITCH = 330, 76
+# The world editor's rail: NAME, SEED, a rule, SEVEN categories, a rule,
+# HISTORY - ten rows on one uniform 70px grid from RAIL_ROW0_Y.
+EDITOR_PITCH = 70
+EDITOR_ROW1_Y = 300
+EDITOR_RULE1_Y = 358
+EDITOR_FIRST_Y = 370
+EDITOR_RULE2_Y = 848
+EDITOR_HISTORY_Y = 860
 PANE_HEADING_Y, PANE_HEADING_SCALE = 220, 4
 PANE_FIRST_Y, PANE_PITCH, PANE_BOTTOM, PANE_HINT_GAP = 330, 76, 880, 52
 HELP_TITLE_Y, HELP_PITCH = 220, 52
@@ -295,26 +338,42 @@ FOOTER_Y = 1000
 ROW_SCALE = 3
 BAR_OFFSET_Y, BAR_HEIGHT = -10, 64
 
-RAIL_INK_END = 850            # the lowest ink in the rail column (FINISH)
+RAIL_INK_END = 910            # the lowest ink either rail column reaches
+                              # (the editor's HISTORY row)
 
 FOOTER_LINE = "UP DOWN MOVE   LEFT RIGHT CHANGE   X SELECT   O BACK   OPTIONS SAVE"
-# The wizard's Settings step drops OPTIONS SAVE: OPTIONS commits, and it
-# commits on Confirm only (spec 10, 9.2).
-WIZARD_FOOTER_LINE = "UP DOWN MOVE   LEFT RIGHT CHANGE   X SELECT   O BACK"
+# The editor's footer is NOT the same string and must be read from the editor
+# itself. It was aliased to FOOTER_LINE until 2026-09-25, which meant the
+# "editor footer fits" case below measured the DEFAULTS footer and would have
+# passed however wide the editor's grew. Assigned lazily in the editor case,
+# where parse_named_strings has run.
 
-# The wizard's header band: the seed readout runs right from RAIL_X at scale 4,
-# the target readout is right-aligned to this edge at scale 3.
+# The editor's header band: one readout, the target, right-aligned to this
+# edge at scale 3. The seed readout that used to run right from RAIL_X moved
+# into the pane.
 HEADER_TARGET_RIGHT = 1860
 SEED_DIGITS = 10
+NAME_CAP_ROWS = 16            # the name cap, as a sanity bound on the parse
 
-# Confirm, which is still a flat review list - the seed row plus all 18
-# settings, centred on the screen at scale 4 (kSettingsLayout of plan 4.5).
+# Confirm, which is still a flat review list - the head rows plus every
+# setting, centred on the screen at scale 4 (kSettingsLayout of the
+# randomizer-settings-ui plan's 4.5). Three of the head rows replaced the
+# readiness summary that used to sit in FINISH's help pane; worlds milestone 6
+# added five more, because Confirm is now the ACTIVATION confirmation and B10
+# says what it has to state: which world is deactivated and where its save
+# goes, which is activated, what happens to its save, and roughly how long it
+# takes.
 CONFIRM_SCALE = 4
+CONFIRM_HEAD_ROWS = 8
 CONFIRM_GAP = "   "           # what ConfirmItems puts between label and value
-SCREEN_W = 1920
 
-# The help pane's readiness summary, shown while the rail cursor is on FINISH.
-SUMMARY_BLANK_LINES = 1       # one blank line between the summary and the prose
+# What a refusal sentence's runtime half is measured as: a title id is 9
+# characters, a block count up to 10 digits, and a stored-save error is
+# whatever the walk said. 24 characters is longer than any of the first two and
+# is the budget the third is held to - a longer one is truncated on screen,
+# which is stated in the milestone 6 implementation report.
+RUNTIME_STANDIN = "X" * 24
+SCREEN_W = 1920
 
 # The picker lists draw at scale 3 (ModelPicker's kItemScale). PICKER_MIN_GAP is
 # the clear space demanded between the longest label and the flag column - not a
@@ -330,6 +389,11 @@ for table, const in (("EnemyPoolTable.h", "kEnemyPoolModelCount"),
     POOL_COUNTS[const] = int(re.search(r"const int %s = (\d+);" % const,
                                        read(os.path.join(RND, table))).group(1))
 
+# SettingKind::SaveChoice's two named states, as SettingValueText returns them.
+# Retyped here rather than parsed because they are the thing being checked: the
+# case below fails if the C++ stops saying exactly these.
+SAVE_CHOICE_VALUES = ["KEEP EXISTING", "START FRESH"]
+
 KIND_TO_COUNT = {
     "EnemyPool": POOL_COUNTS["kEnemyPoolModelCount"],
     "EnemySkip": POOL_COUNTS["kEnemySkipModelCount"],
@@ -341,9 +405,20 @@ def widest_value(entry):
     """The widest string SettingValueText can return for this setting."""
     if entry["kind"] == "Toggle":
         return max(("YES", "NO"), key=lambda s: width(s, ROW_SCALE))
+    if entry["kind"] == "SaveChoice":
+        return max(SAVE_CHOICE_VALUES, key=lambda s: width(s, ROW_SCALE))
     count = KIND_TO_COUNT[entry["kind"]]
     return max(("%d OF %d" % (n, count) for n in range(count + 1)),
                key=lambda s: width(s, ROW_SCALE))
+
+
+def widest_name(cap):
+    """The widest world name a player can type: `cap` characters of the widest
+    glyph NormalizeWorldName lets through. Not the name that happens to be on
+    this console."""
+    letter = max("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ",
+                 key=lambda c: ADV[ROW_SCALE][c])
+    return letter * cap
 
 
 def widest_title_id():
@@ -370,15 +445,62 @@ def widest_title_id():
 #                  wizard, so the constant is not unpinned, only unshared.
 #   kHeaderScale - gone from both screens with those readouts. The one thing
 #                  left in a header, TARGET, is drawn at kRowScale.
+#   kTitleY      - the DEFAULTS tab has no screen title any more. Its top row
+#   kTitleScale    is the tab strip, whose geometry is Controls.h's and is
+#                  checked there; the editor, which is not tabbed, keeps both
+#                  and they stay pinned by the `mirror` dict below.
+#   kRailRuleY   - editor-only from worlds milestone 5. The editor's rail is
+#   kRailFirstY    ten rows deep where Setup Defaults' is seven, and ten rows
+#   kRailPitch     at 76px put the last one's ink two pixels inside the column
+#                  rule and under its own focus bar. kRailRow0Y is still shared
+#                  - both rails still start in the same place - and the three
+#                  that differ are pinned by the `mirror` dict, so they are
+#                  unshared and not unpinned.
 SHARED_GEOMETRY = [
     "kRailX", "kRailW", "kPaneX", "kPaneW", "kPaneValueRight", "kHelpX", "kHelpW",
-    "kTitleY", "kHeaderRuleY", "kColumnRuleY", "kColumnRuleH",
-    "kRailRow0Y", "kRailRuleY", "kRailFirstY", "kRailPitch",
+    "kHeaderRuleY", "kColumnRuleY", "kColumnRuleH",
+    "kRailRow0Y",
     "kPaneHeadingY", "kHelpTitleY", "kHelpPitch", "kHelpRuleY", "kHelpBodyY",
     "kHelpTitleMaxLines", "kHelpBodyMaxLines", "kFooterY", "kRuleThickness",
     "kBarOffsetY", "kBarHeight",
-    "kTitleScale", "kHeadingScale", "kRowScale", "kFooterScale",
+    "kHeadingScale", "kRowScale", "kFooterScale",
 ]
+
+# The subset ALL THREE screens carry - the two categorised ones and the WORLDS
+# tab. The worlds rail is a ListLayout rather than a row-0-plus-block rail, so
+# the four kRail*Y constants are not in it; everything that decides where the
+# three columns are, is.
+THREE_COLUMN_GEOMETRY = [
+    "kRailX", "kRailW", "kPaneX", "kPaneW", "kPaneValueRight", "kHelpX", "kHelpW",
+    "kHeaderRuleY", "kColumnRuleY", "kColumnRuleH", "kPaneHeadingY",
+    "kHelpTitleY", "kHelpPitch", "kHelpRuleY", "kHelpBodyY",
+    "kHelpTitleMaxLines", "kHelpBodyMaxLines", "kFooterY", "kRuleThickness",
+    "kBarOffsetY", "kBarHeight",
+    "kHeadingScale", "kRowScale", "kFooterScale",
+]
+
+# Clear space demanded between the longest world name a player can type and
+# the ACTIVE swatch at the rail row's right edge. Not a measurement, a
+# requirement, exactly like PICKER_MIN_GAP: below this the two read as one.
+SWATCH_MIN_GAP = 24
+
+# The worst case the details pane can build, as WorldsScreen::Details builds
+# it: seven label/value rows for a world, four for Vanilla plus its own note,
+# one for + NEW WORLD plus its own note - and then AT MOST ONE further note,
+# either why this world cannot be activated or why no row is ACTIVE. The pane
+# has no cursor, so "worst case" has to fit the band rather than scroll.
+DETAIL_ROWS_WORLD = 7
+DETAIL_ROWS_VANILLA = 4
+DETAIL_ROWS_NEW = 1
+
+# Every label and every widest value the details pane can show, so the column
+# is measured against what it can be asked to draw rather than against today's
+# save.
+DETAIL_LABELS = ["STATUS", "SEED", "SETTINGS", "REVISION", "SAVE DATA",
+                 "SAVED ON", "LAST PLAYED", "CREATED"]
+DETAIL_VALUES = ["ACTIVE", "NOT ACTIVE", "9999999999", "99 OF 99 ON",
+                 "99 OF 99", "9999 MB IN 9999 FILES", "NONE", "REVISION 9999",
+                 "2026-09-22 12:00:00", "NEVER", "-"]
 
 
 def parse_geometry(filename):
@@ -398,13 +520,146 @@ def parse_geometry(filename):
     return values
 
 
-def parse_wizard_rail():
-    """kFinishRow and kRailItemCount, as the wizard's header declares them."""
-    body = strip_comments(read(os.path.join(UI, "EnableWizardScreen.h")))
+def parse_controls_tabs():
+    """The tab strip's geometry and its two labels, from Controls.{h,cpp}.
+
+    The strip lives in Controls rather than in either screen precisely so the
+    two tabbed screens cannot disagree about it, which is why this is parsed
+    once and not compared between screens like everything else here.
+    """
+    hdr = strip_comments(read(os.path.join(UI, "Controls.h")))
+    values = {name: int(value) for name, value
+              in re.findall(r"constexpr int (\w+)\s*=\s*(-?\d+);", hdr)}
+    src = strip_comments(read(os.path.join(UI, "Controls.cpp")))
+    block = re.search(r"kTabLabels\[kTabCount\] = \{(.*?)\};", src, re.S)
+    labels = STRING_LITERAL.findall(block.group(1)) if block else []
+    return values, labels
+
+
+def parse_list_layout(filename, name):
+    """A `const ListLayout kFoo = { firstY, spacing, bottomLimit, hintGap };`."""
+    body = strip_comments(read(os.path.join(UI, filename)))
+    m = re.search(r"ListLayout %s\s*=\s*\{([^}]*)\}" % name, body)
+    if not m:
+        sys.exit("could not find %s in %s" % (name, filename))
+    return [int(x) for x in m.group(1).split(",")]
+
+
+def parse_named_strings(filename):
+    """Every `const char* const kFoo = "...";` in a screen, by name.
+
+    The worlds screen's labels, notes and help are named constants for exactly
+    this reason: a string the app draws and nothing measures is a string that
+    fits until someone edits it.
+    """
+    body = strip_comments(read(os.path.join(UI, filename)))
     out = {}
-    for name in ("kFinishRow", "kRailItemCount"):
+    for m in re.finditer(r"const char\* const (\w+)\s*=(.*?);", body, re.S):
+        out[m.group(1)] = joined_literals(m.group(2))
+    return out
+
+
+def parse_startup_problems():
+    """The StartupProblem enum, and the sentence/prompt table that must cover it.
+
+    Two sources on purpose: the enum is the set of outcomes the code can
+    produce, the table is the set the screen can DRAW, and the case below is
+    that they are the same set. Reading the table alone would only prove the
+    rows it happens to have are well formed.
+    """
+    hdr = strip_comments(read(os.path.join(UI, "WorldsScreen.h")))
+    m = re.search(r"enum class StartupProblem\s*\{([^}]*)\}", hdr)
+    if not m:
+        sys.exit("could not find enum class StartupProblem in WorldsScreen.h")
+    enumerators = [n.strip() for n in m.group(1).split(",") if n.strip()]
+
+    src = strip_comments(read(os.path.join(UI, "WorldsScreen.cpp")))
+    t = re.search(r"kProblemTable\[\]\s*=\s*\{(.*?)\};", src, re.S)
+    if not t:
+        sys.exit("could not find kProblemTable in WorldsScreen.cpp")
+    rows = re.findall(r"\{\s*StartupProblem::(\w+)\s*,\s*(\w+)\s*,\s*(\w+)\s*\}",
+                      t.group(1))
+    return enumerators, rows
+
+
+def parse_activation_strings():
+    """SaveActionName, SaveActionSentence and every refusal sentence.
+
+    Confirm draws all three and this file measures none of them unless it
+    reads them out of the source: they live in Game/WorldActivation.cpp,
+    because they are the transaction's words rather than a screen's, and a
+    screen that draws a string it did not define still has to fit it.
+
+    A refusal sentence can carry runtime text - a title id, a block count, a
+    manifest error. Those are replaced with a worst-case stand-in rather than
+    dropped, because a sentence that fits only when the substitution is empty
+    is a sentence that does not fit.
+    """
+    body = strip_comments(read(os.path.join(GAME, "WorldActivation.cpp")))
+
+    def switch_table(func):
+        chunk = body[body.index(func):]
+        chunk = chunk[:chunk.index("\n}")]
+        return [m for m in STRING_LITERAL.findall(chunk) if m != "?"]
+
+    names = switch_table("const char* SaveActionName(")
+    sentences = switch_table("const char* SaveActionSentence(")
+
+    # Every Refuse(RefusalReason::X, ...) call in CheckActivation, as one
+    # string each: the literals joined, with RUNTIME_STANDIN wherever an
+    # expression was concatenated in.
+    check = body[body.index("Refusal CheckActivation("):]
+    check = check[:check.index("const char* SaveActionName(")]
+    refusals = []
+    for m in re.finditer(r"Refuse\(RefusalReason::(\w+),(.*?)\);", check, re.S):
+        arg = m.group(2)
+        parts, pos = [], 0
+        for lit in STRING_LITERAL.finditer(arg):
+            gap = arg[pos:lit.start()]
+            if "+" in gap and pos != 0:
+                parts.append(RUNTIME_STANDIN)
+            parts.append(lit.group(1))
+            pos = lit.end()
+        if "+" in arg[pos:]:
+            parts.append(RUNTIME_STANDIN)
+        refusals.append((m.group(1), "".join(parts)))
+    return names, sentences, refusals
+
+
+def parse_screen_categories(filename):
+    """The category list a screen iterates, from its own header.
+
+    BOTH tabbed-or-not settings screens carry one, and neither ranges over
+    SettingCategory, precisely so the editor-only Save category cannot appear
+    on the screen that says what a NEW world starts from (worlds plan 3.3).
+    The DIFFERENCE between the two lists is the rule, so both are parsed.
+    """
+    body = strip_comments(read(os.path.join(UI, filename)))
+    block = re.search(r"kCategories\[\] = \{(.*?)\};", body, re.S)
+    if not block:
+        sys.exit("could not find kCategories in %s" % filename)
+    return re.findall(r"SettingCategory::(\w+)", block.group(1))
+
+
+def parse_world_name_cap():
+    """The name cap NormalizeWorldName actually enforces, not a retyped 16."""
+    body = strip_comments(read(os.path.join(RND, "WorldStore.cpp")))
+    fn = body.split("std::string NormalizeWorldName", 1)[1]
+    return int(re.search(r"out\.size\(\) < (\d+)", fn).group(1))
+
+
+def parse_editor_rail(categories):
+    """kHistoryRow and kRailItemCount, as the editor's header declares them.
+
+    Both are written as arithmetic on kCategoryCount, so the offsets are what
+    is parsed and the count comes from the editor's own category list - not
+    from a 6 or a 7 retyped here.
+    """
+    body = strip_comments(read(os.path.join(UI, "WorldEditorScreen.h")))
+    out = {}
+    for name in ("kHistoryRow", "kRailItemCount"):
         m = re.search(r"%s\s*=\s*kCategoryCount \+ (\d+);" % name, body)
-        out[name] = 6 + int(m.group(1)) if m else None
+        out[name] = len(categories) + int(m.group(1)) if m else None
     return out
 
 
@@ -497,8 +752,17 @@ def main():
     cases.append(("1: the three selection fields have exactly one entry each",
                   len(selections) == 3 and
                   all(kinds.count(k) == 1 for k in ("EnemyPool", "EnemySkip", "BossPool"))))
-    cases.append(("1: every entry is a toggle with a flag or a pool without one",
-                  all((e["flag"] is not None) == (e["kind"] == "Toggle") for e in entries)))
+    # SaveChoice is the second bool-backed kind: it carries a flag exactly as a
+    # Toggle does and differs only in how it is named and counted. The three
+    # pool kinds carry none.
+    two_state = ("Toggle", "SaveChoice")
+    cases.append(("1: every entry is a toggle or a save choice with a flag, or a "
+                  "pool without one",
+                  all((e["flag"] is not None) == (e["kind"] in two_state)
+                      for e in entries)))
+    cases.append(("1: exactly one SaveChoice entry, and it is SAVE DATA",
+                  [e["label"] for e in entries if e["kind"] == "SaveChoice"] ==
+                  ["SAVE DATA"]))
 
     # --- 2: ids are unique and declared -------------------------------------
     used = [e["id"] for e in entries]
@@ -507,17 +771,23 @@ def main():
                   sorted(used) == sorted(declared_ids)))
 
     # --- 3: the spec's categories, order and membership ----------------------
+    #
+    # The spec's 7.1 table is the six SETTINGS categories. SAVE is the worlds
+    # feature's seventh and has no row there, because it is not a randomizer
+    # setting - it is checked below, as an editor-only category.
     spec_rows = parse_spec_categories()
-    ok = len(spec_rows) == 6 and len(categories) == 6
+    settings_categories = [c for c in categories if c != "Save"]
+    ok = len(spec_rows) == 6 and settings_categories == categories[:6]
     if ok:
         for i, (spec_name, spec_settings) in enumerate(spec_rows):
-            if SPEC_CATEGORY_TO_ENUM.get(spec_name) != categories[i]:
+            if SPEC_CATEGORY_TO_ENUM.get(spec_name) != settings_categories[i]:
                 ok = False
                 detail.append("   category %d: spec says %s, model says %s"
-                              % (i, spec_name, categories[i]))
+                              % (i, spec_name, settings_categories[i]))
                 continue
             want = [PROSE_TO_LABEL.get(s, "?" + s) for s in spec_settings]
-            got = [e["label"] for e in entries if e["category"] == categories[i]]
+            got = [e["label"] for e in entries
+                   if e["category"] == settings_categories[i]]
             if want != got:
                 ok = False
                 detail.append("   %s: spec %s, model %s" % (spec_name, want, got))
@@ -530,20 +800,39 @@ def main():
     cases.append(("3: START WITH HUNTER TOOLS is not beside RANDOMIZE WORKSHOP TOOLS",
                   by_label["START WITH HUNTER TOOLS"]["category"] == "WeaponsGear" and
                   by_label["RANDOMIZE WORKSHOP TOOLS"]["category"] == "ItemsTreasure"))
-    cases.append(("3: the six rail labels are declared, one per category",
-                  len(category_labels) == 6))
+    cases.append(("3: the %d rail labels are declared, one per category"
+                  % len(categories), len(category_labels) == len(categories)))
+    # Each screen iterates a list of its own rather than the whole enum, so
+    # that an editor-only category cannot turn up on the screen that says what
+    # a NEW world starts from (worlds plan 3.3, hazard row 6). The two lists
+    # differ by exactly Save, and that difference IS the rule.
+    defaults_categories = parse_screen_categories("SetupDefaultsScreen.h")
+    editor_categories = parse_screen_categories("WorldEditorScreen.h")
+    cases.append(("3: the DEFAULTS tab iterates the %d settings categories and "
+                  "not SAVE" % len(settings_categories),
+                  defaults_categories == settings_categories))
+    cases.append(("3: the world editor iterates all %d categories, SAVE last"
+                  % len(categories),
+                  editor_categories == categories and categories[-1] == "Save"))
+    cases.append(("3: SAVE holds exactly the one setting the worlds spec gives it",
+                  [e["label"] for e in entries if e["category"] == "Save"] ==
+                  ["SAVE DATA"]))
+    if defaults_categories != settings_categories or editor_categories != categories:
+        detail.append("   DEFAULTS list %s, editor list %s, model %s"
+                      % (defaults_categories, editor_categories, categories))
 
     # --- 4: help coverage ----------------------------------------------------
     cases.append(("4: all %d settings have non-empty help" % len(entries),
                   all(e["help"].strip() for e in entries)))
-    cases.append(("4: SEED, BLOODBORNE TITLE ID and FINISH have non-empty help",
+    cases.append(("4: SEED, BLOODBORNE TITLE ID, NAME and HISTORY have non-empty "
+                  "help",
                   all(rail_help[k].strip() for k in
-                      ("kSeedHelp", "kTitleIdHelp", "kFinishHelp"))))
+                      ("kSeedHelp", "kTitleIdHelp", "kNameHelp", "kHistoryHelp"))))
 
     # --- 5: everything fits, measured from the atlas -------------------------
-    rail_rows = list(category_labels) + ["FINISH"]
+    rail_rows = list(category_labels) + ["NAME", "HISTORY"]
     # Row 0 at its widest REAL value. Every Bloodborne title ID the console can
-    # have is CUSA-prefixed (Game/GameInfo.cpp lists all six), and CUSA03173 is
+    # have is CUSA-prefixed (ps4-homebrew-findings.md section 6 lists all six), and CUSA03173 is
     # the struct's own default - this is the 552px row plan M3 sized the column
     # on.
     rail_rows.append("BLOODBORNE TITLE ID   CUSA03173")
@@ -578,7 +867,8 @@ def main():
                   % (PANE_W, max(w for _c, w in headings)),
                   all(w <= PANE_W for _c, w in headings)))
 
-    titles = [e["label"] for e in entries] + ["BLOODBORNE TITLE ID", "SEED", "FINISH"]
+    titles = ([e["label"] for e in entries] +
+              ["BLOODBORNE TITLE ID", "SEED", "NAME", "HISTORY"])
     title_lines = {t: len(wrap(t, ROW_SCALE, HELP_W)) for t in titles}
     cases.append(("5: every help title wraps into at most %d lines at %d px (worst %d)"
                   % (HELP_TITLE_MAX_LINES, HELP_W, max(title_lines.values())),
@@ -601,33 +891,69 @@ def main():
                   width(FOOTER_LINE, ROW_SCALE) <= 1920))
 
     # --- 6: the vertical constants do not overlap ----------------------------
-    rail_stack = [
-        ("screen title", ink_top(TITLE_Y, TITLE_SCALE), ink_bottom(TITLE_Y, TITLE_SCALE)),
-        ("header readout", ink_top(HEADER_Y, HEADER_SCALE),
-         ink_bottom(HEADER_Y, HEADER_SCALE)),
-        ("header rule", HEADER_RULE_Y, HEADER_RULE_Y + 2),
-        ("rail row 0", ink_top(RAIL_ROW0_Y, ROW_SCALE), ink_bottom(RAIL_ROW0_Y, ROW_SCALE)),
-        ("rail rule 1", RAIL_RULE1_Y, RAIL_RULE1_Y + 2),
-    ]
-    for i in range(6):
-        y = RAIL_FIRST_Y + i * RAIL_PITCH
-        rail_stack.append(("category %d" % i, ink_top(y, ROW_SCALE),
-                           ink_bottom(y, ROW_SCALE)))
-    rail_stack.append(("rail rule 2", RAIL_RULE2_Y, RAIL_RULE2_Y + 2))
-    rail_stack.append(("FINISH", ink_top(FINISH_Y, ROW_SCALE),
-                       ink_bottom(FINISH_Y, ROW_SCALE)))
+    # Two rails now, not one: the DEFAULTS tab's seven rows and the world
+    # editor's ten. They no longer share a pitch (see SHARED_GEOMETRY), so they
+    # no longer share a stack either - and the editor's, being the deeper of
+    # the two, is the one that has to be shown to fit.
+    def rail_stack_for(name, row0_y, extra_top, rule1_y, first_y, pitch,
+                       category_count, rule2_y, last_y):
+        stack = []
+        if name == "editor":
+            stack += [
+                ("screen title", ink_top(TITLE_Y, TITLE_SCALE),
+                 ink_bottom(TITLE_Y, TITLE_SCALE)),
+                ("header readout", ink_top(HEADER_Y, HEADER_SCALE),
+                 ink_bottom(HEADER_Y, HEADER_SCALE)),
+            ]
+        stack.append(("header rule", HEADER_RULE_Y, HEADER_RULE_Y + 2))
+        stack.append(("rail row 0", ink_top(row0_y, ROW_SCALE),
+                      ink_bottom(row0_y, ROW_SCALE)))
+        if extra_top is not None:
+            stack.append(("rail row 1", ink_top(extra_top, ROW_SCALE),
+                          ink_bottom(extra_top, ROW_SCALE)))
+        stack.append(("rail rule 1", rule1_y, rule1_y + 2))
+        for i in range(category_count):
+            y = first_y + i * pitch
+            stack.append(("category %d" % i, ink_top(y, ROW_SCALE),
+                          ink_bottom(y, ROW_SCALE)))
+        if rule2_y is not None:
+            stack.append(("rail rule 2", rule2_y, rule2_y + 2))
+            stack.append(("last row", ink_top(last_y, ROW_SCALE),
+                          ink_bottom(last_y, ROW_SCALE)))
+        return stack
 
-    overlaps = [(a[0], b[0]) for a, b in zip(rail_stack, rail_stack[1:]) if b[1] < a[2]]
-    cases.append(("6: the rail column's %d elements are in order and clear of each other"
-                  % len(rail_stack), not overlaps))
-    if overlaps:
-        detail.append("   rail overlaps: %s" % overlaps)
-    cases.append(("6: the rail's ink ends at %d, inside its column rule (%d..%d)"
-                  % (rail_stack[-1][2], COLUMN_RULE_Y, COLUMN_RULE_Y + COLUMN_RULE_H),
-                  rail_stack[-1][2] <= RAIL_INK_END and
-                  rail_stack[-1][2] < COLUMN_RULE_Y + COLUMN_RULE_H and
-                  rail_stack[-1][2] < ink_top(FOOTER_Y, ROW_SCALE)))
+    rails = {
+        "DEFAULTS": rail_stack_for("defaults", RAIL_ROW0_Y, None, DEFAULTS_RULE1_Y,
+                                   DEFAULTS_FIRST_Y, DEFAULTS_PITCH,
+                                   len(settings_categories), None, None),
+        "editor": rail_stack_for("editor", RAIL_ROW0_Y, EDITOR_ROW1_Y,
+                                 EDITOR_RULE1_Y, EDITOR_FIRST_Y, EDITOR_PITCH,
+                                 len(categories), EDITOR_RULE2_Y, EDITOR_HISTORY_Y),
+    }
+    for who, rail_stack in rails.items():
+        overlaps = [(a[0], b[0]) for a, b in zip(rail_stack, rail_stack[1:])
+                    if b[1] < a[2]]
+        cases.append(("6: the %s rail's %d elements are in order and clear of "
+                      "each other" % (who, len(rail_stack)), not overlaps))
+        if overlaps:
+            detail.append("   %s rail overlaps: %s" % (who, overlaps))
+        cases.append(("6: the %s rail's ink ends at %d, inside its column rule "
+                      "(%d..%d)" % (who, rail_stack[-1][2], COLUMN_RULE_Y,
+                                    COLUMN_RULE_Y + COLUMN_RULE_H),
+                      rail_stack[-1][2] <= RAIL_INK_END and
+                      rail_stack[-1][2] < COLUMN_RULE_Y + COLUMN_RULE_H and
+                      rail_stack[-1][2] < ink_top(FOOTER_Y, ROW_SCALE)))
 
+    # The editor's rail runs at its own pitch, so its focus bar has to be shown
+    # to still contain a row and still miss the next one at that pitch.
+    ed_bar_bottom = EDITOR_FIRST_Y + BAR_OFFSET_Y + BAR_HEIGHT
+    cases.append(("6: the editor rail's focus bar contains its row and misses the "
+                  "next at pitch %d" % EDITOR_PITCH,
+                  EDITOR_FIRST_Y + BAR_OFFSET_Y <= ink_top(EDITOR_FIRST_Y, ROW_SCALE) and
+                  ed_bar_bottom >= ink_bottom(EDITOR_FIRST_Y, ROW_SCALE) and
+                  ed_bar_bottom < EDITOR_FIRST_Y + EDITOR_PITCH + BAR_OFFSET_Y))
+
+    rail_stack = rails["editor"]
     visible = (PANE_BOTTOM - PANE_FIRST_Y) // PANE_PITCH + 1
     last_row_y = PANE_FIRST_Y + (visible - 1) * PANE_PITCH
     pane_stack = [
@@ -668,13 +994,13 @@ def main():
     if overlaps:
         detail.append("   help overlaps: %s" % overlaps)
 
-    # --- 5/6 (wizard): the same screen, plus SEED, FINISH and Confirm --------
+    # --- 5/6 (editor): the same screen, plus NAME, SEED, HISTORY and Confirm --
     #
-    # The wizard's rail is the Setup Defaults rail with two more rows, so
-    # everything above already covers the six categories, FINISH and the SEED
-    # row. What is left is what only the wizard has: a second copy of the
-    # geometry, a two-sided header band, the readiness summary, and Confirm.
-    wiz = parse_geometry("EnableWizardScreen.cpp")
+    # The editor's rail is the Setup Defaults rail with three more rows and a
+    # seventh category, so everything above already covers the labels. What is
+    # left is what only the editor has: a second copy of the geometry, a header
+    # band, the name editor, the revision list and Confirm.
+    wiz = parse_geometry("WorldEditorScreen.cpp")
     setup = parse_geometry("SetupDefaultsScreen.cpp")
     absent = [k for k in SHARED_GEOMETRY if k not in wiz or k not in setup]
     differ = [k for k in SHARED_GEOMETRY
@@ -696,8 +1022,9 @@ def main():
         "kPaneValueRight": PANE_VALUE_RIGHT, "kHelpX": HELP_X, "kHelpW": HELP_W,
         "kTitleY": TITLE_Y, "kHeaderY": HEADER_Y, "kHeaderRuleY": HEADER_RULE_Y,
         "kColumnRuleY": COLUMN_RULE_Y, "kColumnRuleH": COLUMN_RULE_H,
-        "kRailRow0Y": RAIL_ROW0_Y, "kRailRuleY": RAIL_RULE1_Y,
-        "kRailFirstY": RAIL_FIRST_Y, "kRailPitch": RAIL_PITCH,
+        "kRailRow0Y": RAIL_ROW0_Y, "kRailRow1Y": EDITOR_ROW1_Y,
+        "kRailRuleY": EDITOR_RULE1_Y,
+        "kRailFirstY": EDITOR_FIRST_Y, "kRailPitch": EDITOR_PITCH,
         "kPaneHeadingY": PANE_HEADING_Y, "kHelpTitleY": HELP_TITLE_Y,
         "kHelpPitch": HELP_PITCH, "kHelpRuleY": HELP_RULE_Y,
         "kHelpBodyY": HELP_BODY_Y, "kHelpTitleMaxLines": HELP_TITLE_MAX_LINES,
@@ -705,63 +1032,504 @@ def main():
         "kTitleScale": TITLE_SCALE,
         "kHeadingScale": PANE_HEADING_SCALE, "kRowScale": ROW_SCALE,
         "kBarOffsetY": BAR_OFFSET_Y, "kBarHeight": BAR_HEIGHT,
-        "kRailRule2Y": RAIL_RULE2_Y, "kFinishY": FINISH_Y,
+        "kRailRule2Y": EDITOR_RULE2_Y, "kHistoryY": EDITOR_HISTORY_Y,
         "kHeaderTargetRight": HEADER_TARGET_RIGHT,
+        "kCategoryRows": len(categories),
     }
     stale = [(k, v, wiz.get(k)) for k, v in mirror.items() if wiz.get(k) != v]
     cases.append(("6: this file's %d geometry constants match the screens'"
                   % len(mirror), not stale))
     if stale:
         detail.append("   stale mirror constants: %s" % stale)
+    # The DEFAULTS rail keeps its own three, which nothing else pins now that
+    # they are out of SHARED_GEOMETRY.
+    setup_rail = {"kRailRuleY": DEFAULTS_RULE1_Y, "kRailFirstY": DEFAULTS_FIRST_Y,
+                  "kRailPitch": DEFAULTS_PITCH}
+    setup_stale = [(k, v, setup.get(k)) for k, v in setup_rail.items()
+                   if setup.get(k) != v]
+    cases.append(("6: the DEFAULTS rail's own %d constants match this file's"
+                  % len(setup_rail), not setup_stale))
+    if setup_stale:
+        detail.append("   stale DEFAULTS rail constants: %s" % setup_stale)
 
-    rail = parse_wizard_rail()
-    cases.append(("6: the wizard's rail is 8 rows - SEED, six categories, FINISH",
-                  rail["kRailItemCount"] == len(category_labels) + 2 and
-                  rail["kFinishRow"] == len(category_labels) + 1))
+    rail = parse_editor_rail(categories)
+    cases.append(("6: the editor's rail is %d rows - NAME, SEED, %d categories, "
+                  "HISTORY" % (len(categories) + 3, len(categories)),
+                  rail["kRailItemCount"] == len(categories) + 3 and
+                  rail["kHistoryRow"] == len(categories) + 2))
 
-    # The header band. Two readouts, one growing right from RAIL_X and one
-    # right-aligned to HEADER_TARGET_RIGHT, at their widest possible values.
-    hdr_seed = "SEED  " + max("0123456789", key=lambda c: ADV[ROW_SCALE][c]) * SEED_DIGITS
+    # The header band. One readout now, right-aligned to HEADER_TARGET_RIGHT at
+    # its widest possible value, and it has to clear the centred screen title
+    # above it rather than a second readout beside it.
+    editor_strings = parse_named_strings("WorldEditorScreen.cpp")
     hdr_target = "TARGET  " + widest_title_id()
-    seed_end = RAIL_X + width(hdr_seed, HEADER_SCALE)
     target_start = HEADER_TARGET_RIGHT - width(hdr_target, ROW_SCALE)
-    cases.append(("5: the header's two readouts clear each other (%d px apart)"
-                  % (target_start - seed_end), seed_end < target_start and
-                  HEADER_TARGET_RIGHT <= SCREEN_W))
-    cases.append(("5: the wizard footer line fits the screen (%d px of %d)"
-                  % (width(WIZARD_FOOTER_LINE, ROW_SCALE), SCREEN_W),
-                  width(WIZARD_FOOTER_LINE, ROW_SCALE) <= SCREEN_W))
+    title_end = (SCREEN_W + width(editor_strings["kScreenTitle"], TITLE_SCALE)) // 2
+    cases.append(("5: the header readout clears the screen title (%d px apart, "
+                  "starts at %d)" % (target_start - title_end, target_start),
+                  target_start > title_end and HEADER_TARGET_RIGHT <= SCREEN_W and
+                  target_start > RAIL_X))
+    editor_footer = editor_strings["kFooterLine"]
+    cases.append(("5: the editor footer line fits the screen (%d px of %d)"
+                  % (width(editor_footer, ROW_SCALE), SCREEN_W),
+                  width(editor_footer, ROW_SCALE) <= SCREEN_W))
+    # OPTIONS saves the world AND opens the activation confirmation, and the
+    # footer has to say both - it said only SAVE until 2026-09-25.
+    cases.append(("5: the editor footer says OPTIONS both saves and activates",
+                  "OPTIONS SAVE AND ACTIVATE" in editor_footer))
 
-    # The readiness summary FINISH shows in the help pane: three lines, a
-    # blank, then FINISH's own help. Each summary line is wrapped like any
-    # other, so the case is that none of them NEEDS wrapping and the block as a
-    # whole still fits the 11 body lines the pane draws.
     digit = max("0123456789", key=lambda c: ADV[ROW_SCALE][c])
-    toggles = sum(1 for e in entries if e["kind"] == "Toggle")
-    summary = ["SEED  " + digit * SEED_DIGITS,
-               "TARGET  " + widest_title_id(),
-               "%s OF %d SETTINGS ENABLED" % (digit * len(str(toggles)), toggles)]
-    over = [s for s in summary if len(wrap(s, ROW_SCALE, HELP_W)) > 1]
-    summary_total = (len(summary) + SUMMARY_BLANK_LINES +
-                     len(wrap(rail_help["kFinishHelp"], ROW_SCALE, HELP_W)))
-    cases.append(("5: each readiness line fits %d px on one line (widest %d px)"
-                  % (HELP_W, max(width(s, ROW_SCALE) for s in summary)), not over))
-    cases.append(("5: the readiness block is %d of the %d body lines drawn"
-                  % (summary_total, HELP_BODY_MAX_LINES),
-                  summary_total <= HELP_BODY_MAX_LINES))
+    name_cap = parse_world_name_cap()
 
-    # Confirm: the seed row, then every setting in category order, at its
-    # widest value. Centred, so the budget is the whole screen.
-    confirm = ["SEED   " + digit * SEED_DIGITS]
+    # The name editor: sixteen characters of the widest glyph the alphabet
+    # allows, at the editor scale, centred - so the budget is the screen.
+    name_scale = 6
+    widest_edit_name = widest_name(name_cap)
+    cases.append(("5: the name editor's %d characters fit the screen at scale %d "
+                  "(%d px of %d)"
+                  % (name_cap, name_scale, width(widest_edit_name, name_scale),
+                     SCREEN_W),
+                  width(widest_edit_name, name_scale) <= SCREEN_W and
+                  name_cap == NAME_CAP_ROWS))
+
+    # Confirm, which is the ACTIVATION confirmation from worlds milestone 6 on.
+    # Eight head rows at their widest possible values, then every setting in
+    # category order at its widest value. Centred, so the budget is the whole
+    # screen.
+    action_names, action_sentences, refusals = parse_activation_strings()
+    widest_action = max(action_names, key=lambda t: width(t, CONFIRM_SCALE))
+    widest_outgoing = max([editor_strings[k] for k in
+                           ("kOutgoingNoContainer", "kOutgoingEmpty",
+                            "kOutgoingNowhere", "kOutgoingFiled")],
+                          key=lambda t: width(t, CONFIRM_SCALE))
+    widest_duration = max([editor_strings[k] for k in
+                           ("kDurationUnknown", "kDurationShort",
+                            "kDurationMedium", "kDurationLong")],
+                          key=lambda t: width(t, CONFIRM_SCALE))
+    # A world name is capped at 16 characters; the "no world is active" line is
+    # longer than that, so the DEACTIVATING row is measured against whichever
+    # of the two is wider.
+    widest_world = max([widest_name(name_cap), editor_strings["kNoOutgoingWorld"]],
+                       key=lambda t: width(t, CONFIRM_SCALE))
+    confirm = ["NAME" + CONFIRM_GAP + widest_name(name_cap),
+               "SEED" + CONFIRM_GAP + digit * SEED_DIGITS,
+               "TARGET" + CONFIRM_GAP + widest_title_id(),
+               editor_strings["kRowDeactivating"] + CONFIRM_GAP + widest_world,
+               editor_strings["kRowOutgoingSave"] + CONFIRM_GAP + widest_outgoing,
+               editor_strings["kRowActivating"] + CONFIRM_GAP + widest_name(name_cap),
+               editor_strings["kRowIncomingSave"] + CONFIRM_GAP + widest_action,
+               editor_strings["kRowHowLong"] + CONFIRM_GAP + widest_duration]
     confirm += [e["label"] + CONFIRM_GAP + widest_value(e) for e in entries]
     widest_confirm = max(confirm, key=lambda s: width(s, CONFIRM_SCALE))
-    cases.append(("6: Confirm lists %d rows - the seed row and all %d settings"
-                  % (len(confirm), len(entries)),
-                  len(confirm) == len(entries) + 1 and
-                  ui_scroll_count("Wizard Confirm") == len(confirm)))
+    cases.append(("6: Confirm lists %d rows - %d head rows and all %d settings"
+                  % (len(confirm), CONFIRM_HEAD_ROWS, len(entries)),
+                  len(confirm) == len(entries) + CONFIRM_HEAD_ROWS and
+                  ui_scroll_count("Editor Confirm") == len(confirm)))
     cases.append(("5: every Confirm row fits the screen at scale 4 (widest %d px, %s)"
                   % (width(widest_confirm, CONFIRM_SCALE), widest_confirm),
                   width(widest_confirm, CONFIRM_SCALE) <= SCREEN_W))
+
+    # B10 says the confirmation states which world is deactivated and where its
+    # save goes, which is activated, what happens to its save, and roughly how
+    # long it takes. Five rows, and this is what stops one of them quietly
+    # going away.
+    cases.append(("6: Confirm states all five B10 activation facts",
+                  all(editor_strings[k] in "".join(confirm[3:8]) for k in
+                      ("kRowDeactivating", "kRowOutgoingSave", "kRowActivating",
+                       "kRowIncomingSave", "kRowHowLong"))))
+
+    # The state line, and the sentence band under it. The sentence is the phase
+    # 6 row in the player's words, or the refusal's own sentence - both far too
+    # long for scale 4, so both are wrapped at the row scale into a band of
+    # kConfirmSentenceMax lines. A sentence that needs one more line than the
+    # band has is a sentence the player only reads half of.
+    band_w = wiz["kConfirmSentenceW"]
+    band_max = wiz["kConfirmSentenceMax"]
+    state_line = max([editor_strings["kConfirmHeading"],
+                      editor_strings["kConfirmChecking"],
+                      editor_strings["kCannotActivate"] + " - SAVE DIRECTORY"],
+                     key=lambda t: width(t, CONFIRM_SCALE))
+    cases.append(("5: the Confirm state line fits the screen at scale 4 "
+                  "(widest %d px, %s)" % (width(state_line, CONFIRM_SCALE), state_line),
+                  width(state_line, CONFIRM_SCALE) <= SCREEN_W))
+
+    banded = action_sentences + [text for _, text in refusals]
+    worst = max(banded, key=lambda t: len(wrap(t, ROW_SCALE, band_w)))
+    cases.append(("6: all %d Confirm sentences wrap into %d lines of %d px "
+                  "(worst is %d lines: %s)"
+                  % (len(banded), band_max, band_w, len(wrap(worst, ROW_SCALE, band_w)),
+                     worst),
+                  all(len(wrap(t, ROW_SCALE, band_w)) <= band_max for t in banded)))
+
+    # ...and the band itself clears the state line above it and the list's
+    # MORE ABOVE hint below it. ui_scroll_verify.py owns the hint's own
+    # clearance; what is checked here is that the two rows fit in between.
+    confirm_layout = parse_list_layout("WorldEditorScreen.cpp", "kSettingsLayout")
+    band_last_y = wiz["kConfirmSentenceY"] + (band_max - 1) * wiz["kConfirmSentencePitch"]
+    hint_y = confirm_layout[0] - confirm_layout[3]
+    cases.append(("5: the sentence band clears the state line above it "
+                  "(%d px)" % (ink_top(wiz["kConfirmSentenceY"], ROW_SCALE) -
+                               ink_bottom(wiz["kConfirmStateY"], CONFIRM_SCALE)),
+                  ink_top(wiz["kConfirmSentenceY"], ROW_SCALE) >
+                  ink_bottom(wiz["kConfirmStateY"], CONFIRM_SCALE)))
+    cases.append(("5: the sentence band clears the list's MORE ABOVE hint "
+                  "(%d px)" % (ink_top(hint_y, ROW_SCALE) -
+                               ink_bottom(band_last_y, ROW_SCALE)),
+                  ink_top(hint_y, ROW_SCALE) > ink_bottom(band_last_y, ROW_SCALE)))
+    cases.append(("5: the band's own rows do not overlap each other (pitch %d, "
+                  "line box %d)" % (wiz["kConfirmSentencePitch"],
+                                    INK[ROW_SCALE][1] - INK[ROW_SCALE][0]),
+                  wiz["kConfirmSentencePitch"] >=
+                  INK[ROW_SCALE][1] - INK[ROW_SCALE][0]))
+
+    # Confirm's two footer lines, which now say ACTIVATE rather than COMMIT and
+    # drop the OPTIONS half entirely when there is nothing to activate.
+    for key in ("kConfirmFooterHint", "kConfirmFooterGo", "kConfirmFooterBack"):
+        cases.append(("5: %s fits the screen at the footer scale (%d px)"
+                      % (key, width(editor_strings[key], ROW_SCALE)),
+                      width(editor_strings[key], ROW_SCALE) <= SCREEN_W))
+    cases.append(("6: the Confirm footer offers OPTIONS only when it activates",
+                  "OPTIONS" in editor_strings["kConfirmFooterGo"] and
+                  "OPTIONS" not in editor_strings["kConfirmFooterBack"]))
+
+    # HISTORY: one line per revision, "REVISION n   <seed>   n CHANGED", with a
+    # cursor, at the row scale. The revision count is unbounded, so the widest
+    # line is measured at four-digit numbers rather than at today's.
+    history_rows = ["REVISION 9999   " + digit * SEED_DIGITS + "   9999 CHANGED",
+                    "REVISION 9999   " + digit * SEED_DIGITS + "   CREATED",
+                    "THIS WORLD HAS NOT BEEN SAVED YET"]
+    widest_history = max(history_rows, key=lambda t: width(t, ROW_SCALE))
+    cases.append(("5: every HISTORY row fits the screen at scale %d (widest %d px)"
+                  % (ROW_SCALE, width(widest_history, ROW_SCALE)),
+                  width(widest_history, ROW_SCALE) <= SCREEN_W))
+    cases.append(("6: ui_scroll_verify.py checks the revision list",
+                  ui_scroll_count("Editor history") is not None))
+
+    # --- 5/6 (worlds): the tab strip and the WORLDS tab ---------------------
+    #
+    # A third screen on the same three-column split, plus the strip that sits
+    # above two of them. Everything here is measured the same way the two
+    # categorised screens are; what is NOT here is the scroll band, which is
+    # ui_scroll_verify.py's "Worlds rail" and "Worlds details" entries.
+    tabs, tab_labels = parse_controls_tabs()
+    worlds = parse_geometry("WorldsScreen.cpp")
+    worlds_strings = parse_named_strings("WorldsScreen.cpp")
+    name_cap = parse_world_name_cap()
+
+    cases.append(("6: the tab strip declares %d tabs and names both of them"
+                  % tabs.get("kTabCount", 0),
+                  tabs.get("kTabCount") == 2 and
+                  tab_labels == ["WORLDS", "DEFAULTS"]))
+
+    # Both labels, boxed and spaced as DrawTabs lays them out. The strip is
+    # left-aligned on the rail's own edge, so its budget is the screen.
+    strip_x = tabs["kTabX"]
+    tab_boxes = []
+    for label in tab_labels:
+        box_w = width(label, tabs["kTabScale"]) + tabs["kTabPadX"] * 2
+        tab_boxes.append((strip_x, strip_x + box_w, label))
+        strip_x += box_w + tabs["kTabGap"]
+    strip_end = tab_boxes[-1][1] if tab_boxes else tabs["kTabX"]
+    cases.append(("5: both tab labels fit their boxes and the strip ends at %d of %d"
+                  % (strip_end, SCREEN_W), strip_end <= SCREEN_W))
+    gaps = [b[0] - a[1] for a, b in zip(tab_boxes, tab_boxes[1:])]
+    cases.append(("6: the tab boxes clear each other (%s px apart)" % gaps,
+                  all(g == tabs["kTabGap"] for g in gaps)))
+    cases.append(("6: the active tab's box contains its own label's ink",
+                  tabs["kTabY"] + tabs["kTabBoxOffsetY"] <=
+                  ink_top(tabs["kTabY"], tabs["kTabScale"]) and
+                  tabs["kTabY"] + tabs["kTabBoxOffsetY"] + tabs["kTabBoxHeight"] >=
+                  ink_bottom(tabs["kTabY"], tabs["kTabScale"])))
+
+    # All three screens' copies of the three-column split.
+    setup_absent = [k for k in THREE_COLUMN_GEOMETRY if k not in worlds or k not in setup]
+    setup_differ = [k for k in THREE_COLUMN_GEOMETRY
+                    if k in worlds and k in setup and worlds[k] != setup[k]]
+    cases.append(("6: the worlds screen's %d three-column constants match the "
+                  "settings screens'" % len(THREE_COLUMN_GEOMETRY),
+                  not setup_absent and not setup_differ))
+    if setup_absent or setup_differ:
+        detail.append("   worlds geometry absent=%s differ=%s"
+                      % (setup_absent, [(k, worlds.get(k), setup.get(k))
+                                        for k in setup_differ]))
+    cases.append(("6: all three screens draw their rules in the same colour",
+                  worlds.get("kRuleColor") == setup.get("kRuleColor")))
+
+    # The header band: the tab strip, the active tab's name, and the readout
+    # that says which world is active - which is the only place UNMANAGED and
+    # FIRST RUN are stated, because in both of them no rail row is marked
+    # (worlds B32, B4).
+    heading_scale = tabs["kTabHeadingScale"]
+    worlds_stack = [
+        ("tab box", tabs["kTabY"] + tabs["kTabBoxOffsetY"],
+         tabs["kTabY"] + tabs["kTabBoxOffsetY"] + tabs["kTabBoxHeight"]),
+        ("heading band",
+         min(ink_top(tabs["kTabHeadingY"], heading_scale),
+             ink_top(worlds["kStateY"], ROW_SCALE)),
+         max(ink_bottom(tabs["kTabHeadingY"], heading_scale),
+             ink_bottom(worlds["kStateY"], ROW_SCALE))),
+        ("header rule", worlds["kHeaderRuleY"],
+         worlds["kHeaderRuleY"] + worlds["kRuleThickness"]),
+        ("column rule top", worlds["kColumnRuleY"], worlds["kColumnRuleY"]),
+        ("pane heading", ink_top(worlds["kPaneHeadingY"], worlds["kHeadingScale"]),
+         ink_bottom(worlds["kPaneHeadingY"], worlds["kHeadingScale"])),
+    ]
+    overlaps = [(a[0], b[0]) for a, b in zip(worlds_stack, worlds_stack[1:])
+                if b[1] < a[2]]
+    cases.append(("6: the worlds screen's %d header elements are in order and clear"
+                  % len(worlds_stack), not overlaps))
+    if overlaps:
+        detail.append("   worlds header overlaps: %s" % overlaps)
+
+    # The heading and the readout share a band, so they have to clear each
+    # other across the screen instead of down it.
+    heading_end = tabs["kTabX"] + width("DEFAULTS", heading_scale)
+    readout = "ACTIVE  " + widest_name(name_cap)
+    readout_start = worlds["kStateRight"] - width(readout, ROW_SCALE)
+    cases.append(("5: the heading and the ACTIVE readout clear each other "
+                  "(%d px apart)" % (readout_start - heading_end),
+                  heading_end < readout_start and
+                  worlds["kStateRight"] <= SCREEN_W))
+
+    # The rail. A world name is at most `name_cap` characters of A-Z, 0-9 and
+    # space (worlds plan P10), and the ACTIVE swatch sits at the row's right
+    # edge - nothing clips the label, so the clear space is checked here.
+    rail_budget = worlds["kRailW"] - worlds["kSwatchW"] - SWATCH_MIN_GAP
+    worlds_rail_rows = [worlds_strings["kRowNewWorld"], widest_name(name_cap),
+                        "VANILLA"]
+    widest_rail = max(worlds_rail_rows, key=lambda t: width(t, ROW_SCALE))
+    cases.append(("5: every worlds rail row fits %d px beside the swatch "
+                  "(widest %d px, %s)"
+                  % (rail_budget, width(widest_rail, ROW_SCALE), widest_rail),
+                  width(widest_rail, ROW_SCALE) <= rail_budget))
+    rail_layout = parse_list_layout("WorldsScreen.cpp", "kRailLayout")
+    cases.append(("6: the worlds rail's focus bar contains its row's ink, and the "
+                  "swatch sits inside the bar",
+                  worlds["kBarOffsetY"] <= ink_top(0, ROW_SCALE) and
+                  worlds["kBarOffsetY"] + worlds["kBarHeight"] >=
+                  ink_bottom(0, ROW_SCALE) and
+                  worlds["kSwatchOffsetY"] >= worlds["kBarOffsetY"] and
+                  worlds["kSwatchOffsetY"] + worlds["kSwatchH"] <=
+                  worlds["kBarOffsetY"] + worlds["kBarHeight"] and
+                  worlds["kBarOffsetY"] + worlds["kBarHeight"] <
+                  rail_layout[1] + worlds["kBarOffsetY"]))
+
+    # The details pane. Its heading is the row's own name, so it is measured
+    # at the widest one a player can type.
+    cases.append(("5: the details heading fits %d px at scale %d (widest %d px)"
+                  % (worlds["kPaneW"], worlds["kHeadingScale"],
+                     width(widest_name(name_cap), worlds["kHeadingScale"])),
+                  width(widest_name(name_cap), worlds["kHeadingScale"]) <=
+                  worlds["kPaneW"] and
+                  width(worlds_strings["kRowNewWorld"], worlds["kHeadingScale"]) <=
+                  worlds["kPaneW"]))
+    widest_detail = max(((width(l, ROW_SCALE) + VALUE_GAP + width(v, ROW_SCALE), l, v)
+                         for l in DETAIL_LABELS for v in DETAIL_VALUES))
+    cases.append(("5: every detail label + %d + widest value fits %d px "
+                  "(widest %d px, %s / %s)"
+                  % (VALUE_GAP, worlds["kPaneW"], widest_detail[0],
+                     widest_detail[1], widest_detail[2]),
+                  widest_detail[0] <= worlds["kPaneW"]))
+
+    # The notes, and the worst case the pane can be asked to draw. It has no
+    # cursor: a note that pushed a row past the band would be a row the player
+    # cannot reach.
+    detail_layout = parse_list_layout("WorldsScreen.cpp", "kDetailLayout")
+    detail_visible = ((detail_layout[2] - detail_layout[0]) // detail_layout[1]) + 1
+    notes = {k: v for k, v in worlds_strings.items() if k.startswith("kNote")}
+    note_lines = {k: len(wrap(v, ROW_SCALE, worlds["kPaneW"])) for k, v in notes.items()}
+    worst_note = max(note_lines.values())
+    own_note = max(note_lines["kNoteNewWorld"], note_lines["kNoteVanilla"])
+    worst_pane = max(DETAIL_ROWS_WORLD + worst_note,
+                     DETAIL_ROWS_VANILLA + note_lines["kNoteVanilla"] + worst_note,
+                     DETAIL_ROWS_NEW + note_lines["kNoteNewWorld"] + worst_note)
+    cases.append(("5: the worst details pane is %d rows of the %d the band draws"
+                  % (worst_pane, detail_visible), worst_pane <= detail_visible))
+    detail.append("   details pane: %d rows visible, worst %d "
+                  "(notes %s, own-note worst %d)"
+                  % (detail_visible, worst_pane, note_lines, own_note))
+    longest_note_word = max((w for v in notes.values() for w in v.split()),
+                            key=lambda w: width(w, ROW_SCALE))
+    cases.append(("5: no note word exceeds the pane (%d px, '%s')"
+                  % (width(longest_note_word, ROW_SCALE), longest_note_word),
+                  width(longest_note_word, ROW_SCALE) <= worlds["kPaneW"]))
+    cases.append(("5: ui_scroll_verify.py checks the details pane at %d rows"
+                  % detail_visible,
+                  ui_scroll_count("Worlds details") == detail_visible))
+
+    # The help column, measured exactly as the settings screens' is.
+    world_help = {k: v for k, v in worlds_strings.items() if k.startswith("kHelp")}
+    help_titles = [v for k, v in world_help.items() if k.endswith("Title")]
+    help_bodies = [v for k, v in world_help.items() if k.endswith("Body")]
+    worst_title = max(len(wrap(t, ROW_SCALE, worlds["kHelpW"])) for t in help_titles)
+    worst_body = max(len(wrap(b, ROW_SCALE, worlds["kHelpW"])) for b in help_bodies)
+    longest_help_word = max((w for b in help_bodies + help_titles for w in b.split()),
+                            key=lambda w: width(w, ROW_SCALE))
+    cases.append(("5: the %d worlds help titles wrap into at most %d lines (worst %d)"
+                  % (len(help_titles), worlds["kHelpTitleMaxLines"], worst_title),
+                  worst_title <= worlds["kHelpTitleMaxLines"]))
+    cases.append(("5: the %d worlds help bodies wrap into at most %d lines (worst %d)"
+                  % (len(help_bodies), worlds["kHelpBodyMaxLines"], worst_body),
+                  worst_body <= worlds["kHelpBodyMaxLines"] and len(help_bodies) == 3))
+    cases.append(("5: no worlds help word exceeds %d px (widest '%s', %d px)"
+                  % (worlds["kHelpW"], longest_help_word,
+                     width(longest_help_word, ROW_SCALE)),
+                  width(longest_help_word, ROW_SCALE) <= worlds["kHelpW"]))
+
+    # The two footers this milestone writes. The DEFAULTS tab now has two -
+    # Left/Right change a value in the pane and switch tabs on the rail, and
+    # the footer says whichever is true right now (B31).
+    worlds_footer = worlds_strings["kFooterLine"]
+    rail_footer = parse_named_strings("SetupDefaultsScreen.cpp")["kRailFooterLine"]
+    cases.append(("5: the worlds footer fits the screen (%d px of %d)"
+                  % (width(worlds_footer, ROW_SCALE), SCREEN_W),
+                  width(worlds_footer, ROW_SCALE) <= SCREEN_W and
+                  "LEFT RIGHT TABS" in worlds_footer and
+                  "TRIANGLE DELETE" in worlds_footer))
+    cases.append(("5: the DEFAULTS rail footer fits the screen (%d px of %d)"
+                  % (width(rail_footer, ROW_SCALE), SCREEN_W),
+                  width(rail_footer, ROW_SCALE) <= SCREEN_W and
+                  "LEFT RIGHT TABS" in rail_footer))
+
+    # The delete confirmation (B17). Centred on the whole screen rather than
+    # drawn into the details pane, so these are measured against 1920 - which
+    # is why they carry their own kDelete/kRefuse prefixes and are not swept up
+    # by the kNote pass above.
+    delete_strings = {k: v for k, v in worlds_strings.items()
+                      if k.startswith("kDelete") or k.startswith("kRefuse")}
+    widest_delete = max(delete_strings.values(),
+                        key=lambda t: width(t, ROW_SCALE))
+    cases.append(("5: the %d delete-confirmation strings fit the screen "
+                  "(widest %d px of %d)"
+                  % (len(delete_strings), width(widest_delete, ROW_SCALE), SCREEN_W),
+                  len(delete_strings) >= 6 and
+                  all(width(v, ROW_SCALE) <= SCREEN_W
+                      for v in delete_strings.values())))
+    # B17 and B20 in the strings themselves: the confirmation has to say the
+    # save is kept, and Vanilla and the active world each have to be refused
+    # rather than silently ignored.
+    cases.append(("5: the confirmation says the save is kept, and both refusals "
+                  "exist",
+                  "KEPT" in delete_strings.get("kDeleteLine2", "") and
+                  "CANNOT BE DELETED" in delete_strings.get("kRefuseVanilla", "") and
+                  "ACTIVE" in delete_strings.get("kRefuseActive", "")))
+
+    # --- 5/10 (startup screen): the error state ------------------------------
+    #
+    # The startup sequence's four failures, each with a sentence the SCREEN
+    # owns and a prompt of its own. Centred on the whole screen, so measured
+    # against 1920 and not against a column - and the mapping is asserted
+    # total against the enum, because the failure a missing row produces is a
+    # blank error screen rather than a build error.
+    problem_enum, problem_rows = parse_startup_problems()
+    expected_outcomes = [e for e in problem_enum if e != "None"]
+    row_outcomes = [r[0] for r in problem_rows]
+    cases.append(("10: the outcome table has one row for each of the %d non-None "
+                  "StartupProblem outcomes" % len(expected_outcomes),
+                  row_outcomes == expected_outcomes and
+                  len(expected_outcomes) == 4))
+    if row_outcomes != expected_outcomes:
+        detail.append("   outcome table %s vs enum %s" % (row_outcomes, expected_outcomes))
+
+    missing = [n for r in problem_rows for n in (r[1], r[2])
+               if n not in worlds_strings]
+    cases.append(("10: every sentence and prompt the table names is a measurable "
+                  "named string", not missing))
+    if missing:
+        detail.append("   outcome table names unmeasurable: %s" % missing)
+
+    sentences = [worlds_strings[r[1]] for r in problem_rows if r[1] in worlds_strings]
+    cases.append(("10: all %d outcome sentences are distinct and non-empty"
+                  % len(sentences),
+                  len(set(sentences)) == len(sentences) and all(sentences)))
+
+    # B10: X for the three that leave a usable app behind, O for the one that
+    # does not. NoSignedInPlayer is the only row that may offer the exit.
+    prompts = {r[0]: r[2] for r in problem_rows}
+    cases.append(("10: every prompt is kPromptContinue or kPromptExit, and only "
+                  "NoSignedInPlayer exits",
+                  all(v in ("kPromptContinue", "kPromptExit") for v in prompts.values()) and
+                  [k for k, v in prompts.items() if v == "kPromptExit"] ==
+                  ["NoSignedInPlayer"]))
+
+    sub_scale = worlds["kStartupSubScale"]
+    widest_sentence = max(sentences, key=lambda t: width(t, sub_scale))
+    cases.append(("5: the %d startup problem sentences fit the screen at scale %d "
+                  "(widest %d px of %d)"
+                  % (len(sentences), sub_scale, width(widest_sentence, sub_scale),
+                     SCREEN_W),
+                  all(width(t, sub_scale) <= SCREEN_W for t in sentences)))
+    detail.append("   widest startup problem sentence %d px: %s"
+                  % (width(widest_sentence, sub_scale), widest_sentence))
+    cases.append(("5: the startup problem title fits the screen at scale %d (%d px)"
+                  % (worlds["kStartupTitleScale"],
+                     width(worlds_strings["kProblemTitle"],
+                           worlds["kStartupTitleScale"])),
+                  width(worlds_strings["kProblemTitle"],
+                        worlds["kStartupTitleScale"]) <= SCREEN_W))
+
+    # The two footer lines the error state draws, in the band ui_scroll_verify
+    # already checks: the scroll hint above, the outcome's prompt below.
+    footers = [worlds_strings["kProblemScrollHint"],
+               worlds_strings["kPromptContinue"], worlds_strings["kPromptExit"]]
+    cases.append(("5: the scroll hint and both prompts fit the screen at scale %d "
+                  "(widest %d px)"
+                  % (worlds["kFooterScale"],
+                     max(width(t, worlds["kFooterScale"]) for t in footers)),
+                  all(width(t, worlds["kFooterScale"]) <= SCREEN_W for t in footers)))
+
+    # --- 5/6 (startup screen): the loading state ----------------------------
+    #
+    # Four elements and nothing else: the wordmark, a rule, a five-cell bar and
+    # the word LOADING, all inside one centred block. Nothing available here
+    # can observe the bar stepping or the frame ordering - what IS checkable is
+    # that the block is centred, that five equal cells divide it exactly, that
+    # both words fit inside it, and that the stack does not collide with
+    # itself. A cell width that rounded would put the fifth cell off the
+    # block's right edge on a TV and nowhere else.
+    title_scale = worlds["kStartupTitleScale"]
+    block_w = worlds["kLoadBlockW"]
+    cases.append(("5: the wordmark fits the loading block at scale %d (%d px of %d)"
+                  % (title_scale, width(worlds_strings["kWordmark"], title_scale),
+                     block_w),
+                  width(worlds_strings["kWordmark"], title_scale) <= block_w))
+    cases.append(("5: LOADING fits the loading block at scale %d (%d px of %d)"
+                  % (sub_scale, width(worlds_strings["kLoadingWord"], sub_scale),
+                     block_w),
+                  worlds_strings["kLoadingWord"] == "LOADING" and
+                  width(worlds_strings["kLoadingWord"], sub_scale) <= block_w))
+
+    cases.append(("6: the loading block is centred (%d + %d + %d == %d)"
+                  % (worlds["kLoadBlockX"], block_w, worlds["kLoadBlockX"], SCREEN_W),
+                  worlds["kLoadBlockX"] * 2 + block_w == SCREEN_W))
+
+    # B3: FIVE EQUAL steps. The gaps come out of the block first, and what is
+    # left has to divide by five exactly and equal five coded cell widths.
+    cells = worlds["kLoadStageCount"]
+    inner = block_w - (cells - 1) * worlds["kLoadCellGap"]
+    cases.append(("6: the bar is %d equal cells of %d px filling the block exactly"
+                  % (cells, worlds["kLoadCellW"]),
+                  cells == 5 and inner % cells == 0 and
+                  inner == cells * worlds["kLoadCellW"]))
+    if inner % cells or inner != cells * worlds["kLoadCellW"]:
+        detail.append("   loading bar: %d px of cells over %d cells, coded %d"
+                      % (inner, cells, worlds["kLoadCellW"]))
+
+    load_stack = [
+        ("wordmark", ink_top(worlds["kLoadWordmarkY"], title_scale),
+         ink_bottom(worlds["kLoadWordmarkY"], title_scale)),
+        ("rule", worlds["kLoadRuleY"], worlds["kLoadRuleY"] + worlds["kRuleThickness"]),
+        ("bar", worlds["kLoadBarY"], worlds["kLoadBarY"] + worlds["kLoadBarH"]),
+        ("LOADING", ink_top(worlds["kLoadWordY"], sub_scale),
+         ink_bottom(worlds["kLoadWordY"], sub_scale)),
+    ]
+    overlaps = [(a[0], b[0]) for a, b in zip(load_stack, load_stack[1:]) if b[1] < a[2]]
+    cases.append(("6: the loading state's %d elements are in order, clear of each "
+                  "other and inside the screen" % len(load_stack),
+                  not overlaps and load_stack[0][1] >= 0 and
+                  load_stack[-1][2] <= SCREEN_H))
+    if overlaps:
+        detail.append("   loading stack overlaps: %s" % overlaps)
 
     # --- 7: nothing from the save-data inventory survives --------------------
     survivors = []

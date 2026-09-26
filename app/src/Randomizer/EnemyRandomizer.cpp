@@ -224,7 +224,7 @@ const std::array<const char*, 6> kMirrorFolders = {{
 }};
 
 // The two messages StepBuildPool can fail with. Both reach the TV verbatim,
-// behind EnableWizardScreen's "ENEMY RANDOMIZATION FAILED - " prefix, and
+// behind WorldEditorScreen's "ENEMY RANDOMIZATION FAILED - " prefix, and
 // Font8x8.cpp's glyph table has no lowercase and no ':' - an unrenderable
 // character draws as a full-width BLANK column rather than as nothing, so a
 // lowercase message satisfies every width budget and still shows the player an

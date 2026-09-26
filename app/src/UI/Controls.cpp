@@ -2,6 +2,49 @@
 
 namespace bbr {
 
+namespace {
+const char* const kTabLabels[kTabCount] = { "WORLDS", "DEFAULTS" };
+
+// The box's own colour. The same value the rules use, one step down from
+// Palette::Dim: a frame drawn as loud as its label is furniture competing with
+// content. Repeated here rather than shared with the screens' kRuleColor,
+// which is file-local to each of them.
+const Color kTabBoxColor = { 64, 72, 82 };
+} // namespace
+
+const char* TabLabel(int index) {
+    if (index < 0 || index >= kTabCount) return "";
+    return kTabLabels[index];
+}
+
+void DrawTabs(Renderer& renderer, int active) {
+    int x = kTabX;
+    for (int i = 0; i < kTabCount; i++) {
+        const char* label = kTabLabels[i];
+        int labelW = renderer.TextWidth(label, kTabScale);
+        int boxW   = labelW + kTabPadX * 2;
+
+        if (i == active) {
+            // Four FillRects rather than an outlined rect: FillRect is the one
+            // rectangle entry point this app has proven on hardware, and the
+            // rules elsewhere are drawn the same way.
+            int boxY = kTabY + kTabBoxOffsetY;
+            renderer.FillRect(x, boxY, boxW, kTabBorder,
+                              kTabBoxColor.r, kTabBoxColor.g, kTabBoxColor.b);
+            renderer.FillRect(x, boxY + kTabBoxHeight - kTabBorder, boxW, kTabBorder,
+                              kTabBoxColor.r, kTabBoxColor.g, kTabBoxColor.b);
+            renderer.FillRect(x, boxY, kTabBorder, kTabBoxHeight,
+                              kTabBoxColor.r, kTabBoxColor.g, kTabBoxColor.b);
+            renderer.FillRect(x + boxW - kTabBorder, boxY, kTabBorder, kTabBoxHeight,
+                              kTabBoxColor.r, kTabBoxColor.g, kTabBoxColor.b);
+        }
+
+        Color color = (i == active) ? Palette::Selected : Palette::Dim;
+        renderer.DrawText(x + kTabPadX, kTabY, label, kTabScale, color.r, color.g, color.b);
+        x += boxW + kTabGap;
+    }
+}
+
 void DrawCenteredLabel(Renderer& renderer, int y, const char* text, int scale, Color color) {
     int x = (kScreenWidth - renderer.TextWidth(text, scale)) / 2;
     renderer.DrawText(x, y, text, scale, color.r, color.g, color.b);

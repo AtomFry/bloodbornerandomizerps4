@@ -1,6 +1,7 @@
 # Plan — Worlds
 
-**Status: APPROVED** — approved by the developer 2026-09-22.
+**Status: DONE** — all six milestones implemented and hardware-tested.
+Approved by the developer 2026-09-22; hardware test passed in full 2026-09-25.
 
 **Spec:** `docs/features/worlds/spec.md` — **APPROVED**, re-approved 2026-09-22.
 Twenty-seven binding decisions, §7.2 and §10, of which D13 is superseded by D24;
@@ -576,7 +577,10 @@ Halt and report rather than deciding, if any of these occur:
 
 ## 8. Open questions
 
-*None.* The two this plan raised were both spec gaps rather than plan choices,
+*None.* The one milestone 3 raised — B37 making B8 a one-way door — was put to
+the developer on 2026-09-24 and answered as **P26** below.
+
+The two this plan raised were both spec gaps rather than plan choices,
 and the developer answered both on 2026-09-22 as recommended. They are binding
 in the spec as **D26** (a container holding no save files means no backup and no
 capture) and **D27** (the `BLOODBORNE TITLE ID` setting alone decides the AFR
@@ -615,7 +619,352 @@ editing accident.
 | P23 | 2026-09-22 | The AFR title and the save-data title are independent values, neither derived from the other | developer (D25) |
 | P24 | 2026-09-22 | A container that exists but holds no save files skips phases 2 and 3 and leaves the outgoing world's stored save untouched, rather than capturing an empty save over a good one | developer (D26) |
 | P25 | 2026-09-22 | The `BLOODBORNE TITLE ID` setting alone decides the AFR title. A configured title that `GameInfo::DetectAll` did not find refuses at phase 1, listing what was detected | developer (D27) |
+| P26 | 2026-09-24 | **Supersedes the second sentence of P25/D27.** The `BLOODBORNE TITLE ID` setting alone decides the AFR title and is used as entered — AFR handling never infers or validates it. The §4.4 `AFR title` refusal and `RefusalReason::AfrTitleNotDetected` are removed in milestone 6, resolving the B37/B8 one-way door: `GameInfo::DetectAll` inspects the AFR overlay, which a Vanilla activation deletes, so it could never be evidence that a title is installed. Save-title discovery is unaffected — it keeps inspecting `param.sfo`, which is a different question | developer |
 
 ---
 
 ## 10. Changes during implementation
+
+### Milestone 1 — 2026-09-22
+
+**One deviation.** §7 milestone 1 step 7 asks that `SaveDataProbe.cpp` end up
+with "no mount call of its own". Milestone 0's write probe was **deleted**
+rather than rewritten to go through the service: its `RDWR|CREATE2` mount, its
+`sceSaveDataDelete`, its `statvfs` dump and its scratch-directory guard cannot
+be expressed through `Platform/SaveData`, because §3.1 forbids the service from
+having any of them. The read-only probe and the two delete-by-prefix probes went
+with it, being `ReadContainer` and `EmptyContainer` now. `SaveDataProbe.{h,cpp}`
+are a 394-line harness containing no orbis call at all, which is P11's
+"promoted to an operations harness". Everything the deleted code established is
+in `technical-findings.md` §§1–7; the cost is that those diagnostics cannot be
+re-run from this build.
+
+Nothing else in §1–§7 was departed from. The thirteen choices the contract left
+open — the `bbr::savedata` namespace, no fallback to the initial user, the
+six-SKU sweep, a name-only walk inside `BackupJob`, verification as a separate
+call, confirming only the written set, the restore's own refusals, a refused
+unlink failing the operation, the harness as a stepped job, the AFR side read in
+`UI/` rather than `Platform/`, backup naming left to the harness, no
+`Randomizer/FileIo.h` include from `Platform/`, and `worlds_verify.py` covering
+the source invariants as well as the manifest rules — are set out with their
+reasoning in `implementation-report.md` §3.
+
+### Milestone 2 — 2026-09-22
+
+**Three deviations, and one knock-on the plan should be aware of.**
+
+**1. `AfrManager` gained the manifest and the derivation, not the staging
+path, the swap or the remove-tree.** §5's `AfrManager` row lists four changes
+for milestone 2; §7 milestone 2 step 6 asks for two of them — "read and write
+`.bbrandomizer_manifest`, and expose the §4.2 derivation" — and its
+done-condition is about the derivation only. §7 was followed. The other three
+are pure path plumbing with no caller until §4.3's phases 4 and 5, and
+building them now would have added code no milestone-2 hardware test can
+reach. They land in milestone 3, in the same file §5 names.
+
+**2. `app/tools/pool_verify.py` was edited in milestone 2, not milestone 5.**
+§5 assigns it to milestone 5 for the progress-log constants' file name. Step 1
+of this milestone adds `start_fresh_save` to `defaults.cfg`, and
+`pool_verify.py` carries an **exact equality** on that file's worst-case size —
+"616 bytes", with a comment saying it "fails the moment a key is added or
+removed without the buffer being thought about". It is doing exactly what it
+was built to do. The figure is now 635, and the case was split in two because
+the serializer was split in two: the 584-byte settings block is what
+`char buf[1024]` holds, and the 635-byte total is what the file costs on disk.
+
+**3. The milestone-2 harness operations live in `UI/SaveProbeScreen.{h,cpp}`,
+not `Platform/SaveDataProbe.{h,cpp}`.** §5 lists both files as "harness
+operations for each milestone". These operations drive
+`Randomizer/WorldStore` and `Game/AfrManager`, and `Platform/` may include
+neither — `WorldStore.h` already includes `Platform/SaveData.h`, so a
+`Platform/` → `Randomizer/` include would be a cycle between layers. `UI/` is
+the one layer both halves are reachable from, and milestone 1 already put the
+AFR half of the harness there for the same reason. `SaveDataProbe` keeps the
+save-data operations unchanged, so milestone 1's H4 instructions still hold
+button for button.
+
+**Knock-on: `settings_ui_verify.py` case 1 now fails, and was left failing.**
+Adding `startFreshSave` to `RandomizerDefaults` in milestone 2 gives that
+struct a seventeenth `bool` with no `SettingsModel` entry, which is precisely
+what case 1 exists to catch. Milestone 5 step 1 adds the entry and its
+done-condition is "done when `settings_ui_verify.py` passes", so the plan
+already expects this failure to be closed by the entry rather than by an
+exemption in the verifier. It will be red at milestone 4's gate too, where §6
+lists that verifier — the developer may want to decide whether milestone 4
+should absorb step 1 of milestone 5, or simply expect the one failure.
+
+Nothing else in §1–§7 was departed from. The eighteen choices the contract
+left open — `WorldStore` as an account-scoped class, the recipe as seed plus a
+whole `RandomizerDefaults`, recipe identity as serializer equality, name
+normalisation in the store, the shape of the extracted serializer, the
+`.partial`/`.old` swap for a world's save, verification folded into
+`SafetyBackupJob`, first-run capture refusing rather than spending its one run,
+the world-save half of the `.partial` sweep, `Delete` not knowing which world
+is active, `DeriveActive` as a pure function, a manifest with no `world_id`
+reading as absent, `WorldStore.cpp` carrying its own file helpers, the harness
+button map, the store test refusing to run before capture, the verifier's third
+section and its pinned AFR-path allowlist, Vanilla's empty
+`last_played_revision`, and the `acct-%016llx` directory name — are set out
+with their reasoning in `implementation-report.md` §3.
+
+### Milestone 3 — 2026-09-22
+
+**Three deviations, and one contradiction between approved documents that the
+developer has to settle before H11.**
+
+**1. `CheckActivation` carries a thirteenth refusal, `EmptySelection`, that
+§4.4 does not list.** It is the Enable wizard's two existing up-front guards —
+`NO ENEMIES SELECTED` and `NO BOSSES SELECTED` — moved into phase 1 rather
+than added as new behaviour. §3.1 requires the run decision to be unchanged,
+and those guards are part of it: the enemy case fails after most of the tree
+is written, and the boss case draws `RandIndex(rng, 0)`, which
+`BossRandomizer.cpp`'s own header calls out as undefined behaviour rather than
+a clean failure. Leaving them out would have made an activation able to invoke
+UB after the safety backup and the capture had already run. They are checked
+where every other refusal is, write nothing, and never fire for Vanilla.
+
+**2. Phase 4 runs `EnemyRandomizerJob` for every non-Vanilla world, including
+one with every setting off.** §4.3 says phase 4 is "skipped when the incoming
+world is Vanilla" and nothing else, while §3.1 asks that the run decision keep
+its `||` chain. The two cannot both be read as "skip the run when the chain is
+false": a world with no tree has nowhere to put `.bbrandomizer_manifest`, so
+§4.2 would derive it as Vanilla and B4's "exactly one row is marked ACTIVE"
+would be false for it. §4.3 was followed and the chain is evaluated and
+reported instead — with every option off the job mirrors the vanilla tree
+unchanged, so the world plays exactly as the game shipped and is still a world
+the app can see. The `||` chain and the options mapping are now pinned against
+the wizard's, field for field, by `worlds_verify.py`.
+
+**3. `PlanActivation` is a public function, not phase 1's private body.**
+§7's step 2 asks for "phase 1's checks ... returning a refusal and writing
+nothing" and its done-condition is that the harness can trigger each one. A
+harness that triggered them by running the job would have had to stop it
+before phase 2, which is the one thing a transaction must not offer. Phase 1
+is therefore a function of its own that the job calls, the harness calls, and
+milestone 6's confirmation screen (B10) will call.
+
+**The contradiction: B37 makes B8 a one-way door.** `GameInfo::DetectAll`
+detects a title by finding `<title>/dvdroot_ps4/event/common.emevd.dcx` inside
+its AFR folder, and that tree exists only because the randomizer wrote it —
+AFR is an overlay, not a copy of the game. Activating Vanilla removes it (B8,
+§4.3 phase 5), after which `DetectAll` no longer reports that title, and
+B37/§4.4's AFR-title row refuses every subsequent activation of a randomized
+world for it. H11 — "activate Vanilla, return" — cannot pass as specified, and
+nor can a first activation on a console whose AFR folder has never been
+seeded. B37 was implemented exactly as written rather than reinterpreted, and
+the harness prints the check's live verdict so the state is visible. **This
+needs a spec decision before milestone 6**; `implementation-report.md` §2.4
+sets out what was considered.
+
+Nothing else in §1–§7 was departed from. The twelve choices the contract left
+open — the refusal-reason enum and the order it is tested in, "zero save
+titles" refusing with a sentence that still tells the player to run the game
+once, the AFR title being taken from the setting on reconciliation rather than
+carried in the journal, the journal being created at the start of phase 2, a
+failure leaving the journal for the next launch, the staged tree rather than
+`dvdroot_ps4.old` being what says whether phase 5 completed, `SetLastPlayed`
+on the incoming world when phase 6 adopts the live save, `AdoptLive`
+collapsing to nothing when the container holds no save files, `TakeLines`
+beside the `EnemyRandomizerJob` job shape, reconciliation resuming through the
+activation job itself, the two-button harness on `L1` and `R1`, and the
+three-world `HARNESS A → HARNESS B → VANILLA` cycle — are set out with their
+reasoning in `implementation-report.md` §3.
+
+### Milestone 4 — 2026-09-23
+
+**Two deviations, and one carried-over verifier failure left standing.**
+
+**1. `ScreenId::SetupDefaults` was renamed to `ScreenId::Defaults` rather than
+kept beside it.** §5 says `Screen.h` gains `Worlds`, `Defaults` and
+`WorldEditor`, and says nothing about the id that already named the same
+screen. Two ids for one screen is one more thing to keep in step, so the one
+the plan names is the one that survives. Its single caller is
+`UI/MenuScreen.cpp`, which §5 assigns to milestone 6 (deleted) — one token on
+one line, no behaviour change, and flagged rather than buried because it is a
+file this milestone was not given.
+
+**2. `WorldsScreen` has three modes, not §4.5's four.** §7's milestone 4 step
+list asks for `Reconciling`, `FirstRunCapture` and `Browse`. `ConfirmDelete`
+belongs to **milestone 5 step 7**, which is the step that defines what
+deleting does and whose done-condition is that both its cases behave; and
+`TRIANGLE` has nothing to delete until that milestone can create a world. The
+consequence is that milestone 5 step 7 will have to edit
+`UI/WorldsScreen.{h,cpp}`, which §5's table lists only against milestone 4 —
+the same table-versus-§7 gap milestone 2 recorded for `AfrManager`, not a new
+file.
+
+**`settings_ui_verify.py` is 60 of 61, and the one failure is milestone 2's.**
+Check 1: `startFreshSave` has no `SettingsModel` entry. §6 lists that verifier
+against this milestone, so it is red at this gate. It was **not** closed by
+exempting the field, and milestone 5 step 1 was **not** pulled forward — the
+first is a decision for the developer and the second is the next milestone.
+All 21 cases this milestone adds pass, as do `ui_scroll_verify.py`,
+`worlds_verify.py` and the whole output-parity suite.
+
+**The B37/B8 contradiction milestone 3 raised was not touched.** It bears on
+milestone 6; nothing built here activates anything.
+
+Nothing else in §1–§7 was departed from. The eleven choices the contract left
+open — the details pane as label/value rows plus at most one note, the header
+band as where `UNMANAGED` and `FIRST RUN` are stated, `WorldsSession` as
+`Application`-owned state so the save container is read once per launch rather
+than once per tab switch, the startup log waiting for `X` only when something
+happened, `O` exiting from `WORLDS` with `MenuScreen` reached through the
+`DEFAULTS` tab, `X` on a world opening the Enable wizard with the world id
+plumbed but not yet read, `X` on `VANILLA` doing nothing until milestone 6,
+the `DEFAULTS` footer changing with focus, the two pre-existing
+`/data/GoldHEN/AFR` occurrences left alone, whole-unit sizes with no decimal
+point for the `Font8x8` fallback, and the rail's swatch clearance as a
+verifier requirement rather than a draw-time clip — are set out with their
+reasoning in `implementation-report.md` §3.
+
+### Milestone 5 — 2026-09-24
+
+**Four deviations, and one verifier failure closed rather than carried.**
+
+**1. The rename touched `worlds_verify.py` too.** §3.3's hazard row names
+three parses that break when `EnableWizardScreen.{h,cpp}` is renamed —
+`pool_verify.py:533`, `settings_ui_verify.py:403` and `:677`. There are six.
+`worlds_verify.py` names the file in three places milestone 3 added: the
+AFR-path allowlist, the output-parity comparison pinning the activation job's
+options mapping and `||` chain against the wizard's, and the four
+progress-log constants' location check. All were updated in the same pass and
+all still pass. Two smaller corrections to the row itself: the
+`settings_ui_verify.py` lines had moved to `:520` and `:803`, and three source
+files carried the old name in prose comments (`EasyModes.h`,
+`EnemyRandomizer.cpp`, `SetupDefaultsScreen.h`).
+
+**2. The editor's rail no longer shares Setup Defaults' pitch or category
+band.** §4.4's "one geometry, shared by the wizard's Settings step and
+`SetupDefaultsScreen`" cannot hold for §4.5's rail: Setup Defaults' is seven
+rows and the editor's is ten — `NAME`, `SEED`, rule, seven categories, rule,
+`HISTORY` — and ten rows on the shared 330/76 band put the last row's ink at
+958, two pixels inside a column rule that ends at 960, with its focus bar
+running past it. The editor's rail is its own uniform 70px grid from the
+still-shared `kRailRow0Y = 230`, ending its ink at 900. Three constants —
+`kRailRuleY`, `kRailFirstY`, `kRailPitch` — left `SHARED_GEOMETRY` and are
+pinned by the verifier's own mirror instead, as `kHeaderY` already was; the
+three-column split, the pane, the help column and the scales are all still
+shared and still compared. The verifier now checks two rail stacks and also
+pins the DEFAULTS rail's three constants, which the move would otherwise have
+left unpinned. Visible consequence: the editor's category rows no longer line
+up with the pane rows beside them. Setup Defaults' still do.
+
+**3. `FINISH` and its readiness summary are gone, and `Application.cpp` was
+edited.** §4.5's rail has no `FINISH` row — `OPTIONS` activates — and `FINISH`
+was where the help pane drew the readiness summary. That summary is now the
+first three rows of the Confirm list (`NAME`, `SEED`, `TARGET`), and
+`SettingsModel`'s `FinishHelp()` is replaced by `NameHelp()` and
+`HistoryHelp()`. `Application.cpp`, which §5 assigns to milestones 4 and 6,
+gained two lines: milestone 4 plumbed `worldId` as far as `MakeScreen` and left
+the constructor call to take it, which is this milestone's step 5. The menu's
+`ENABLE RANDOMIZER` row now opens the editor on a new world, because that is
+what the Enable wizard became (P8); the row and `ScreenId::EnableWizard` go in
+milestone 6.
+
+**4. The delete confirmation reports its own outcome before returning.** §4.5
+says `TRIANGLE` deletes "after a confirmation naming it and stating its save is
+kept" and says nothing about afterwards. Returning straight to the rail and
+stating the outcome in the header band does not fit: `kStateY` is 140 and the
+header rule is at 196, so a second scale-3 row's ink would run from 197 through
+it. `X` deletes and stays to say what it did; `O` returns and re-reads the
+rail. Step 7 also edited `UI/WorldsScreen.{h,cpp}`, which §5's table assigns
+only to milestone 4 — the gap milestone 4's record already flagged, not a new
+file.
+
+**`settings_ui_verify.py` is back to green, 71 of 71.** Milestone 2's
+carried-over check-1 failure — `startFreshSave` with no `SettingsModel` entry —
+is closed by step 1's entry. The field was not exempted from the check.
+
+Nothing else in §1–§7 was departed from. The twelve choices the contract left
+open — `SaveChoice` as a second bool-backed kind rather than a third state on
+`Toggle`, the editor iterating its own `kCategories` list, `SAVE` last on the
+rail, `WORLD` as a new world's name, a new world's `SAVE DATA` forced to
+`KEEP EXISTING` rather than inherited from `defaults.cfg`, a `HISTORY`
+selection appending immediately rather than on the next `OPTIONS`, the
+revision line's shape and its `CREATED` baseline, `O` returning to `WORLDS`
+from both the rail and Progress, the last `OPTIONS` outcome stated on the
+`NAME` pane and on Confirm, `History` as a full-screen mode rather than a
+fourth column, the name editor's cursor bar, and `kCategoryRows` written twice
+under a `static_assert` — are set out with their reasoning in
+`implementation-report.md` §3.
+
+### Milestone 6 — 2026-09-24
+
+**Six deviations.** Five are files or steps §7's list does not name; the sixth
+is what replaced a check that could no longer exist.
+
+**1. P26 was implemented here, and §7's step list predates it.** The developer
+took P26 on 2026-09-24, after §7 was written, so milestone 6's six steps do not
+mention it. Removed: §4.4's `AFR title` row, `RefusalReason::AfrTitleNotDetected`,
+`ActivationFacts::afrTitleDetected` and `::detectedAfrTitles`, the
+`GameInfo::DetectAll` sweep in `GatherFacts`, the `GameInfo.h` include in
+`WorldActivation.cpp`, and `worlds_verify.py`'s mirror of all of it — the
+reason, the fact, the refusal case and the "vanilla still refuses on an
+undetected AFR title" case. §2's B37 and §4.4's row are left as written, per
+P26's own instruction not to edit §1–§9. **This meant editing
+`Game/WorldActivation.{h,cpp}`, which §5 assigns to milestone 3.** The B37/B8
+one-way door milestone 3's report §2.4 raised is closed by the removal: a
+Vanilla activation deletes the AFR tree `DetectAll` reads, so nothing now
+refuses on it and H11's "activate Vanilla, return" can run.
+
+**2. `ScreenId::Menu` was removed with `MenuScreen`.** §7 step 5 names
+`EnableWizard` and `DisableWizard` and not the id of the screen it deletes.
+Leaving `Menu` would have left an id no factory could build and no screen could
+reach — the dangling-id case the step's own done-condition is about.
+`ScreenId::SaveDataProbe` went with step 6 as written.
+
+**3. `UI/SetupDefaultsScreen.cpp` was edited, and §5 assigns it to milestone
+4.** It held the last two `ScreenId::Menu` transitions — `OPTIONS` after a save
+and `O` from the rail — and both now go to `ScreenId::Worlds`. Two tokens, no
+behaviour beyond where the screen returns to; flagged rather than buried
+because it is a file this milestone was not given. Exiting the app is now `O`
+on the `WORLDS` rail, one press further on.
+
+**4. Confirm's head rows went from three to eight and its list band moved, so
+`settings_ui_verify.py` and `ui_scroll_verify.py` were edited here.** §5 lists
+both against milestones 4 and 5. B10's statement is five more label/value rows
+at the head of the same review list, and two wrapped rows of sentence above it;
+at `kSettingsLayout`'s old `{420, 90, ...}` the list's `MORE ABOVE` hint drew
+inside the second sentence row, which `ui_scroll_verify.py` caught. The layout
+is now `{470, 80, 870, 60}` — the same six visible rows, the band cleared. Both
+verifiers were extended rather than relaxed: 81 of 81 and all geometry passing.
+
+**5. `worlds_verify.py`'s output-parity check lost the thing it compared
+against.** It pinned the activation job's `EnemyRandomizerOptions` mapping and
+`||` chain field for field against the Enable wizard's copy in
+`WorldEditorScreen.cpp`, with a comment saying "milestone 6 deletes the
+wizard's copy; until then the two must say the same thing". Step 2 deleted it.
+The wizard's two lists are now **frozen in the verifier** — eighteen mapped
+fields in order and the thirteen-field chain — so the one surviving copy is
+still pinned, against exactly what it was pinned against before. Two new cases
+assert the editor no longer carries a second copy at all. The verifier's
+"harness refuses more than one save directory" case, which read the deleted
+`SaveDataProbe.cpp`, now reads the same rule out of phase 1.
+
+**6. The `SKIPPING …` lines and the generation's result lines stayed in the
+editor.** §7 step 2 moves the run to `WorldActivation`; §3.1 requires the four
+progress-log constants to stay `const char* const` in the file `pool_verify.py`
+parses, and requires the run decision to keep its `SKIPPING …` lines. Moving
+the reporting to `WorldActivation.cpp` would have taken the constants with it.
+So `StartCommit` still emits the seven `SKIPPING` lines from `run_`, and
+`FinishCommit` still reports the generation from
+`WorldActivationJob::Result().generation` — the `||` chain and the options
+mapping went, the reporting did not. `OPTIONS` on Confirm is refused whenever
+`storeError_` is set, so the recipe the editor reports and the revision the
+activation regenerates from cannot come apart.
+
+Nothing else in §1–§7 was departed from. The fifteen choices the contract left
+open — Vanilla routed through the editor opening on Confirm rather than a fifth
+`WorldsScreen` mode, eight fixed head rows rather than a variable statement
+block, the phase-6 row and the refusal sentence sharing one wrapped two-line
+band at the row scale, the coarse duration as three phrases and the arithmetic
+behind them, `OPTIONS` gated on `storeError_` as well as on the refusal, Vanilla
+contributing no settings rows to Confirm, phase 1 run on Confirm's first frame
+rather than on the `OPTIONS` press, the state line's three-way precedence, the
+job's drained lines pushed into the log without a second `Log()`, `LoadWorld()`
+re-read after a successful activation, `kSettingsLayout` at `{470, 80}`, the two
+Confirm footers, a refusal and a failure ending the log differently,
+`Game/GameInfo.{h,cpp}` left in place with no caller, and
+`settings_ui_verify.py`'s 24-character stand-in for a refusal sentence's runtime
+half — are set out with their reasoning in `implementation-report.md` §3.

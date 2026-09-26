@@ -18,6 +18,7 @@ sometimes misleading.
 | Label | Meaning |
 |---|---|
 | **DONE** | Implemented, on hardware, confirmed working |
+| **BUILT** | Implemented and green off-console — clean build plus its verifiers — but **not yet hardware-confirmed**. Not DONE: on this project only the console proves runtime behaviour (`CLAUDE.md` section 3) |
 | **READY** | Code already exists in this port; only a UI row and a flag are missing |
 | **TODO** | Not implemented |
 | **NEW** | Our own idea; no reference equivalent, or a better front-end for one |
@@ -84,7 +85,7 @@ and the code chops the string into five-character chunks:
 | 9 | Enemies to include | A checklist of every pool creature, **all ticked by default**. Untick a few to keep them out of the run; untick everything but one and every enemy becomes that creature | **DONE** — shipped as the `ENEMIES INCLUDED` drill-in, 82 rows; see `docs/plans/pickers.md` |
 | 10 | Bosses to include | The same for the boss pool. Leave only Ludwig ticked and every boss arena is Ludwig | **DONE** — shipped as the `BOSSES INCLUDED` drill-in, 17 rows; same component as row 9 |
 | 32 | Bypassed enemies | A checklist of every creature that has a randomizable placement, **none ticked by default**. Tick one and it leaves the randomizer entirely: its own placements keep their vanilla identity, and it is never used as a replacement anywhere | **DONE** — shipped as the `ENEMIES SKIPPED` drill-in, 85 rows, same component as rows 9 and 10; hardware-tested 2026-09-19. **Retired row 16.** Two documented exceptions, both deliberate: the six Yahar'gul maidens still change, and with `RANDOMIZE BOSSES` on the boss pool is not filtered. See `docs/features/032-bypassed-enemies/` |
-| 33 | Protect caged dogs | A **placement** protection, not an enemy one: the ten **Shaggy Hunting Dogs** (`c1240`) wired into the cage scripts in Central Yharnam (six) and the Forbidden Woods (four) keep their vanilla identity, while `c1240`'s other 86 placements stay eligible and the model stays in the pool. Replacements dropped into the Central Yharnam cages misbehave — a Boom Hammer Hunter and a Maneater Boar each caused severe lag, and other replacements take damage but cannot be killed | **TODO** — **NEW**, no reference equivalent. Shipping as `DO NOT RANDOMIZE CAGED DOGS`; spec **APPROVED** 2026-09-19, see `docs/features/033-protect-caged-dogs/` |
+| 33 | Protect caged dogs | A **placement** protection, not an enemy one: the ten **Shaggy Hunting Dogs** (`c1240`) wired into the cage scripts in Central Yharnam (six) and the Forbidden Woods (four) keep their vanilla identity, while `c1240`'s other 86 placements stay eligible and the model stays in the pool. Replacements dropped into the Central Yharnam cages misbehave — a Boom Hammer Hunter and a Maneater Boar each caused severe lag, and other replacements take damage but cannot be killed | **DONE** — shipped as `DO NOT RANDOMIZE CAGED DOGS`; **NEW**, no reference equivalent. Hardware-tested 2026-09-19 against a byte-identical seed-1234567890 run. See `docs/features/033-protect-caged-dogs/` |
 
 Why this is worth building rather than porting the text box:
 
@@ -234,7 +235,7 @@ it applies, and this one only adds protection where it does not.
 |---|---|---|---|---|---|
 | 11 | Randomize Shop Items | `shopBool` | Shuffles shop **armour** (`equipType 1`) and **consumables** (`equipType 3`). Note it does *not* touch weapons — that is setting 5 | **TODO** | **Low.** Same `ShopLineupParam`, same `equipId` field, same loop we already run for weapons — two more type buckets |
 | 12 | Key Overworld Items (With Logic) | `keyItemRandomizeBool` | Nothing. The flag is assigned from the checkbox and **never read anywhere**; `keyitemRand` is constructed and never used. Key items are only ever *excluded* from the treasure pool | **DEAD** in the reference | Building it for real is net-new design, not a port — see §9 |
-| 34 | Start with hunter tools | *none* | **NEW, no reference equivalent.** Grants both workshop key items — Blood Gem Workshop Tool (goods `4103`) and Rune Workshop Tool (goods `4104`) — at character creation, by writing them into the free `item_*` slots of every player-origin row in `CharaInitParam`. The randomizer hands out gems and runes from the first area but vanilla gates fitting either one behind two mid-early-game chests, so without this they are dead weight | **DONE** — shipped as `START WITH HUNTER TOOLS`; spec and plan deliberately skipped at the user's request. **NOT yet hardware-tested**, and it rests on an unverified assumption — see `docs/features/034-start-with-hunter-tools/implementation-report.md` | **Low.** One new engine file plus the usual settings chain |
+| 34 | Start with hunter tools | *none* | **NEW, no reference equivalent.** Grants both workshop key items — Blood Gem Workshop Tool (goods `4103`) and Rune Workshop Tool (goods `4104`) — at character creation, by writing them into the free `item_*` slots of every player-origin row in `CharaInitParam`. The randomizer hands out gems and runes from the first area but vanilla gates fitting either one behind two mid-early-game chests, so without this they are dead weight | **BUILT** — shipped as `START WITH HUNTER TOOLS`; spec and plan deliberately skipped at the user's request. **NOT yet hardware-tested**, and it rests on an unverified assumption — see `docs/features/034-start-with-hunter-tools/implementation-report.md` | **Low.** One new engine file plus the usual settings chain |
 
 ---
 
@@ -259,7 +260,7 @@ boss randomizers already perform, so all four are one small table-driven pass.
 
 | # | Feature | Reference flag | Target | Status |
 |---|---|---|---|---|
-| 18 | Easy Shadows | `easyMultiBossesBool` | `m27_00_00_01` — Shadows of Yharnam (`c2120_0001/0002`) | **TODO** |
+| 18 | Easy Shadows | `easyMultiBossesBool` | `m27_00_00_01` — Shadows of Yharnam (`c2120_0001/0002`) | **BUILT** — shipped as `EASY SHADOWS`, verified by `easy_modes_verify.py`; **not yet hardware-tested**. See `docs/features/018-easy-shadows/` |
 | 19 | Easy Rom | `easyRomBool` | `m32_00_00_00/01` — Rom's children (`c1400`) | **TODO** |
 | 20 | Easy Failures | `easyFailuresBool` | `m35_00_00_00` — the Failures | **TODO** |
 | 21 | Easy Emissary | `easyWitchesBool` | `m24_02_00_00/01` — Celestial Emissary (`c2500_0001`) | **TODO** |

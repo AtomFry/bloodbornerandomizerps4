@@ -35,8 +35,19 @@ this:
    executes, and `plan-evidence.md`, the investigation that supports it. Both
    belong to stage C and both go to the reviewer.
 
-5. **Put its §8 questions to the developer.** The subagent cannot ask them
-   itself. Use `AskUserQuestion`, carrying each question's recommended answer
+5. **Put the Execution Strategy to the developer, with the §8 questions.**
+   The block near the top of `plan.md` states the milestone structure, the
+   execution mode, the gates and their classification, and what verification
+   runs between milestones. Approving the plan approves that strategy, so the
+   developer has to see it — quote it, do not summarise it away.
+
+   **Question any gate the planner proposed.** The default is continuous
+   execution with one hardware test at the end. A **Required** gate should name
+   the risk it reduces; an **Optional** gate is a straight question for the
+   developer. A plan that gates every milestone without justification is a plan
+   to send back.
+
+   Then put the §8 questions. The subagent cannot ask them itself. Use `AskUserQuestion`, carrying each question's recommended answer
    through as the first option so the recommendation is visible. Ask blocking
    questions first. If there are more than four, ask the consequential ones and
    leave the rest in §8.

@@ -1,7 +1,8 @@
 // Controls.h - the reusable drawing/input pieces every screen was
-// hand-rolling its own copy of (MenuScreen, OptionsScreen, StatusScreen all
-// had near-identical "centered label", "list with a highlighted selection",
-// and "move selection on up/down" code). This is that logic, written once.
+// hand-rolling its own copy of: near-identical "centered label", "list with
+// a highlighted selection" and "move selection on up/down" code, repeated
+// across the menu and status screens the worlds feature has since retired.
+// This is that logic, written once.
 //
 // Deliberately small: a label, a list, and a navigation helper. Not a full
 // widget/layout system - grow it only when a real screen needs something
@@ -54,6 +55,47 @@ constexpr unsigned char kScrimAlpha = 235;
 // means nothing without the rows it would skip - so this one stays light
 // enough to read. Do not unify these two: the prompt would go black.
 constexpr unsigned char kPromptAlpha = 190;
+
+// ---------------------------------------------------------------------------
+// The main screen's tab strip
+//
+// Two text tabs across the top, the active one boxed, with the active tab's
+// name as a heading beneath (worlds B1). Both tabbed screens draw it from
+// here rather than each carrying its own copy: the two would otherwise be one
+// unnoticed edit away from disagreeing about their own names, their order, or
+// where the frame sits - and a tab strip that moves between tabs reads as the
+// screen jumping rather than as the content changing.
+//
+// There is no box around the INACTIVE tab. One box means "you are here"; two
+// boxes with different fills means the player has to know which fill wins.
+// ---------------------------------------------------------------------------
+
+constexpr int kTabCount    = 2;
+constexpr int kTabWorlds   = 0;
+constexpr int kTabDefaults = 1;
+
+// Geometry. Measured by settings_ui_verify.py against the atlas's own
+// advances, like every other number on these screens - none of them is a
+// character count.
+constexpr int kTabScale        = 4;
+constexpr int kTabX            = 60;   // the same left edge as the rail below
+constexpr int kTabY            = 40;
+constexpr int kTabPadX         = 24;   // clear space inside the box, each side
+constexpr int kTabGap          = 20;   // between one box and the next
+constexpr int kTabBoxOffsetY   = -10;  // the box, relative to the label's draw y
+constexpr int kTabBoxHeight    = 78;
+constexpr int kTabBorder       = 3;
+constexpr int kTabHeadingY     = 118;  // the active tab's name, beneath the strip
+constexpr int kTabHeadingScale = 5;
+
+// "WORLDS" / "DEFAULTS", by index. The strings live here so one verifier case
+// covers both screens' tab labels.
+const char* TabLabel(int index);
+
+// The strip, with `active` boxed. Does not draw the heading - a screen draws
+// its own, because Setup Defaults' heading is its tab's name and the worlds
+// screen's carries a readout beside it.
+void DrawTabs(Renderer& renderer, int active);
 
 // One line of text, horizontally centered on screen.
 void DrawCenteredLabel(Renderer& renderer, int y, const char* text, int scale, Color color);

@@ -3,7 +3,8 @@
 // plus the six categories, the selected category's settings in the middle, and
 // contextual help on the right.
 //
-// Per UI_BLUEPRINT.md this is a plain editor (not a wizard): edits are local
+// Per docs/plans/ui-blueprint-wizards.md this is a plain editor (not a wizard,
+// and the wizards are gone): edits are local
 // until OPTIONS writes them into Application's canonical RandomizerDefaults
 // and persists them to disk; O discards them.
 //
@@ -21,7 +22,7 @@
 // button now has one meaning (spec section 10, 9.2).
 //
 // The title-ID editor and the three pickers are internal modes of this screen,
-// not separate Screens - same reasoning as EnableWizardScreen's internal Step
+// not separate Screens - same reasoning as WorldEditorScreen's internal Step
 // enum: Application.cpp rebuilds screens on every switch, so a real drill-in
 // would destroy this screen's in-progress edits on the way back.
 #pragma once
@@ -56,7 +57,22 @@ private:
     // (plan 9 D1).
     enum class Focus { Rail, List };
 
-    static const int kCategoryCount = (int)SettingCategory::Count;
+    // The categories THIS screen shows, in rail order - a LIST, not a range
+    // over SettingCategory. Milestone 5 of the worlds feature adds
+    // SettingCategory::Save for the world editor, and a per-world save policy
+    // has no business on the screen that says what a NEW world starts from
+    // (worlds plan section 3.3). Iterating an own list is what stops an
+    // editor-only category turning up here by accident.
+    static constexpr SettingCategory kCategories[] = {
+        SettingCategory::Enemies,
+        SettingCategory::Bosses,
+        SettingCategory::ItemsTreasure,
+        SettingCategory::WeaponsGear,
+        SettingCategory::Difficulty,
+        SettingCategory::World,
+    };
+    static const int kCategoryCount =
+        (int)(sizeof(kCategories) / sizeof(kCategories[0]));
     // Rail rows: 0 is BLOODBORNE TITLE ID, 1..6 are the categories. No FINISH
     // - this screen saves with OPTIONS and has no commit path, which is why it
     // is the first of the two screens to be built on the model.
@@ -79,7 +95,7 @@ private:
     void OpenTitleIdEditor();
     std::string TitleIdDisplay() const;
 
-    SettingCategory Category() const { return (SettingCategory)lastCategory_; }
+    SettingCategory Category() const { return kCategories[lastCategory_]; }
     const SettingDef& SelectedSetting() const;
 
     RandomizerDefaults& defaults_; // Application's canonical copy - only touched on SAVE
@@ -94,8 +110,9 @@ private:
     // restores position" true everywhere instead of true wherever someone
     // remembered to restore it.
     int railCursor_   = 0;
-    int lastCategory_ = 0; // 0..5; the category the pane keeps showing, even
-                           // while the rail cursor sits on row 0 (plan P13)
+    int lastCategory_ = 0; // an index into kCategories; the category the pane
+                           // keeps showing, even while the rail cursor sits on
+                           // row 0 (plan P13)
     int listCursor_[kCategoryCount] = { 0 };
     int listScroll_[kCategoryCount] = { 0 };
 

@@ -75,7 +75,7 @@ namespace bbr {
 // form would be a duplicate symbol the moment a second translation unit
 // included this header (EnemyRandomizer.cpp does). Same spelling the rest of
 // the port already uses for a named string constant - see
-// EnableWizardScreen.cpp's kEnemyFailPrefix. Value and name unchanged.
+// WorldEditorScreen.cpp's kEnemyFailPrefix. Value and name unchanged.
 const int32_t     kEasyModeNpcParamId   = 252100;
 const int32_t     kEasyModeThinkParamId = 252100;
 const char* const kEasyModeModelName    = "c2521";

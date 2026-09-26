@@ -1,16 +1,27 @@
-# Bloodborne Randomizer Manager — UI Blueprint
+# UI Blueprint — the Enable/Disable wizards (FROZEN)
 
-Status: agreed design, not yet fully implemented. This is the screen-level
-specification the UI is built against going forward. Update this file
-whenever a screen's behavior changes for real — it should never drift from
-the actual app.
+**Status: FROZEN, 2026-09-25. Historical.** This described the UI up to the
+worlds feature, and the worlds feature retired all of it: the Enable wizard, the
+Disable wizard, the main menu and the save-data probe were deleted in milestone
+6 on 2026-09-24. Nothing here describes the shipping app.
 
-> **In progress:** the Enable wizard's settings step is being redesigned around
-> a six-category Settings screen, with Confirm becoming a genuine final review.
-> That work is specified in
-> `docs/features/randomizer-settings-ui/spec.md` (spec stage, questions open).
-> This blueprint still describes the **current** flat-list behaviour and should
-> be updated from that spec only once the change is actually implemented.
+**For the UI as it ships**, read, in this order:
+
+* `docs/user-guide.md` — the screens and controls as a player meets them
+* `docs/features/worlds/spec.md` §2 — the agreed behaviour of tabs, the rail,
+  the editor, activation, save handling, revisions and deleting
+* `docs/architecture.md` — where the four surviving screens sit in the layering
+
+**Why it is kept.** Two things in here are still load-bearing and were not
+replaced: the **button-meaning scheme** (§ "Controls"), which the worlds screens
+still follow, and the **"Defaults != Profile"** distinction, which is why the
+`DEFAULTS` tab seeds new worlds rather than editing existing ones. Two source
+comments cite this file for exactly those points. It also records the
+save-data redesign that was deferred, and the reasoning the worlds spec later
+built on.
+
+Do not update this file. If something here is worth keeping current, move it to
+one of the three documents above.
 
 ## Relationship to the earlier architecture review
 

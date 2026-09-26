@@ -31,8 +31,15 @@
 
 namespace bbr {
 
-// The six groups of spec §7.1, in rail order. Count is the rail's category
-// count, not a category - it is what sizes the per-category cursor arrays.
+// The six groups of spec §7.1, in rail order, plus SAVE. Count is the rail's
+// category count, not a category - it is what sizes the per-category cursor
+// arrays.
+//
+// SAVE IS EDITOR-ONLY (worlds plan §3.3). It holds the one per-world save
+// policy, which is not something a NEW world starts from, so the DEFAULTS tab
+// must not show it. Neither screen iterates this enum: each carries its own
+// kCategories list, and the difference between the two lists IS the rule -
+// settings_ui_verify.py asserts SAVE is in the editor's and not in Defaults'.
 enum class SettingCategory {
     Enemies,
     Bosses,
@@ -40,6 +47,7 @@ enum class SettingCategory {
     WeaponsGear,
     Difficulty,
     World,
+    Save,
     Count
 };
 
@@ -48,7 +56,14 @@ enum class SettingCategory {
 // selection type they belong to - EnemyPoolSelection, EnemySkipSelection and
 // BossPoolSelection are three distinct types, so they cannot share a
 // pointer-to-member the way the toggles do.
-enum class SettingKind { Toggle, EnemyPool, EnemySkip, BossPool };
+//
+// SaveChoice is a second bool-backed kind rather than a Toggle: it carries the
+// same pointer-to-member and Left/Right flips it the same way, but its two
+// states are named - KEEP EXISTING and START FRESH - and it is deliberately
+// NOT counted by ToggleCount()/EnabledToggleCount(), because "9 OF 15
+// SETTINGS ENABLED" is a statement about what the run randomizes and a save
+// policy is not one of those.
+enum class SettingKind { Toggle, SaveChoice, EnemyPool, EnemySkip, BossPool };
 
 // A stable name per setting. NEVER reordered and never reused: a screen asks
 // for a setting by identity, and nothing outside this file may assume an id's
@@ -72,6 +87,7 @@ enum class SettingId {
     EasyFailures,
     EasyEmissary,
     EnableMergoDarkness,
+    SaveData,
 };
 
 struct SettingDef {
@@ -80,7 +96,8 @@ struct SettingDef {
     SettingKind     kind;
     const char*     label;           // the on-screen row label - today's shipped
                                      // wording, not the spec's prose name (§9 D2)
-    bool RandomizerDefaults::* flag; // Toggle only; nullptr for the pool kinds
+    bool RandomizerDefaults::* flag; // Toggle and SaveChoice; nullptr for the
+                                     // three pool kinds
     const char*     help;            // spec Appendix A, never empty
 };
 
@@ -93,13 +110,15 @@ const char*       CategoryLabel(SettingCategory category);
 int               CategorySize(SettingCategory category);
 const SettingDef& SettingInCategory(SettingCategory category, int index);
 
-// "YES"/"NO" for a toggle, "N OF M" for the three pool kinds.
+// "YES"/"NO" for a toggle, "KEEP EXISTING"/"START FRESH" for SaveChoice,
+// "N OF M" for the three pool kinds.
 std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& values);
 
-// THE ONLY WRITER of a setting. Flips a toggle whichever way `direction`
-// points - a toggle has two states, so left and right do the same thing to it
-// - and is a no-op for the pool kinds, which are edited in their picker. X
-// never comes here: X advances, it does not change a value (spec §10 9.2).
+// THE ONLY WRITER of a setting. Flips a toggle or a SaveChoice whichever way
+// `direction` points - both have two states, so left and right do the same
+// thing to them - and is a no-op for the pool kinds, which are edited in their
+// picker. X never comes here: X advances, it does not change a value (spec §10
+// 9.2).
 void AdjustSetting(const SettingDef& def, RandomizerDefaults& values, int direction);
 
 // True for the three settings X opens a picker for.
@@ -113,17 +132,20 @@ int                   SelectionCount(const SettingDef& def);
 const PickerStrings&  SelectionStrings(const SettingDef& def);
 
 // The readiness summary's two numbers: how many settings are toggles, and how
-// many of those are on.
+// many of those are on. SaveChoice is not a toggle and is in neither.
 int ToggleCount();
 int EnabledToggleCount(const RandomizerDefaults& values);
 
-// The three rail rows that are not settings. Their help lives beside
-// kSettings rather than inside either screen, so one verifier case covers
-// every help string the feature draws. SEED and FINISH are spec Appendix A;
-// BLOODBORNE TITLE ID has no Appendix A entry, so the plan's §4.1 supplies
-// one drawn from the field comment in RandomizerDefaults.h (P14).
+// The rail rows that are not settings. Their help lives beside kSettings
+// rather than inside either screen, so one verifier case covers every help
+// string the feature draws. SEED is spec Appendix A; BLOODBORNE TITLE ID has
+// no Appendix A entry, so the randomizer-settings-ui plan's §4.1 supplies one
+// drawn from the field comment in RandomizerDefaults.h (P14). NAME and
+// HISTORY are the world editor's two new rows (worlds plan §4.5), and they
+// replace FINISH, which went with the Enable wizard's rail.
 const char* SeedHelp();
 const char* TitleIdHelp();
-const char* FinishHelp();
+const char* NameHelp();
+const char* HistoryHelp();
 
 } // namespace bbr

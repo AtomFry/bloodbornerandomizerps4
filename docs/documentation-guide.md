@@ -84,4 +84,8 @@ Do not mark work as complete merely because it builds or passes non-hardware ver
 
 ## Other documentation
 
-`app/UI_BLUEPRINT.md` contains the current UI blueprint and should be consulted for UI implementation work.
+For UI implementation work, `docs/user-guide.md` and `docs/features/worlds/spec.md` §2
+describe the shipping screens. `docs/plans/ui-blueprint-wizards.md` (formerly
+`app/UI_BLUEPRINT.md`) is frozen history — the wizards it specifies were retired on
+2026-09-24 — and is kept only for its button-meaning scheme and the
+"Defaults != Profile" distinction.

@@ -41,6 +41,12 @@ mechanism:
 - Some became effectively unkillable — the normal cage dogs die very quickly,
   whereas certain replacements survived many attacks.
 
+> **Partly resolved 2026-09-19.** The known case — the caged dogs — shipped as
+> backlog row 33, `DO NOT RANDOMIZE CAGED DOGS`, and is hardware-tested. It
+> protects the ten scripted cage placements specifically. **The general problem
+> below is untouched**: no other confined or geometry-dependent placement has any
+> compatibility handling, and the next one found will need its own decision.
+
 ### 1.2 Evidence gathered
 
 - **Neither implementation has any cage-aware handling.** Case-insensitive
@@ -336,13 +342,41 @@ or show an explicit "this step takes a while" hint before entering it.
 
 ---
 
-## 6. Save Data backup and restore are still simulated
+## 6. Save Data backup and restore are still simulated — RESOLVED 2026-09-25
 
-`StartCommit` prints `BACKING UP EXISTING SAVE (SIMULATED)`, `REMOVING EXISTING
-SAVE DATA (SIMULATED)` and `RESTORING SAVE DATA … (SIMULATED)`, and the backup
-entries on the replace-save screen are stubs with hardcoded dates. Nothing
-touches real save data.
+**Done. The worlds feature built this for real** and it passed hardware testing
+on 2026-09-25. Save data is backed up, verified against a manifest, restored and
+swapped as part of one activation transaction; `Platform/SaveData` is the
+service and `docs/features/worlds/` is the record. The simulated prints and the
+stub backup entries are gone with the wizards.
 
-Deliberately deprioritized in favour of the randomizer path, but **it is the one
-remaining place where the UI claims to do something it does not.** Worth doing
-before anyone runs this against a save they care about.
+Kept here, struck through rather than deleted, because this item was the
+standing argument for building worlds at all: *"it is the one remaining place
+where the UI claims to do something it does not."* That is no longer true of
+anything in the app.
+
+---
+
+## 7. `UI/WorldEditorScreen.cpp` is 1,690 lines and wants splitting
+
+At 1,690 lines it is the largest hand-written file in the app by about 400, and
+it carries six modes: the rail, the name editor, the seed editor, the history
+list, Confirm, and the progress log. Both the milestone 5 and milestone 6
+implementers named it as the natural place to split and neither did, correctly,
+as out of scope.
+
+**Deliberately not done in the 2026-09-25 cleanup pass**, for two reasons:
+
+* **It is not a file split, it is a refactor.** The modes share member state —
+  the character editors work on the screen's own slots and cursors — so
+  extracting them means restructuring ownership, not moving functions between
+  translation units.
+* **It would spend a hardware test pass that has already been paid for.** The
+  file passed a full hardware run on 2026-09-25 in exactly its current form. A
+  cross-compile is the only check available here, and it cannot see a
+  behavioural regression; the console would, and only by being asked again.
+
+**The trigger:** do it as part of the next feature that changes the editor
+anyway — that work has to be hardware-tested regardless, so the split rides
+along at no extra verification cost. Doing it on its own buys nothing that a
+reader cannot get from the section comments already in the file.

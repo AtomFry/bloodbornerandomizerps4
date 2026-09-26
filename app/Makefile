@@ -115,6 +115,12 @@ pkg.gp4: eboot.bin sce_sys/about/right.sprx sce_sys/param.sfo sce_sys/icon0.png 
 $(CONTENT_ID).pkg: pkg.gp4
 	$(BIN)/PkgTool.Core pkg_build $< .
 
+# rm -rf the whole intermediate tree rather than $(OBJS): OBJS comes from a
+# live find over the sources that exist NOW, so naming it here left the .o of
+# every deleted source behind. Harmless to the binary - the link uses that same
+# live list, so a stale object can never reach it - but it meant `make clean`
+# did not clean, and the worlds feature's milestone 6 had to `rm -rf src/x64`
+# by hand after deleting four screens.
 clean:
-	rm -f $(CONTENT_ID).pkg pkg.gp4 sce_sys/param.sfo eboot.bin \
-	    $(INTDIR)/bbrandomizer.elf $(INTDIR)/bbrandomizer.oelf $(OBJS)
+	rm -f $(CONTENT_ID).pkg pkg.gp4 sce_sys/param.sfo eboot.bin
+	rm -rf $(INTDIR)

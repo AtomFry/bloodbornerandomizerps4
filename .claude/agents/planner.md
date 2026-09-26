@@ -154,24 +154,58 @@ unit tests. Say which one covers this feature, whether it exists or must be
 written, and what its `selftest` will assert. Say plainly that a mirror pins the
 rules and not the C++ implementation of them.
 
-**Plan in milestones that stop.** CLAUDE.md §4 is explicit: small explicit
-milestones, smallest change that reaches each one, build the `.pkg`, then stop
-for the hardware test and explicit approval. Do not plan a sequence that chains
-several milestones without a stop. One milestone is a fine answer.
+## Structure and gates are two decisions, not one
 
-Make each milestone **operational**. It needs a one-sentence goal, an **ordered**
-change list where every step has a condition that says it is done, the
-invariants it must not break, the verification that applies to it, and a
-completion gate. An implementer should be able to work down the list.
+`CLAUDE.md` §4: **milestones describe implementation structure; gates describe
+when a human stops to test.** Answer the two questions separately and state both
+in the plan's **Execution Strategy** block, near the top, where the developer
+approves them together with the plan.
+
+**Question 1 — how should the work be structured?** A single implementation, a
+set of functional milestones, or larger phases with internal sub-work.
+
+A milestone answers: **what meaningful piece of functionality becomes complete
+here?** It does *not* answer "what can we make independently testable here?"
+That second question is what produces scaffolding nobody uses and seams that
+deform the code.
+
+**Never split work to create a test checkpoint.** Prefer the decomposition that
+produces the cleanest implementation. Where functionality divides naturally,
+document the pieces even when they will be implemented continuously and tested
+together. Do not invent a transitional state, keep a symbol alive, or build a
+harness so that an intermediate milestone can be told apart on a television.
 
 Size a milestone by what one implementation pass can hold, not by what shares a
-theme. A milestone spanning a generated table, a new type, persistence, engine
+theme — that is about an implementer's working context, not about testing. A
+milestone spanning a generated table, a new type, persistence, engine
 integration, a picker abstraction and two UI screens is too much for one pass
-even when every part belongs to the same feature — split it where a half can
-build and be verified on its own. Two milestones that each compile beat one that
-is only testable at the end. The exception is a split that produces a half with
-nothing to test: a generated header nothing includes changes no behaviour, and
-that is not a milestone.
+even when every part belongs to the same feature. Split it where the halves are
+each a meaningful piece of functionality. One milestone is a fine answer, and so
+is five.
+
+Make each milestone **operational**: a one-sentence goal, an **ordered** change
+list where every step has a condition that says it is done, the invariants it
+must not break, and the verification that applies to it. An implementer should
+be able to work down the list.
+
+**Question 2 — where should execution stop for human validation?** Classify
+**every** proposed gate as one of three, and write the classification into the
+plan:
+
+| Class | When | Effect |
+| ----- | ---- | ------ |
+| **Required gate** | Data could be corrupted or destroyed; **or** a later step would make diagnosing a failure here substantially harder; **or** the next milestone depends on confirming something that build and static verification cannot establish | Execution stops. The developer tests before the next milestone starts |
+| **Optional gate** | Testing here gives useful confidence but nothing depends on it | Offered to the developer, who decides at approval |
+| **No gate** | The feature can be safely completed and validated at the end | The default |
+
+**The default is no gate.** Propose one only when you can say what risk it
+materially reduces — and remember that a gate costs an expensive test cycle and
+tends to shape the code around itself. "It would be nice to check" is not a
+justification; "a failure here becomes undiagnosable after milestone 3" is.
+
+Between milestones, **continuous execution still builds and verifies**. Say in
+§6 which checks run after each milestone. That localises a failure without
+spending a test cycle, and it is why continuous execution is safe.
 
 Write the plan's §7 stop conditions as a control loop the implementer can
 actually run — the circumstances under which they halt and report rather than
@@ -212,7 +246,11 @@ Report back with:
 - the spec it plans against, and that spec's status
 - **the §8 questions verbatim**, so the dispatching session can put them to the
   developer without re-reading the file
-- the milestone breakdown in one line each
+- **the Execution Strategy block verbatim** — structure, execution mode, gates
+  and their classification, and the between-milestone verification. The
+  developer approves this together with the plan, so it must reach them
+- the milestone breakdown in one line each, each saying what piece of
+  functionality becomes complete — not what becomes testable
 - anything in the spec you found wrong, incomplete, or contradicted by the code
   — surface it rather than silently planning around it
 - any risk you judged serious enough that the developer should know before

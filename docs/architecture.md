@@ -8,19 +8,30 @@
 
 ```text id="o5s7pg"
 Application
-├── Platform       SDL2, input, renderer, PS4/platform services
-├── Game           GameInfo, AfrManager
-├── UI             Screen, ScreenManager, Controls
-├── Randomizer     Settings, Engine, Progress
+├── Platform       SDL2, input, renderer, PS4/platform services, SaveData
+├── Game           AfrManager, WorldActivation
+├── UI             Screen, ScreenManager, Controls, the four screens
+├── Randomizer     Settings, Engine, Progress, WorldStore
 ├── Msb            MSB map format
 └── Param          game parameter formats
 ```
 
+`Platform/SaveData` is the only place the save-data API is called, and no orbis
+type reaches its header. `Game/WorldActivation` is the activation transaction —
+refusals, the journal, the seven phases, reconciliation. `Randomizer/WorldStore`
+owns worlds, revisions and the on-disk layout under `/data/bbrandomizer/Worlds/`.
+
+`UI/` holds exactly four screens: `WorldsScreen`, `SetupDefaultsScreen`,
+`WorldEditorScreen` and `ModelPicker`. The Enable/Disable wizards, the main menu
+and the save-data probe were retired by the worlds feature.
+
 Maintain these boundaries:
 
-* UI must not access raw AFR paths.
+* UI must not access raw AFR paths, call SDL2, or make an orbis call.
+* The AFR path literal appears in exactly one file, `Game/AfrManager.cpp`.
+  `worlds_verify.py` asserts this.
 * Randomizer core must not depend on SDL2.
-* Platform code owns platform-specific concerns.
+* Platform code owns platform-specific concerns, the save-data API included.
 * `Msb` owns MSB format handling.
 * `Param` owns parameter format handling.
 

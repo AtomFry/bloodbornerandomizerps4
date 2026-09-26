@@ -109,11 +109,27 @@ const SettingDef kSettings[] = {
       "Cuts the scripted darkness in Mergo's Loft. Not a randomizer - it is a "
       "single fixed edit, and it applies whether or not anything else is on. Off "
       "leaves the area exactly as the game shipped it. Default: Off." },
+
+    // --- Save --------------------------------------------------------------
+    //
+    // The one entry the DEFAULTS tab must never show (worlds plan 3.3). It is
+    // not a randomizer and not a preference: it decides what happens to the
+    // save container when THIS world is activated, which is a per-world
+    // question. The Defaults screen iterates a list of six categories that
+    // does not contain this one.
+    { SettingId::SaveData, SettingCategory::Save, SettingKind::SaveChoice,
+      "SAVE DATA", &RandomizerDefaults::startFreshSave,
+      "What happens to save data when this world is activated. Keep Existing "
+      "restores this world's own save, or adopts the live save if it has none. "
+      "Start Fresh empties the container so the game starts a new playthrough. "
+      "Either way the live save is backed up first, and Start Fresh lasts one "
+      "activation. Default: Keep Existing." },
 };
 
 const int kSettingCount = (int)(sizeof(kSettings) / sizeof(kSettings[0]));
 
-// Rail labels for the six categories, in enum order. The ampersand rather than
+// Rail labels for the categories, in enum order. SAVE is last and is drawn
+// only by the world editor - see the enum's own note. The ampersand rather than
 // "AND" (plan P8): the atlas draws printable ASCII, so the glyph exists. The
 // Font8x8 fallback has no such glyph, which is why pool_verify.py's renderable()
 // budget covers the strings that path still has to draw and not these.
@@ -124,6 +140,7 @@ const char* const kCategoryLabels[] = {
     "WEAPONS & STARTING GEAR",
     "DIFFICULTY",
     "WORLD",
+    "SAVE",
 };
 
 const char* const kSeedHelp =
@@ -137,9 +154,19 @@ const char* const kTitleIdHelp =
     "one character at a time. Default: CUSA03173, the Europe and Game of the "
     "Year release.";
 
-const char* const kFinishHelp =
-    "Review the run and start randomizing. Shows the seed, the target title ID, "
-    "and how many settings are enabled.";
+// FINISH is gone with the Enable wizard's rail: the world editor activates on
+// OPTIONS from anywhere on the screen, so there is no row to describe. NAME
+// and HISTORY are its two replacements (worlds plan 4.5).
+const char* const kNameHelp =
+    "What this world is called. Up to sixteen characters of A to Z, 0 to 9 and "
+    "space, edited one character at a time. The name is yours to change at any "
+    "time - it is not part of the recipe, so renaming a world records no new "
+    "revision.";
+
+const char* const kHistoryHelp =
+    "Every recipe this world has ever had, newest first. Nothing here is ever "
+    "overwritten: choosing an older revision makes it current by adding a new "
+    "one, so the list only grows.";
 
 } // namespace
 
@@ -165,7 +192,7 @@ int CategorySize(SettingCategory category) {
     return n;
 }
 
-// Linear rather than an index built at startup: 18 entries scanned once per
+// Linear rather than an index built at startup: nineteen entries scanned once per
 // draw is nothing beside the glyph blits the same frame costs, and a prebuilt
 // index would be a second structure to keep in step - the exact thing this
 // file exists to remove.
@@ -183,6 +210,11 @@ std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& va
     switch (def.kind) {
         case SettingKind::Toggle:
             return (values.*(def.flag)) ? "YES" : "NO";
+        // Named states rather than YES/NO. "SAVE DATA   YES" would not say
+        // which of the two things it means, and the one it would be read as -
+        // "yes, keep my save" - is the opposite of what true stores.
+        case SettingKind::SaveChoice:
+            return (values.*(def.flag)) ? "START FRESH" : "KEEP EXISTING";
         case SettingKind::EnemyPool:
             return std::to_string(values.enemiesIncluded.CountEnabled()) + " OF " +
                    std::to_string(kEnemyPoolModelCount);
@@ -201,12 +233,18 @@ std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& va
 // through here now, which is what makes "X never toggles" a property of one
 // function rather than a rule every branch had to remember.
 void AdjustSetting(const SettingDef& def, RandomizerDefaults& values, int direction) {
-    (void)direction; // a toggle has two states: left and right both flip it
-    if (def.kind != SettingKind::Toggle || def.flag == nullptr) return;
+    (void)direction; // two states: left and right both flip them
+    bool twoState = (def.kind == SettingKind::Toggle ||
+                     def.kind == SettingKind::SaveChoice);
+    if (!twoState || def.flag == nullptr) return;
     values.*(def.flag) = !(values.*(def.flag));
 }
 
-bool IsDrillIn(const SettingDef& def) { return def.kind != SettingKind::Toggle; }
+// The three picker kinds, and only those. SaveChoice is edited in place by
+// Left/Right exactly as a toggle is, so X must do nothing on it either.
+bool IsDrillIn(const SettingDef& def) {
+    return def.kind != SettingKind::Toggle && def.kind != SettingKind::SaveChoice;
+}
 
 // The four Selection* functions are the one place the three picker types are
 // told apart. They need a switch rather than a pointer-to-member because
@@ -217,7 +255,8 @@ bool* SelectionFlags(const SettingDef& def, RandomizerDefaults& values) {
         case SettingKind::EnemyPool: return values.enemiesIncluded.enabled;
         case SettingKind::EnemySkip: return values.enemiesSkipped.enabled;
         case SettingKind::BossPool:  return values.bossesIncluded.enabled;
-        case SettingKind::Toggle:    break;
+        case SettingKind::Toggle:     break;
+        case SettingKind::SaveChoice: break;
     }
     return nullptr;
 }
@@ -227,7 +266,8 @@ const ModelPoolEntry* SelectionTable(const SettingDef& def) {
         case SettingKind::EnemyPool: return EnemyPoolTable().data();
         case SettingKind::EnemySkip: return EnemySkipTable().data();
         case SettingKind::BossPool:  return BossPoolTable().data();
-        case SettingKind::Toggle:    break;
+        case SettingKind::Toggle:     break;
+        case SettingKind::SaveChoice: break;
     }
     return nullptr;
 }
@@ -237,7 +277,8 @@ int SelectionCount(const SettingDef& def) {
         case SettingKind::EnemyPool: return kEnemyPoolModelCount;
         case SettingKind::EnemySkip: return kEnemySkipModelCount;
         case SettingKind::BossPool:  return kBossPoolModelCount;
-        case SettingKind::Toggle:    break;
+        case SettingKind::Toggle:     break;
+        case SettingKind::SaveChoice: break;
     }
     return 0;
 }
@@ -246,8 +287,9 @@ const PickerStrings& SelectionStrings(const SettingDef& def) {
     switch (def.kind) {
         case SettingKind::EnemySkip: return kEnemiesSkippedStrings;
         case SettingKind::BossPool:  return kBossesIncludedStrings;
-        case SettingKind::EnemyPool: break;
-        case SettingKind::Toggle:    break;
+        case SettingKind::EnemyPool:  break;
+        case SettingKind::Toggle:     break;
+        case SettingKind::SaveChoice: break;
     }
     return kEnemiesIncludedStrings;
 }
@@ -271,6 +313,7 @@ int EnabledToggleCount(const RandomizerDefaults& values) {
 
 const char* SeedHelp()    { return kSeedHelp; }
 const char* TitleIdHelp() { return kTitleIdHelp; }
-const char* FinishHelp()  { return kFinishHelp; }
+const char* NameHelp()    { return kNameHelp; }
+const char* HistoryHelp() { return kHistoryHelp; }
 
 } // namespace bbr

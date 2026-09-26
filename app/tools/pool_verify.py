@@ -530,7 +530,7 @@ def cmd_selftest(root):
     # The character assertion is the one that matters: a lowercase message
     # passes any length budget and draws as blank columns.
     eng_strings = named_strings(os.path.join(SRC, "EnemyRandomizer.cpp"))
-    ui_strings = named_strings(os.path.join(UI_SRC, "EnableWizardScreen.cpp"))
+    ui_strings = named_strings(os.path.join(UI_SRC, "WorldEditorScreen.cpp"))
     fail_msgs = {k: v for k, v in eng_strings.items() if k.startswith("kFail")}
     prefix = ui_strings.get("kEnemyFailPrefix", "")
     ui_lines = [ui_strings.get(k, None) for k in
@@ -683,29 +683,39 @@ def cmd_selftest(root):
     store = open(os.path.join(SRC, "RandomizerDefaultsStore.cpp"), encoding="utf-8").read()
     bufs = [int(x) for x in re.findall(r"char buf\[(\d+)\]", store)]
     # Worst case: every fixed line at its longest, plus all three selections.
-    worst = (len("bloodborne_title_id=CUSA00000") + 1 + len("randomize_enemies=1") + 1 +
-             len("randomize_bosses=1") + 1 + len("randomize_treasure=1") + 1 +
-             len("randomize_workshop_tools=1") + 1 + len("randomize_enemy_drops=1") + 1 +
-             len("randomize_starting_weapons=1") + 1 + len("randomize_starting_guns=1") + 1 +
-             len("randomize_shop_weapons=1") + 1 + len("enable_mergo_darkness=1") + 1 +
-             len("do_not_randomize_caged_dogs=1") + 1 +
-             len("start_with_hunter_tools=1") + 1 +
-             len("easy_shadows=1") + 1 + len("easy_rom=1") + 1 +
-             len("easy_failures=1") + 1 + len("easy_emissary=1") + 1 +
-             len("bosses_included=") + 17 + 1 +
-             len("enemies_included=") + 82 + 1 +
-             len("enemies_skipped=") + 85 + 1 +
+    #
+    # The SETTINGS BLOCK is the part FormatSettings() builds in char buf[1024],
+    # and it is the part shared with a world's rev-NNNN.cfg. defaults.cfg wraps
+    # it in two more lines of its own, which are built separately and are not
+    # in that buffer - so the buffer check below is against the block, and the
+    # total is what the whole file costs on disk.
+    settings_block = (len("randomize_enemies=1") + 1 +
+                      len("randomize_bosses=1") + 1 + len("randomize_treasure=1") + 1 +
+                      len("randomize_workshop_tools=1") + 1 + len("randomize_enemy_drops=1") + 1 +
+                      len("randomize_starting_weapons=1") + 1 + len("randomize_starting_guns=1") + 1 +
+                      len("randomize_shop_weapons=1") + 1 + len("enable_mergo_darkness=1") + 1 +
+                      len("do_not_randomize_caged_dogs=1") + 1 +
+                      len("start_with_hunter_tools=1") + 1 +
+                      len("easy_shadows=1") + 1 + len("easy_rom=1") + 1 +
+                      len("easy_failures=1") + 1 + len("easy_emissary=1") + 1 +
+                      len("start_fresh_save=1") + 1 +
+                      len("bosses_included=") + 17 + 1 +
+                      len("enemies_included=") + 82 + 1 +
+                      len("enemies_skipped=") + 85 + 1)
+    worst = (len("bloodborne_title_id=CUSA00000") + 1 +
+             settings_block +
              len("last_seed=4294967295") + 1)
     # 555 until feature 033 added the caged-dogs key, which is 30 bytes with
     # its newline; 585 until START WITH HUNTER TOOLS added 26 more; 611 until
     # feature 018's four easy-mode keys added 58 (15 + 11 + 16 + 16), making
     # 669; 616 once the randomizer-settings-ui spec §4.8 removed
     # backup_existing_save (23 with its newline) and
-    # replace_save_default_is_new (30). This is an exact equality on purpose:
-    # it fails the moment a key is added or removed without the buffer being
-    # thought about.
-    cases.append(("worst-case defaults.cfg is 616 bytes and fits char buf[1024]",
-                  worst == 616 and bufs and worst < max(bufs)))
+    # replace_save_default_is_new (30); 635 once the worlds feature added
+    # start_fresh_save (19). This is an exact equality on purpose: it fails the
+    # moment a key is added or removed without the buffer being thought about.
+    cases.append(("worst-case defaults.cfg is 635 bytes", worst == 635))
+    cases.append(("the 584-byte settings block fits char buf[1024]",
+                  settings_block == 584 and bufs and settings_block < max(bufs)))
     # The save-data removal, checked the way the two cases below check a key
     # that must be PRESENT: on the quoted key literal in the load chain, the
     # "key=%d" fragment of the save format string, and the struct field the

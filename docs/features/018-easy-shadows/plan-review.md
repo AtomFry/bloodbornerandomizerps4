@@ -87,7 +87,9 @@ lines of investigation, rejected alternatives and decision history mixed into
 **Problem:** Three separate things have moved since the plan was written.
 
 *Feature 016 did not land — it was deleted.* `docs/features/016-unchanged-bell-maidens/`
-is now under `docs/features/Completed/`, and the in-code comment at
+still exists and holds the record [path corrected 2026-09-25; this review originally
+said the folder had moved under `Completed/`, a subfolder since dropped — the review's
+analysis is unchanged], and the in-code comment at
 `SetupDefaultsScreen.h:45-49` records why: *"UNCHANGED BELL MAIDENS used to sit
 at 4… Feature 032 D1 retired it and everything below moved up one."* So §9
 decision 1's dependency, §5.5's whole collision analysis, §7's "starts after
