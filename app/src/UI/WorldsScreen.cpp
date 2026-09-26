@@ -76,26 +76,35 @@ const ListLayout kRailLayout = { 330, 76, 880, 52 };
 // cursor: a details pane that scrolled would be one the player cannot scroll.
 const ListLayout kDetailLayout = { 330, 52, 880, 44 };
 
-// The active marker: a swatch in Palette::Good at the rail row's right edge
-// (worlds plan section 4.5). Not a glyph - the 8x8 fallback has no symbol for
-// it, and a word there would collide with a 16-character world name.
+// The active marker: the Hunter's Mark (Controls.h kActiveMark) in a gutter
+// at the LEFT of the rail row, in Palette::Mark. It replaced the green swatch
+// the worlds plan section 4.5 specified - the reasoning for both the glyph and
+// the colour is in Controls.h; what matters here is that it is a STRING, not a
+// rectangle, so it needs no width, height or vertical offset of its own. It is
+// drawn at the row's own y and scale, which puts it on the row's baseline.
 //
-// Nothing here clips the row's label: the clear space between the widest name
-// a player can type and the swatch is a REQUIREMENT, asserted by
-// settings_ui_verify.py against the atlas, in the same way the picker's flag
+// EVERY row is indented by the gutter, not just the marked one. Indenting only
+// the active row would move its name sideways the moment a world was activated
+// - the rail would appear to twitch at exactly the moment the player is
+// looking for confirmation that something happened.
+//
+// The gutter is the mark's own advance plus clear space. It is wide enough to
+// separate the mark from the name and no wider: at the row's left edge the two
+// are meant to read as one marked row, unlike the old right-edge swatch, which
+// needed a wide band to stop it reading as part of the name.
+//
+// Nothing here clips the row's label: settings_ui_verify.py asserts both the
+// gutter's clear space and that the widest name a player can type still fits
+// beside it, measured against the atlas, in the same way the picker's flag
 // column is. A 16-character name is the cap the plan set (P10) precisely so
-// this band can be checked rather than defended at draw time.
-const int kSwatchW       = 16;
-const int kSwatchH       = 32;
-const int kSwatchOffsetY = 12;   // relative to the row's draw y; at scale 3 the
-                                 // row's ink spans 9..44, so the swatch sits
-                                 // squarely against it
+// this can be checked rather than defended at draw time.
+const int kMarkGutter = 39;   // mark advance 25 at scale 3 + 14 px, two spaces
 
 // The loading state: a wordmark, a rule, a five-cell bar and one word, all
 // centred in the same 1000px block so the rule and the bar share an edge
 // (plan section 4.6). There is no bar primitive anywhere in this app and this
-// change does not add one - the cells are FillRects, exactly as every rule and
-// swatch on every other screen is.
+// change does not add one - the cells are FillRects, exactly as every rule
+// on every other screen is.
 const int kLoadWordmarkY = 390;   // drawn at kStartupTitleScale
 const int kLoadRuleY     = 480;
 const int kLoadBarY      = 530;
@@ -1031,14 +1040,14 @@ void WorldsScreen::DrawRail(Renderer& renderer) {
                               Palette::SelectedBar.b);
         }
         Color color = focused ? Palette::Selected : Palette::Text;
-        DrawLabelLeft(renderer, kRailX, y, RowLabel(index).c_str(), kRowScale, color);
+        DrawLabelLeft(renderer, kRailX + kMarkGutter, y, RowLabel(index).c_str(),
+                      kRowScale, color);
 
         // Exactly one row carries this, and none does until first-run capture
         // has run (B4).
         if (RowIsActive(index)) {
-            renderer.FillRect(kRailX + kRailW - kSwatchW, y + kSwatchOffsetY,
-                              kSwatchW, kSwatchH,
-                              Palette::Good.r, Palette::Good.g, Palette::Good.b);
+            DrawLabelLeft(renderer, kRailX, y, kActiveMark, kRowScale,
+                          Palette::Mark);
         }
     }
 

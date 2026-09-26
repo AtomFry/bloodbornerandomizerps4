@@ -49,11 +49,17 @@ try:
 except ImportError:
     sys.exit("PIL/Pillow is required: python -m pip install Pillow")
 
+import mark_glyph
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# ASCII printable. The whole point of the change is that this is a contiguous
-# range with no holes, so no caller has to check a glyph table any more.
-FIRST_CH, LAST_CH = 32, 126
+# ASCII printable, plus ONE codepoint past it. The whole point of the change
+# is that this is a contiguous range with no holes, so no caller has to check
+# a glyph table any more - which is exactly why the Hunter's Mark is baked at
+# 127 (the first value after printable ASCII) rather than somewhere roomier.
+# It is not a character of the typeface: mark_glyph.py draws it, and
+# FontAtlas.cpp neither knows nor cares which of the two produced a glyph.
+FIRST_CH, LAST_CH = 32, mark_glyph.MARK_CODE
 
 # UI text scale -> em size in pixels.
 #
@@ -88,10 +94,20 @@ def rasterize(font_path, pixel_size):
 
     for code in range(FIRST_CH, LAST_CH + 1):
         ch = chr(code)
-        mask = font.getmask(ch, mode="L")
-        w, h = mask.size
-        bbox = font.getbbox(ch)
-        advance = int(round(font.getlength(ch)))
+        if code == mark_glyph.MARK_CODE:
+            w, h, ink = mark_glyph.mark_mask(pixel_size)
+            m = mark_glyph.mark_metrics(pixel_size, ascent)
+            bearing_x, bearing_y, advance = m["bx"], m["by"], m["adv"]
+        else:
+            mask = font.getmask(ch, mode="L")
+            w, h = mask.size
+            ink = bytes(mask)
+            bbox = font.getbbox(ch)
+            advance = int(round(font.getlength(ch)))
+            # bbox is None-free only for glyphs with ink; guarded below by the
+            # w/h test, which is the same guard the original code relied on.
+            bearing_x = bbox[0] if (w and h) else 0
+            bearing_y = (ascent - bbox[1]) if (w and h) else 0
 
         if w == 0 or h == 0:
             # Space and anything else with no ink: advance only, no pixels.
@@ -106,12 +122,12 @@ def rasterize(font_path, pixel_size):
 
         glyphs.append(dict(
             x=x, y=y, w=w, h=h,
-            bx=bbox[0],                    # pen -> left edge of ink
-            by=ascent - bbox[1],           # baseline -> top edge of ink
+            bx=bearing_x,                  # pen -> left edge of ink
+            by=bearing_y,                  # baseline -> top edge of ink
             adv=advance,
             off=len(blob),
         ))
-        blob += bytes(mask)                # tight w*h coverage, row-major
+        blob += ink                        # tight w*h coverage, row-major
 
         x += w + PAD
         row_height = max(row_height, h)
@@ -148,6 +164,8 @@ def main():
     out.append("// Do not hand-edit; re-run the generator instead.")
     out.append("//")
     out.append("// Typeface: EB Garamond (SIL Open Font License 1.1).")
+    out.append("// Codepoint 127 is NOT from the typeface: it is the Hunter's Mark,")
+    out.append("// drawn by app/tools/mark_glyph.py. See Controls.h kActiveMark.")
     out.append("// The license text ships beside the source font at")
     out.append("// app/tools/fonts/OFL.txt and must stay with any redistribution.")
     out.append("//")
@@ -188,7 +206,8 @@ def main():
         out.append("const AtlasGlyph kGlyphs%d[%d] = {" % (scale, len(b["glyphs"])))
         for code, g in zip(range(FIRST_CH, LAST_CH + 1), b["glyphs"]):
             ch = chr(code)
-            label = "space" if ch == " " else ch
+            label = ("space" if ch == " " else
+                     "HUNTER'S MARK" if code == mark_glyph.MARK_CODE else ch)
             out.append("    {%d,%d,%d,%d,%d,%d,%d,%d}, // '%s'"
                        % (g["off"], g["x"], g["y"], g["w"], g["h"],
                           g["bx"], g["by"], g["adv"], label))

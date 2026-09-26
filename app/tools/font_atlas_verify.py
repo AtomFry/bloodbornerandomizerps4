@@ -20,6 +20,10 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import mark_glyph  # noqa: E402  - the source of truth for codepoint 127
+
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:
@@ -85,7 +89,9 @@ def check_metrics(font_path, sizes, glyphs):
                             % (size["uiScale"], (size["ascent"], size["descent"]),
                                (ascent, descent)))
         rows = glyphs[size["uiScale"]]
-        for code in range(32, 127):
+        # Stops one short of the mark: codepoint 127 is not in the typeface,
+        # so check_mark speaks for it instead.
+        for code in range(32, mark_glyph.MARK_CODE):
             g = rows[code - 32]
             ch = chr(code)
             mask = font.getmask(ch, mode="L")
@@ -111,6 +117,48 @@ def check_metrics(font_path, sizes, glyphs):
                         "scale %d %r: bearings baked %s, font says %s"
                         % (size["uiScale"], ch, (g["bx"], g["by"]),
                            (bbox[0], ascent - bbox[1])))
+    return failures
+
+
+def check_mark(sizes, glyphs):
+    """The Hunter's Mark at codepoint 127, re-derived from mark_glyph.py.
+
+    The mark is not in the typeface, so check_metrics cannot speak for it -
+    that loop stops one short. It gets the same treatment here: every baked
+    number re-drawn independently and compared, plus the two things that are
+    true of the mark and of nothing else. It must HAVE ink - a mark that baked
+    empty would simply not draw, and the rail would look exactly as it did the
+    day before this existed - and it must sit inside the typeface's own
+    vertical band, because WorldsScreen draws it on a text row whose focus bar
+    is sized from the atlas's ink box.
+    """
+    failures = []
+    for size in sizes:
+        scale = size["uiScale"]
+        g = glyphs[scale][mark_glyph.MARK_CODE - 32]
+        w, h, ink = mark_glyph.mark_mask(size["pixel"])
+        m = mark_glyph.mark_metrics(size["pixel"], size["ascent"])
+
+        if (g["w"], g["h"]) != (w, h):
+            failures.append("scale %d mark: size baked %s, drawn %s"
+                            % (scale, (g["w"], g["h"]), (w, h)))
+        if (g["bx"], g["by"], g["adv"]) != (m["bx"], m["by"], m["adv"]):
+            failures.append("scale %d mark: metrics baked %s, drawn %s"
+                            % (scale, (g["bx"], g["by"], g["adv"]),
+                               (m["bx"], m["by"], m["adv"])))
+        if not any(ink):
+            failures.append("scale %d mark: drawn glyph is blank" % scale)
+        if g["adv"] <= 0:
+            failures.append("scale %d mark: advance %d" % (scale, g["adv"]))
+
+        # Drawn at a row's y, the ink spans [ascent - by, ascent - by + h)
+        # below that y. Both edges must stay inside the line the atlas reports.
+        top = size["ascent"] - g["by"]
+        bottom = top + g["h"]
+        if top < 0 or bottom > size["ascent"] + size["descent"]:
+            failures.append("scale %d mark: ink %d..%d escapes the line 0..%d"
+                            % (scale, top, bottom,
+                               size["ascent"] + size["descent"]))
     return failures
 
 
@@ -171,8 +219,15 @@ def main():
     print("\nchecking baked metrics against the typeface...")
     metric_failures = check_metrics(args.font, sizes, glyphs)
     print("  %d glyphs x %d sizes: %s"
-          % (95, len(sizes), "OK" if not metric_failures
+          % (mark_glyph.MARK_CODE - 32, len(sizes),
+             "OK" if not metric_failures
              else "%d MISMATCHES" % len(metric_failures)))
+
+    print("\nchecking the Hunter's Mark against mark_glyph.py...")
+    mark_failures = check_mark(sizes, glyphs)
+    print("  1 glyph x %d sizes: %s"
+          % (len(sizes), "OK" if not mark_failures
+             else "%d MISMATCHES" % len(mark_failures)))
 
     print("\nreplaying the C++ draw loop against PIL's own layout...")
     layout_failures = check_layout(args.font, sizes, glyphs)
@@ -180,7 +235,7 @@ def main():
           % (len(SAMPLES), len(sizes), "OK" if not layout_failures
              else "%d MISMATCHES" % len(layout_failures)))
 
-    failures = metric_failures + layout_failures
+    failures = metric_failures + mark_failures + layout_failures
     if failures:
         print("\nFAILURES:")
         for f in failures[:40]:
@@ -189,8 +244,8 @@ def main():
             print("  ... and %d more" % (len(failures) - 40))
         return 1
 
-    print("\nPASS - baked metrics match the typeface and the draw maths lands "
-          "where PIL puts it.")
+    print("\nPASS - baked metrics match the typeface, the mark matches "
+          "its drawing, and the draw maths lands where PIL puts it.")
     return 0
 
 

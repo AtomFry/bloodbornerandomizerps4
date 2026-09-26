@@ -33,6 +33,12 @@ HEADER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 # --- the real text metrics, parsed from the generated atlas -----------------
 
+# The baked range: printable ASCII, then the Hunter's Mark one past its end
+# (app/tools/mark_glyph.py).
+FIRST_CODE = 32
+MARK_CODE = 127
+
+
 def load_ink_box(path):
     """Per-scale (inkTop, inkBottom, lineHeight), in pixels below the y passed
     to DrawText.
@@ -48,6 +54,14 @@ def load_ink_box(path):
     Taken over all 95 glyphs with a non-zero box, not over the uppercase
     subset every shipped string happens to use: the help text this geometry is
     being corrected for is mixed case, and descenders are what bite.
+
+    The Hunter's Mark at codepoint 127 is EXCLUDED. This box answers "how far
+    can a line of TEXT reach", and every screen measured here draws text and
+    nothing else; the mark is an emblem on one rail row of one screen, where
+    settings_ui_verify.py checks it against that row's focus bar directly.
+    Counting it here would let a change to the rune's height fail a scroll-hint
+    clearance on the progress log, which never draws it - a verifier failure
+    that tells you nothing true.
     """
     text = open(path, encoding="utf-8").read()
 
@@ -70,10 +84,14 @@ def load_ink_box(path):
             raise SystemExit("could not find %s in %s" % (m["table"], path))
         max_bearing_y = 0
         max_below = 0
+        code = FIRST_CODE - 1
         for line in body.group(1).split("\n"):
             g = re.match(r"\s*\{([-0-9,]+)\},", line)
             if not g:
                 continue
+            code += 1
+            if code == MARK_CODE:
+                continue          # the emblem, not a letter - see the docstring
             # dataOffset, atlasX, atlasY, width, height, bearingX, bearingY, advance
             v = [int(x) for x in g.group(1).split(",")]
             w, h, bearing_y = v[3], v[4], v[6]

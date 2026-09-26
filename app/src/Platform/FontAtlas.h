@@ -8,6 +8,12 @@
 // "link fewer libraries" rule in docs/ps4-homebrew-findings.md section 7
 // intact - no new .sprx, so no new load-time bad-NID risk.
 //
+// Codepoint 127 is not a character at all: it is the Hunter's Mark, drawn by
+// app/tools/mark_glyph.py and baked beside the letters so the UI can place an
+// emblem with DrawText instead of needing an image loader or a sprite
+// primitive. Controls.h kActiveMark is the string; nothing in this file knows
+// the difference.
+//
 // Unlike Font8x8 this covers all of printable ASCII (32..126), including
 // lowercase, so the "unknown characters render blank, silently" trap in
 // docs/known-traps.md no longer applies to new user-facing strings.

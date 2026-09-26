@@ -57,7 +57,8 @@ struct PickerStrings {
 // The three lists' vocabulary, defined once because both hosting screens draw
 // the same picker and a second copy is a second thing to forget to change.
 //
-// The atlas draws printable ASCII (32..126) and is proportional, so what a
+// The atlas draws printable ASCII (32..126, plus the mark at 127) and is
+// proportional, so what a
 // string actually costs is Renderer::TextWidth(), never its length. The two
 // budgets pool_verify.py's selftest still asserts - renderable by
 // Font8x8.cpp (A-Z, 0-9, space and ' ( ) - , and nothing else) and 71

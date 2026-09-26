@@ -32,7 +32,7 @@ rail**; inside a settings pane Left/Right changes a value instead.
 
 | Tab | What it is |
 |---|---|
-| **WORLDS** | The list: `+ NEW WORLD`, `VANILLA`, then your worlds, most recently played first. The middle column describes the highlighted world, the right column explains what the row does |
+| **WORLDS** | The list: `+ NEW WORLD`, `VANILLA`, then your worlds, most recently played first. The active world carries the Hunter's Mark at the right of its row, and the header names it as well. The middle column describes the highlighted world, the right column explains what the row does |
 | **DEFAULTS** | What a **new** world starts from, plus the Bloodborne title ID. Editing here changes nothing about worlds that already exist |
 
 From the `WORLDS` rail: **X** opens a world in the editor (or creates one on

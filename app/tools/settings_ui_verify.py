@@ -229,8 +229,14 @@ def parse_spec_categories():
 # text metrics, from the baked atlas
 # ---------------------------------------------------------------------------
 
+# The Hunter's Mark's codepoint, one past printable ASCII - the glyph
+# app/tools/mark_glyph.py bakes. Defined here rather than with the geometry
+# requirements below because load_atlas, which runs on import, needs it.
+MARK_CODE = 127
+
+
 def load_atlas():
-    """(advances, ink box) per scale, parsed from the generated header.
+    """(advances, text ink box, mark ink box) per scale, from the generated H.
 
     Same source and same arithmetic as ui_scroll_verify.py's load_ink_box - the
     parse is repeated rather than imported because that file is a script that
@@ -246,7 +252,7 @@ def load_atlas():
         f = [x.strip() for x in row.split(",")]
         meta[int(f[0])] = dict(ascent=int(f[2]), descent=int(f[3]), table=f[6])
 
-    adv, ink = {}, {}
+    adv, ink, mark_ink = {}, {}, {}
     for scale, m in meta.items():
         body = re.search(r"const AtlasGlyph %s\[\d+\] = \{(.*?)\n\};" % m["table"],
                          text, re.S)
@@ -258,16 +264,24 @@ def load_atlas():
                 continue
             v = [int(x) for x in g.group(1).split(",")]
             glyphs[chr(code)] = v[7]
-            code += 1
-            if v[3] and v[4]:
+            if code == MARK_CODE:
+                # The emblem, measured on its own. It is kept OUT of the text
+                # ink box for the reason ui_scroll_verify.py's load_ink_box
+                # spells out - it is drawn on one rail row, not in running text
+                # - and the worlds rail checks it against that row's focus bar
+                # explicitly instead.
+                mark_ink[scale] = (m["ascent"] - v[6],
+                                   m["ascent"] - v[6] + v[4])
+            elif v[3] and v[4]:
                 max_bearing_y = max(max_bearing_y, v[6])
                 max_below = max(max_below, v[4] - v[6])
+            code += 1
         adv[scale] = glyphs
         ink[scale] = (m["ascent"] - max_bearing_y, m["ascent"] + max_below)
-    return adv, ink
+    return adv, ink, mark_ink
 
 
-ADV, INK = load_atlas()
+ADV, INK, MARK_INK = load_atlas()
 
 
 def width(text, scale):
@@ -479,10 +493,20 @@ THREE_COLUMN_GEOMETRY = [
     "kHeadingScale", "kRowScale", "kFooterScale",
 ]
 
-# Clear space demanded between the longest world name a player can type and
-# the ACTIVE swatch at the rail row's right edge. Not a measurement, a
-# requirement, exactly like PICKER_MIN_GAP: below this the two read as one.
-SWATCH_MIN_GAP = 24
+# Clear space demanded inside the rail's left gutter, between the Hunter's
+# Mark and the name beside it. Not a measurement, a requirement - but a much
+# smaller one than the 24 px the mark needed when it sat at the row's RIGHT
+# edge. There, the requirement was that the two NOT read as one thing; here,
+# marking the row is the whole point, and the gap only has to keep the rune
+# from touching the first letter. Two spaces at scale 3.
+MARK_MIN_GAP = 14
+
+# The mark is a baked glyph at codepoint 127 (app/tools/mark_glyph.py), so the
+# rail is measured against its real advance out of the atlas, exactly as it is
+# measured against the advance of every letter. Nothing in WorldsScreen.cpp
+# carries a width for it any more, which is the point: there is no hand-kept
+# constant here that can drift away from what the atlas actually holds.
+MARK_CHAR = chr(MARK_CODE)
 
 # The worst case the details pane can build, as WorldsScreen::Details builds
 # it: seven label/value rows for a world, four for Vanilla plus its own note,
@@ -1292,27 +1316,48 @@ def main():
                   worlds["kStateRight"] <= SCREEN_W))
 
     # The rail. A world name is at most `name_cap` characters of A-Z, 0-9 and
-    # space (worlds plan P10), and the ACTIVE swatch sits at the row's right
-    # edge - nothing clips the label, so the clear space is checked here.
-    rail_budget = worlds["kRailW"] - worlds["kSwatchW"] - SWATCH_MIN_GAP
+    # space (worlds plan P10), and the Hunter's Mark sits in a gutter at the
+    # row's LEFT, which every row is indented past - nothing clips the label,
+    # so both the gutter's own clear space and what is left for a name are
+    # checked here.
+    mark_w = width(MARK_CHAR, ROW_SCALE)
+    if not mark_w:
+        sys.exit("the mark glyph (codepoint 127) is not in the baked atlas - "
+                 "re-run gen_font_atlas.py")
+    gutter = worlds["kMarkGutter"]
+    cases.append(("5: the rail's %d px gutter holds the %d px mark and %d px of "
+                  "clear space before the name"
+                  % (gutter, mark_w, gutter - mark_w),
+                  gutter - mark_w >= MARK_MIN_GAP))
+    rail_budget = worlds["kRailW"] - gutter
     worlds_rail_rows = [worlds_strings["kRowNewWorld"], widest_name(name_cap),
                         "VANILLA"]
     widest_rail = max(worlds_rail_rows, key=lambda t: width(t, ROW_SCALE))
-    cases.append(("5: every worlds rail row fits %d px beside the swatch "
-                  "(widest %d px, %s)"
+    cases.append(("5: every worlds rail row fits the %d px left after the "
+                  "gutter (widest %d px, %s)"
                   % (rail_budget, width(widest_rail, ROW_SCALE), widest_rail),
                   width(widest_rail, ROW_SCALE) <= rail_budget))
     rail_layout = parse_list_layout("WorldsScreen.cpp", "kRailLayout")
-    cases.append(("6: the worlds rail's focus bar contains its row's ink, and the "
-                  "swatch sits inside the bar",
-                  worlds["kBarOffsetY"] <= ink_top(0, ROW_SCALE) and
-                  worlds["kBarOffsetY"] + worlds["kBarHeight"] >=
-                  ink_bottom(0, ROW_SCALE) and
-                  worlds["kSwatchOffsetY"] >= worlds["kBarOffsetY"] and
-                  worlds["kSwatchOffsetY"] + worlds["kSwatchH"] <=
-                  worlds["kBarOffsetY"] + worlds["kBarHeight"] and
-                  worlds["kBarOffsetY"] + worlds["kBarHeight"] <
-                  rail_layout[1] + worlds["kBarOffsetY"]))
+    # The mark is drawn at the row's own y and scale, so it and the label are
+    # both bounded relative to that y - but by different boxes, because the
+    # mark is deliberately outside the text ink box (see load_atlas). It stands
+    # taller than a capital, so the focus bar has to contain it too. This is
+    # the check that fails if the rune is ever redrawn larger.
+    mark_top, mark_bottom = MARK_INK[ROW_SCALE]
+    bar_top = worlds["kBarOffsetY"]
+    bar_bottom = bar_top + worlds["kBarHeight"]
+    # The gutter is inside the rail, so the mark is inside the focus bar
+    # horizontally as well - the bar starts at kRailX and the mark is drawn
+    # there. A negative gutter, or one wider than the rail, would put it
+    # outside; both are caught by the gutter cases above.
+
+    cases.append(("6: the worlds rail's focus bar contains its row's ink and "
+                  "the mark's (mark ink %d..%d, bar %d..%d)"
+                  % (mark_top, mark_bottom, bar_top, bar_bottom),
+                  bar_top <= ink_top(0, ROW_SCALE) and
+                  bar_bottom >= ink_bottom(0, ROW_SCALE) and
+                  bar_top <= mark_top and bar_bottom >= mark_bottom and
+                  bar_bottom < rail_layout[1] + bar_top))
 
     # The details pane. Its heading is the row's own name, so it is measured
     # at the widest one a player can type.

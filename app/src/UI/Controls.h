@@ -34,7 +34,25 @@ namespace Palette {
     // them; the exact value is a TV judgement and may want adjusting after the
     // hardware test.
     constexpr Color SelectedBar = { 56, 44, 18 };
+    // The active-world marker. Deliberately NOT Good: that green is this
+    // app's confirmation colour - "the operation succeeded" - and on a screen
+    // whose every other hue is gold, parchment and steel, a saturated green
+    // block read as a status LED bolted onto the menu. This is the game's own
+    // blood red, lifted off the painted original enough to hold at scale 3 on
+    // a TV.
+    constexpr Color Mark = { 210, 76, 66 };
 }
+
+// The Hunter's Mark, drawn as TEXT. app/tools/mark_glyph.py bakes it into the
+// font atlas at codepoint 127, so it blits, tints and scales through exactly
+// the same path as every letter: DrawLabel* place it, TextWidth measures it,
+// and Palette colours it. Font8x8.cpp carries a crude 8x8 version for the
+// fallback path, so it is never the one thing that silently fails to draw.
+//
+// Keep it alone in its own literal. Concatenated with a string starting in a
+// hex digit, the  escape would swallow those digits and produce a
+// different character - the standard's rule, and a silent one.
+constexpr const char* kActiveMark = "";
 
 // How hard an overlay dims whatever is behind it - black at this alpha of 255.
 // A pixel behind an overlay survives at (255 - alpha) / 255 of its brightness.

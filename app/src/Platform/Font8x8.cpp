@@ -63,6 +63,14 @@ const Glyph kGlyphs[] = {
     { ')',  { 0x30,0x18,0x0C,0x0C,0x0C,0x18,0x30,0x00 } },
     { '-',  { 0x00,0x00,0x00,0x7E,0x00,0x00,0x00,0x00 } },
     { ',',  { 0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x30 } },
+    // The Hunter's Mark at codepoint 127, matching the atlas glyph baked by
+    // app/tools/mark_glyph.py. This is the FALLBACK shape: it is drawn only
+    // when FontAtlasInit fails and the whole UI is already in 8x8 blocks. An
+    // eight-pixel box cannot hold the rune's arms, kite and fleck, so this
+    // keeps the silhouette - stem, head tick, arms, tapering kite, tail - and
+    // drops the fleck. Without it the active row would be the one place the
+    // fallback renders NOTHING rather than something crude.
+    { '', { 0x12,0x12,0x7E,0x52,0x34,0x18,0x10,0x10 } },
 };
 const int kGlyphCount = sizeof(kGlyphs) / sizeof(kGlyphs[0]);
 const int kAdvance = 9; // 8 pixels of glyph + 1 column of spacing, pre-scale
