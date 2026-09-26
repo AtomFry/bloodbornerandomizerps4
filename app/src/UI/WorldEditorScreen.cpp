@@ -216,10 +216,10 @@ const char* const kRowHowLong       = "HOW LONG";
 // nothing happens are as important as the two that say something does: a
 // player who is told their save was filed away when it was not has been
 // misled about the one thing this screen exists to promise.
-const char* const kOutgoingNoContainer = "NO CONTAINER - NOTHING TO BACK UP";
-const char* const kOutgoingEmpty       = "LEFT ALONE - CONTAINER IS EMPTY";
-const char* const kOutgoingNowhere     = "BACKED UP - FILED NOWHERE";
-const char* const kOutgoingFiled       = "BACKED UP AND FILED INTO IT";
+const char* const kOutgoingNoContainer = "NOTHING TO BACK UP";
+const char* const kOutgoingEmpty       = "NOTHING TO BACK UP - SAVE IS EMPTY";
+const char* const kOutgoingNowhere     = "BACKED UP - NO WORLD TO SAVE IT TO";
+const char* const kOutgoingFiled       = "BACKED UP AND SAVED TO IT";
 
 // Roughly how long it takes (B10), and deliberately no more precise than this.
 // The arithmetic: a ~27 MB save at the measured ~15 MB/s is ~2 s a pass, so a

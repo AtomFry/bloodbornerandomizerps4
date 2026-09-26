@@ -26,89 +26,76 @@ const SettingDef kSettings[] = {
     // --- Enemies -----------------------------------------------------------
     { SettingId::RandomizeEnemies, SettingCategory::Enemies, SettingKind::Toggle,
       "RANDOMIZE ENEMIES", &RandomizerDefaults::randomizeEnemies,
-      "Replaces each enemy placement in the world with another creature drawn "
-      "from the enemy pool. Does not affect bosses. Default: Off." },
+      "Randomizes enemy placements throughout the world. Bosses are "
+      "unaffected." },
     { SettingId::EnemiesIncluded, SettingCategory::Enemies, SettingKind::EnemyPool,
       "ENEMIES INCLUDED", nullptr,
-      "Chooses which creatures may be used as replacements. Everything is "
-      "included by default. Has no effect unless Randomize Enemies is on." },
+      "Choose which enemies can appear as replacements." },
     { SettingId::EnemiesSkipped, SettingCategory::Enemies, SettingKind::EnemySkip,
       "ENEMIES SKIPPED", nullptr,
-      "Chooses which enemies are left exactly as the game placed them. Nothing "
-      "is skipped by default. A skipped enemy can still appear elsewhere as a "
-      "replacement. Has no effect unless Randomize Enemies is on." },
+      "Choose enemies that keep their original placements. They may still "
+      "appear as replacements elsewhere." },
     { SettingId::DoNotRandomizeCagedDogs, SettingCategory::Enemies, SettingKind::Toggle,
       "DO NOT RANDOMIZE CAGED DOGS", &RandomizerDefaults::doNotRandomizeCagedDogs,
-      "Leaves the caged dogs of Central Yharnam and the Forbidden Woods alone. "
-      "This protects the ten cage placements, not the creature - Shaggy Hunting "
-      "Dogs still appear elsewhere and still feed the pool. Replacements dropped "
-      "into the Central Yharnam cages misbehave badly. Default: Off." },
+      "Keeps the caged dogs of Central Yharnam and the Forbidden Woods in "
+      "their original placements. Other enemies behave badly in these cages." },
 
     // --- Bosses ------------------------------------------------------------
     { SettingId::RandomizeBosses, SettingCategory::Bosses, SettingKind::Toggle,
       "RANDOMIZE BOSSES", &RandomizerDefaults::randomizeBosses,
-      "Replaces each boss with another boss. Independent of Randomize Enemies - "
-      "either, both or neither may be on. Default: Off." },
+      "Randomizes boss placements throughout the world." },
     { SettingId::BossesIncluded, SettingCategory::Bosses, SettingKind::BossPool,
       "BOSSES INCLUDED", nullptr,
-      "Chooses which bosses may be used as replacements. Everything is included "
-      "by default. Has no effect unless Randomize Bosses is on." },
+      "Choose which bosses can appear as replacements." },
 
     // --- Items and Treasure ------------------------------------------------
     { SettingId::RandomizeTreasure, SettingCategory::ItemsTreasure, SettingKind::Toggle,
       "RANDOMIZE TREASURE", &RandomizerDefaults::randomizeTreasure,
-      "Shuffles the items found lying in the world. Default: Off." },
+      "Randomizes items found throughout the world." },
     { SettingId::RandomizeWorkshopTools, SettingCategory::ItemsTreasure, SettingKind::Toggle,
       "RANDOMIZE WORKSHOP TOOLS", &RandomizerDefaults::randomizeWorkshopTools,
-      "Adds the two workshop tools - the Blood Gem and Rune workshop tools - to "
-      "the treasure shuffle instead of leaving them where the game put them. "
-      "Only meaningful when Randomize Treasure is also on. Different from Start "
-      "With Hunter Tools, which grants them outright. Default: Off." },
+      "Adds the Blood Gem and Rune Workshop Tools to the treasure pool. "
+      "Requires Randomize Treasure." },
     { SettingId::RandomizeEnemyDrops, SettingCategory::ItemsTreasure, SettingKind::Toggle,
       "RANDOMIZE ENEMY DROPS", &RandomizerDefaults::randomizeEnemyDrops,
-      "Shuffles what enemies drop when killed. Default: Off." },
+      "Randomizes what enemies drop when killed." },
 
     // --- Weapons and Starting Gear -----------------------------------------
     { SettingId::RandomizeStartingWeapons, SettingCategory::WeaponsGear, SettingKind::Toggle,
       "RANDOMIZE STARTING WEAPONS", &RandomizerDefaults::randomizeStartingWeapons,
-      "Randomizes the trick weapon choices offered in the Hunter's Dream. "
-      "Default: Off." },
+      "Randomizes the trick weapons offered in the Hunter's Dream." },
     { SettingId::RandomizeStartingGuns, SettingCategory::WeaponsGear, SettingKind::Toggle,
       "RANDOMIZE STARTING GUNS", &RandomizerDefaults::randomizeStartingGuns,
-      "Randomizes the firearm choices offered in the Hunter's Dream. Independent "
-      "of the trick weapon setting. Default: Off." },
+      "Randomizes the firearms offered in the Hunter's Dream." },
     { SettingId::RandomizeShopWeapons, SettingCategory::WeaponsGear, SettingKind::Toggle,
       "RANDOMIZE SHOP WEAPONS", &RandomizerDefaults::randomizeShopWeapons,
-      "Randomizes the weapons sold by the Bath Messengers. Default: Off." },
+      "Randomizes the weapons sold by the Bath Messengers." },
     { SettingId::StartWithHunterTools, SettingCategory::WeaponsGear, SettingKind::Toggle,
       "START WITH HUNTER TOOLS", &RandomizerDefaults::startWithHunterTools,
-      "Grants the Blood Gem and Rune workshop tools at character creation, so "
-      "gems and runes work from the first area instead of sitting unusable until "
-      "their chests turn up. Different from Randomize Workshop Tools, which "
-      "shuffles them into the treasure pool. Default: Off." },
+      "Start with the Blood Gem and Rune Workshop Tools. Gems and runes can be "
+      "fitted from the first area." },
 
     // --- Difficulty --------------------------------------------------------
     { SettingId::EasyShadows, SettingCategory::Difficulty, SettingKind::Toggle,
       "EASY SHADOWS", &RandomizerDefaults::easyShadows,
-      "Replaces the duplicate bodies in the Shadows of Yharnam fight with "
-      "harmless larvae, so it plays as a duel. Not a randomizer - the same seed "
-      "gives the same world either way. Default: Off." },
+      "Replaces the duplicate Shadows of Yharnam with harmless larvae, so the "
+      "fight is a duel." },
     { SettingId::EasyRom, SettingCategory::Difficulty, SettingKind::Toggle,
       "EASY ROM", &RandomizerDefaults::easyRom,
-      "The same, for Rom's attendant spiders. Default: Off." },
+      "Replaces Rom's attendant spiders with harmless larvae." },
     { SettingId::EasyFailures, SettingCategory::Difficulty, SettingKind::Toggle,
       "EASY FAILURES", &RandomizerDefaults::easyFailures,
-      "The same, for the Living Failures. Default: Off." },
+      "Replaces the duplicate Living Failures with harmless larvae." },
     { SettingId::EasyEmissary, SettingCategory::Difficulty, SettingKind::Toggle,
       "EASY EMISSARY", &RandomizerDefaults::easyEmissary,
-      "The same, for the Celestial Emissary's lesser emissaries. Default: Off." },
+      "Replaces the Celestial Emissary's lesser emissaries with harmless "
+      "larvae." },
 
     // --- World -------------------------------------------------
     { SettingId::EnableMergoDarkness, SettingCategory::World, SettingKind::Toggle,
       "ENABLE MERGO DARKNESS", &RandomizerDefaults::enableMergoDarkness,
-      "Cuts the scripted darkness in Mergo's Loft. Not a randomizer - it is a "
-      "single fixed edit, and it applies whether or not anything else is on. Off "
-      "leaves the area exactly as the game shipped it. Default: Off." },
+      "Turns the Wet Nurse's arena darkness on for the whole game, from your "
+      "first spawn." },
 
     // --- Save --------------------------------------------------------------
     //
@@ -119,11 +106,9 @@ const SettingDef kSettings[] = {
     // does not contain this one.
     { SettingId::SaveData, SettingCategory::Save, SettingKind::SaveChoice,
       "SAVE DATA", &RandomizerDefaults::startFreshSave,
-      "What happens to save data when this world is activated. Keep Existing "
-      "restores this world's own save, or adopts the live save if it has none. "
-      "Start Fresh empties the container so the game starts a new playthrough. "
-      "Either way the live save is backed up first, and Start Fresh lasts one "
-      "activation. Default: Keep Existing." },
+      "Keep Existing restores this world's save, or uses your current save if "
+      "it has none. Start Fresh begins a new playthrough, and applies to this "
+      "activation only. Your save is always backed up first." },
 };
 
 const int kSettingCount = (int)(sizeof(kSettings) / sizeof(kSettings[0]));
@@ -144,29 +129,23 @@ const char* const kCategoryLabels[] = {
 };
 
 const char* const kSeedHelp =
-    "The number that determines this run's randomization. The same seed with "
-    "the same settings always produces the same world. Left/Right rolls a new "
-    "one; X edits it digit by digit.";
+    "Determines this world's randomization. The same seed and settings always "
+    "produce the same world.";
 
 const char* const kTitleIdHelp =
-    "The PS4 title ID of the Bloodborne installation the randomizer writes for. "
-    "Four letters and five digits, the shape the console itself uses. X edits it "
-    "one character at a time. Default: CUSA03173, the Europe and Game of the "
-    "Year release.";
+    "The PS4 title ID of the Bloodborne installation the randomizer writes to. "
+    "CUSA03173 is the Europe and Game of the Year release.";
 
 // FINISH is gone with the Enable wizard's rail: the world editor activates on
 // OPTIONS from anywhere on the screen, so there is no row to describe. NAME
 // and HISTORY are its two replacements (worlds plan 4.5).
 const char* const kNameHelp =
-    "What this world is called. Up to sixteen characters of A to Z, 0 to 9 and "
-    "space, edited one character at a time. The name is yours to change at any "
-    "time - it is not part of the recipe, so renaming a world records no new "
-    "revision.";
+    "What this world is called. Up to 16 characters. Renaming does not create "
+    "a new revision.";
 
 const char* const kHistoryHelp =
-    "Every recipe this world has ever had, newest first. Nothing here is ever "
-    "overwritten: choosing an older revision makes it current by adding a new "
-    "one, so the list only grows.";
+    "Every set of settings this world has had, newest first. Choosing an older "
+    "one makes it current, so the list only grows.";
 
 } // namespace
 

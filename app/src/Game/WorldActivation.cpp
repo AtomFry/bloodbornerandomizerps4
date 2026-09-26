@@ -167,7 +167,7 @@ Refusal CheckActivation(const ActivationFacts& f) {
     // --- Save title (B29) - never the AFR title, which is a separate value ---
     if (f.saveTitlesWithHits == 0) {
         return Refuse(RefusalReason::SaveTitle,
-                      "NO BLOODBORNE SAVE DATA FOR THIS PLAYER - RUN BLOODBORNE ONCE FIRST");
+                      "RUN BLOODBORNE ONCE BEFORE ACTIVATING THIS WORLD");
     }
     if (f.saveTitlesWithHits > 1) {
         return Refuse(RefusalReason::SaveTitle,
@@ -187,8 +187,7 @@ Refusal CheckActivation(const ActivationFacts& f) {
     // --- Container (B33) - the app can never create one ---
     if (f.worldHasStoredSave && !f.containerExists) {
         return Refuse(RefusalReason::NoContainer,
-                      "THIS WORLD HAS A SAVE AND THERE IS NO CONTAINER - "
-                      "RUN THE GAME ONCE");
+                      "RUN BLOODBORNE ONCE BEFORE ACTIVATING THIS WORLD");
     }
 
     // --- Container size (B25) ---
@@ -254,13 +253,13 @@ const char* SaveActionName(SaveAction action) {
 const char* SaveActionSentence(SaveAction action) {
     switch (action) {
         case SaveAction::Nothing:
-            return "THIS WORLD IS ALREADY ACTIVE - ITS SAVE STAYS WHERE IT IS";
+            return "UNCHANGED - THIS WORLD IS ALREADY ACTIVE";
         case SaveAction::RestoreOwn:
-            return "THIS WORLD'S OWN SAVE IS PUT BACK";
+            return "THIS WORLD'S SAVE IS RESTORED";
         case SaveAction::AdoptLive:
-            return "THIS WORLD HAS NO SAVE YET - IT ADOPTS THE ONE ON THE CONSOLE";
+            return "ADOPTS YOUR CURRENT SAVE - THIS WORLD HAS NONE";
         case SaveAction::StartFresh:
-            return "THE SAVE IS BACKED UP AND THE GAME STARTS A NEW PLAYTHROUGH";
+            return "BACKED UP, THEN A NEW PLAYTHROUGH BEGINS";
         case SaveAction::NoContainer:
             return "BLOODBORNE HAS NOT MADE A SAVE YET - IT WILL AT NEXT LAUNCH";
     }
@@ -1286,7 +1285,7 @@ void WorldReconcileJob::Step() {
         case ReconcileAction::ResumeSaveSwap:
         case ReconcileAction::FinishCommit:
             if (!s.user.valid) {
-                s.Finish("NO SIGNED-IN PLAYER - THE ACTIVATION CANNOT BE FINISHED", false);
+                s.Finish("NO PLAYER SIGNED IN", false);
                 return;
             }
             s.resume.reset(new WorldActivationJob(s.user, s.afrTitleId, s.result.journal));

@@ -67,6 +67,21 @@ CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables \
 # nanosleep() in its wait/backoff path, so strict mode fails to build.
 CXXFLAGS := $(CFLAGS) -isystem $(TOOLCHAIN)/include/c++/v1 -std=gnu++17
 
+# -MMD -MP: emit a .d file beside each .o listing the headers that .cpp
+# included, and give each header a phony rule so deleting one does not break
+# the build. Without this the only prerequisite of an object is its own .cpp,
+# so a changed HEADER rebuilds nothing.
+#
+# That is not a theoretical tidiness point. On 2026-09-26 the startup-screen
+# work changed UI/WorldsScreen.h - removing two members, adding four - without
+# touching Application.cpp, which includes that header and does
+# make_unique<WorldsScreen>(). An incremental `make` rebuilt WorldsScreen.o and
+# left Application.o eight hours stale, so the allocation used the OLD sizeof
+# and the constructor wrote the NEW layout past the end of it. The app started
+# fine and crashed at the first screen switch, when that block was freed.
+# Nothing in the source was wrong; the build was.
+CXXFLAGS += -MMD -MP
+
 LDFLAGS := -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr \
            -L$(TOOLCHAIN)/lib $(LIBS) $(TOOLCHAIN)/lib/crt1.o
 
@@ -75,6 +90,7 @@ LDFLAGS := -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr \
 # into them.
 SRC_CPP := $(shell find $(PROJDIR) -name '*.cpp')
 OBJS    := $(patsubst $(PROJDIR)/%.cpp,$(INTDIR)/%.o,$(SRC_CPP))
+DEPS    := $(OBJS:.o=.d)
 
 LIBMODULES := $(wildcard sce_module/*)
 
@@ -87,6 +103,10 @@ all: $(CONTENT_ID).pkg
 $(INTDIR)/%.o: $(PROJDIR)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+# The generated header dependencies. Included last, and with a leading '-' so
+# a first build - when no .d exists yet - is not an error.
+-include $(DEPS)
 
 eboot.bin: $(OBJS)
 	$(LD) $(OBJS) -o $(INTDIR)/bbrandomizer.elf $(LDFLAGS)

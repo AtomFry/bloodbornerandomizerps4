@@ -130,34 +130,27 @@ const char* const kRowNewWorld = "+ NEW WORLD";
 
 const char* const kHelpNewWorldTitle = "+ NEW WORLD";
 const char* const kHelpNewWorldBody =
-    "Creates a world and opens it in the editor, filled in from the DEFAULTS "
-    "tab. Nothing is written until the world is activated.";
+    "Create a new world using your default settings.";
 
 const char* const kHelpVanillaTitle = "VANILLA";
 const char* const kHelpVanillaBody =
-    "The game as it shipped. Vanilla has no settings and cannot be deleted. "
-    "Activating it removes the randomizer's files and makes Vanilla's own save "
-    "data live again.";
+    "Play Bloodborne with the original game files and save data.";
 
 const char* const kHelpWorldTitle = "WORLD";
 const char* const kHelpWorldBody =
-    "One playthrough: a set of randomizer settings and the save data produced "
-    "by playing them. X opens it in the editor, where it can be changed and "
-    "activated.";
+    "A saved randomizer setup and its save data.";
 
 const char* const kNoteNewWorld =
-    "A NEW WORLD STARTS FROM THE DEFAULTS TAB AND IS SAVED WHEN THE EDITOR IS "
-    "FINISHED";
+    "STARTS FROM YOUR DEFAULT SETTINGS";
 
 const char* const kNoteVanilla =
-    "VANILLA HAS NO SETTINGS AND NO REVISIONS AND CANNOT BE DELETED";
+    "NO SETTINGS - CANNOT BE DELETED";
 
 const char* const kNoteNoContainer =
-    "BLOODBORNE HAS NOT MADE SAVE DATA ON THIS CONSOLE YET - RUN THE GAME ONCE "
-    "BEFORE ACTIVATING THIS WORLD";
+    "RUN BLOODBORNE ONCE BEFORE ACTIVATING THIS WORLD";
 
 const char* const kNoteContainerTooSmall =
-    "THIS WORLD'S SAVE NEEDS A LARGER SAVE CONTAINER THAN THIS CONSOLE HAS";
+    "THIS WORLD'S SAVE IS TOO LARGE FOR THIS CONSOLE";
 
 // --- the delete confirmation (B17) ----------------------------------------
 //
@@ -166,18 +159,18 @@ const char* const kNoteContainerTooSmall =
 // named with their own prefix and not kNote.
 const char* const kDeleteTitle = "DELETE WORLD";
 const char* const kDeleteLine1 =
-    "THIS REMOVES THE WORLD AND EVERY REVISION IT HAS";
+    "REMOVES THIS WORLD AND ALL ITS REVISIONS";
 const char* const kDeleteLine2 =
-    "ITS SAVE DATA IS KEPT AS A SAFETY BACKUP AND IS NOT DELETED";
+    "ITS SAVE DATA IS KEPT";
 const char* const kDeleteFooter = "X DELETE   O CANCEL";
 const char* const kDeleteRefusedFooter = "O BACK";
 const char* const kDeleteKeptLine =
-    "ITS SAVE DATA WAS KEPT IN SAVEBACKUPS";
+    "SAVE DATA KEPT IN SAVEBACKUPS";
 
 const char* const kRefuseVanilla =
-    "VANILLA IS ALWAYS PRESENT AND CANNOT BE DELETED";
+    "VANILLA CANNOT BE DELETED";
 const char* const kRefuseActive =
-    "THIS WORLD IS ACTIVE - ACTIVATE ANOTHER WORLD BEFORE DELETING IT";
+    "ACTIVE WORLDS CANNOT BE DELETED";
 
 // --- the startup screen's own words ---------------------------------------
 //
@@ -200,11 +193,11 @@ const char* const kProblemTitle = "STARTUP PROBLEM";
 const char* const kProblemReconcileFailed =
     "AN INTERRUPTED ACTIVATION COULD NOT BE FINISHED";
 const char* const kProblemJournalNotUnderstood =
-    "AN INTERRUPTED ACTIVATION WAS NOT UNDERSTOOD AND WAS LEFT ALONE";
+    "AN INTERRUPTED ACTIVATION COULD NOT BE READ - IT WAS LEFT ALONE";
 const char* const kProblemCaptureFailed =
-    "THE EXISTING SAVE COULD NOT BE FILED INTO VANILLA";
+    "YOUR SAVE COULD NOT BE COPIED INTO VANILLA";
 const char* const kProblemNoSignedInPlayer =
-    "NO SIGNED-IN PLAYER";
+    "NO PLAYER SIGNED IN";
 
 const char* const kProblemScrollHint = "UP DOWN SCROLL";
 

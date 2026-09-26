@@ -79,3 +79,34 @@ Do not rename a setting, invert its polarity, or infer its runtime meaning from 
 The kernel structure's layout should not be assumed to match the real ABI field-for-field. Treat any `OrbisKernelStat` field that has not already been validated on hardware with suspicion.
 
 `st_mode` has been hardware-validated and has behaved correctly.
+
+## An incremental `make` did not rebuild on a changed header
+
+**Fixed 2026-09-26**, recorded because the symptom pointed nowhere near the
+cause and the next person to see something like it should recognise the shape.
+
+`app/Makefile`'s compile rule was `$(INTDIR)/%.o: $(PROJDIR)/%.cpp` and nothing
+else, so an object's only prerequisite was its own `.cpp`. **A changed header
+rebuilt nothing.**
+
+It surfaced when the startup-screen work changed `UI/WorldsScreen.h` — removing
+two members, adding four — without touching `Application.cpp`, which includes
+that header and calls `make_unique<WorldsScreen>()`. An incremental `make`
+rebuilt `WorldsScreen.o` and left `Application.o` eight hours stale. The
+allocation therefore used the **old** `sizeof` while the constructor wrote the
+**new** layout past the end of it.
+
+**The symptom was not a crash at the corruption.** The app started, ran, drew
+the rail and the details pane. It died at the first screen switch — the first
+free-and-allocate after the overflow — with a log that ended on a line that had
+nothing to do with the fault. Nothing in the source was wrong.
+
+`CXXFLAGS += -MMD -MP` and `-include $(DEPS)` now generate and consume real
+header dependencies. Two things follow:
+
+* **A crash that appears after an incremental build, in code you did not
+  change, is a stale-object suspect first.** Compare object mtimes against
+  header mtimes before reading the code.
+* **Milestone 6 of the worlds feature rebuilt with `rm -rf src/x64 && make`**,
+  which is why the hardware test that passed on 2026-09-25 was sound. Builds
+  that used a plain `make` after a header change were not.
