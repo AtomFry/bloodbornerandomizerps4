@@ -662,10 +662,16 @@ def cmd_selftest(root):
     picker_src = open(os.path.join(UI_SRC, "ModelPicker.h"), encoding="utf-8").read()
     skip_strings = picker_src.split("kEnemiesSkippedStrings", 1)[1].split("};", 1)[0]
     skip_words = re.findall(r'"((?:[^"\\]|\\.)*)"', skip_strings)
-    # Seven, one per PickerStrings field: heading, instruction, the two flag
-    # words, the two confirm verbs and the footer.
-    cases.append(("032: the skipped picker declares all seven of its strings",
-                  len(skip_words) == 7))
+    # Eight, one per PickerStrings field: heading, instruction, the two flag
+    # words, the two confirm verbs, and the two footer VERBS.
+    #
+    # It was seven while the footer was one flat string reading "SQUARE SKIP ALL
+    # TRIANGLE SKIP NONE   O BACK". U4 pass 4 made that line a prompt row, so
+    # the buttons are fixed in ModelPicker.cpp and only the two verbs are the
+    # picker's own - BACK went with the string, because it is the same word on
+    # all three pickers.
+    cases.append(("032: the skipped picker declares all eight of its strings",
+                  len(skip_words) == 8))
     cases.append(("032: every picker string is renderable and fits the line",
                   all(renderable(w) and len(w) <= LINE_CHARS for w in skip_words)))
     cases.append(("032: the instruction line is the 42-character F13 wording",

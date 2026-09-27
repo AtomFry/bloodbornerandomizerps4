@@ -150,12 +150,13 @@ const ListLayout   kProgressLayout = { 300, 70, 920, 50 };
 // and the letters X and O that used to stand in for the glyphs looked like
 // nothing on the pad.
 //
-// LEFT RIGHT and UP DOWN share the d-pad glyph, so they are one prompt each
-// with the direction in the label; the pad has one d-pad and saying so twice
-// would be inventing a second.
+// Each direction gets the d-pad with ITS OWN ARMS LIT - kBtnDpadHorz here, and
+// kBtnDpadVert where a prompt means up/down. That is how the game's own footers
+// do it, and it is why the labels no longer carry the words LEFT RIGHT: the
+// glyph says which half of the pad, so repeating it in text said it twice.
 const ButtonPrompt kFooterPrompts[] = {
     { kBtnDpad,     "MOVE" },
-    { nullptr,      "LEFT RIGHT TABS" },
+    { kBtnDpadHorz, "TABS" },
     { kBtnCross,    "SELECT" },
     { kBtnTriangle, "DELETE" },
     { kBtnCircle,   "EXIT" },

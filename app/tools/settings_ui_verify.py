@@ -1282,9 +1282,10 @@ def main():
 
     # A prompt whose glyph is not one of the five baked ones would draw a blank
     # gap - DrawText advances for a glyph it cannot find.
-    known = {"kBtnCross", "kBtnCircle", "kBtnTriangle", "kBtnSquare", "kBtnDpad"}
+    known = {"kBtnCross", "kBtnCircle", "kBtnTriangle", "kBtnSquare",
+             "kBtnDpad", "kBtnDpadVert", "kBtnDpadHorz"}
     unknown = sorted({g for r in all_rows.values() for g, _ in r if g and g not in known})
-    cases.append(("U4: every prompt glyph is one of the five baked buttons",
+    cases.append(("U4: every prompt glyph is one of the %d baked buttons" % len(known),
                   not unknown))
     if unknown:
         detail.append("   unknown prompt glyphs: %s" % unknown)
@@ -1681,13 +1682,28 @@ def main():
     # this milestone put in it - the two facts that made them two footers.
     worlds_row = all_rows["WorldsScreen.kFooterPrompts"]
     rail_row = all_rows["SetupDefaultsScreen.kRailFooterPrompts"]
-    worlds_labels = " ".join(l for _, l in worlds_row)
-    rail_labels = " ".join(l for _, l in rail_row)
-    cases.append(("5: the worlds footer still names tabs, and delete on TRIANGLE",
-                  "LEFT RIGHT TABS" in worlds_labels and
-                  any(g == "kBtnTriangle" and l == "DELETE" for g, l in worlds_row)))
-    cases.append(("5: the DEFAULTS rail footer still names tabs",
-                  "LEFT RIGHT TABS" in rail_labels))
+    # The words LEFT RIGHT are gone from both: the axis d-pad glyph says which
+    # half of the pad, so the label is just the verb. What is asserted is that
+    # TABS is still offered and still on the horizontal d-pad.
+    def has(row, glyph, label):
+        return any(g == glyph and l == label for g, l in row)
+
+    cases.append(("5: the worlds footer puts TABS on the horizontal d-pad and "
+                  "DELETE on TRIANGLE",
+                  has(worlds_row, "kBtnDpadHorz", "TABS") and
+                  has(worlds_row, "kBtnTriangle", "DELETE")))
+    cases.append(("5: the DEFAULTS rail footer puts TABS on the horizontal d-pad",
+                  has(rail_row, "kBtnDpadHorz", "TABS")))
+
+    # An AXIS d-pad and a plain one mean different things, so a prompt that
+    # means one direction must not carry the all-arms glyph - that is the pad
+    # saying "any direction" over a label that means one axis.
+    axis_labels = {"TABS", "CHANGE", "SELECT"}
+    miscast = [(k, l) for k, r in all_rows.items() for g, l in r
+               if g == "kBtnDpad" and l in axis_labels]
+    cases.append(("U4: no single-axis prompt carries the all-arms d-pad", not miscast))
+    if miscast:
+        detail.append("   all-arms d-pad on an axis prompt: %s" % miscast)
 
     # The delete confirmation (B17). Centred on the whole screen rather than
     # drawn into the details pane, so these are measured against 1920 - which

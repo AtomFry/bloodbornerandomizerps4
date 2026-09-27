@@ -51,7 +51,12 @@ struct PickerStrings {
     const char* flagOff;      // ...and when it is not
     const char* verbAll;      // confirm prompt, e.g. "SKIP ALL"
     const char* verbNone;     // ...e.g. "SKIP NONE"
-    const char* footer;       // the second footer line, naming both verbs
+    // The second footer line's two VERBS. Not a whole line any more: it is a
+    // prompt row now, so the glyphs are fixed - SQUARE for all, TRIANGLE for
+    // none, CIRCLE for back - and only the words differ between pickers. BACK
+    // is not here because it is the same word on all three.
+    const char* allVerb;      // what SQUARE does - "ALL", "SKIP ALL"
+    const char* noneVerb;     // what TRIANGLE does - "NONE", "SKIP NONE"
 };
 
 // The three lists' vocabulary, defined once because both hosting screens draw
@@ -72,7 +77,7 @@ inline constexpr PickerStrings kEnemiesIncludedStrings = {
     nullptr,
     "YES", "NO",
     "ENABLE ALL", "DISABLE ALL",
-    "SQUARE ALL   TRIANGLE NONE   O BACK",
+    "ALL", "NONE",
 };
 
 inline constexpr PickerStrings kBossesIncludedStrings = {
@@ -80,7 +85,7 @@ inline constexpr PickerStrings kBossesIncludedStrings = {
     nullptr,
     "YES", "NO",
     "ENABLE ALL", "DISABLE ALL",
-    "SQUARE ALL   TRIANGLE NONE   O BACK",
+    "ALL", "NONE",
 };
 
 // YES/NO under a heading reading ENEMIES SKIPPED is genuinely ambiguous -
@@ -91,7 +96,7 @@ inline constexpr PickerStrings kEnemiesSkippedStrings = {
     "SELECT ENEMIES THAT WILL NOT BE RANDOMIZED",
     "SKIPPED", "-",
     "SKIP ALL", "SKIP NONE",
-    "SQUARE SKIP ALL   TRIANGLE SKIP NONE   O BACK",
+    "SKIP ALL", "SKIP NONE",
 };
 
 class ModelPicker {

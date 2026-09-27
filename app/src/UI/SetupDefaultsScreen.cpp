@@ -92,7 +92,7 @@ const int kPanelPad = 14;
 // changes a value in the pane and switches tabs on the rail.
 const ButtonPrompt kFooterPrompts[] = {
     { kBtnDpad,   "MOVE" },
-    { nullptr,    "LEFT RIGHT CHANGE" },
+    { kBtnDpadHorz, "CHANGE" },
     { kBtnCross,  "SELECT" },
     { kBtnCircle, "BACK" },
     { nullptr,    "OPTIONS SAVE" },
@@ -105,7 +105,7 @@ const int kFooterPromptCount = (int)(sizeof(kFooterPrompts) / sizeof(kFooterProm
 // throwing both inputs away.
 const ButtonPrompt kRailFooterPrompts[] = {
     { kBtnDpad,   "MOVE" },
-    { nullptr,    "LEFT RIGHT TABS" },
+    { kBtnDpadHorz, "TABS" },
     { kBtnCross,  "SELECT" },
     { kBtnCircle, "BACK" },
     { nullptr,    "OPTIONS SAVE" },
@@ -481,8 +481,8 @@ void SetupDefaultsScreen::DrawEditTitleId(Renderer& renderer) {
     }
 
     const ButtonPrompt moveRow[] = {
-        { nullptr,  "LEFT RIGHT SELECT" },
-        { kBtnDpad, "UP DOWN CHANGE" },
+        { kBtnDpadHorz, "SELECT" },
+        { kBtnDpadVert, "CHANGE" },
     };
     DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 2, kFooterScale);
 

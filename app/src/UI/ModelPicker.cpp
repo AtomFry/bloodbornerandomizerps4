@@ -221,10 +221,16 @@ void ModelPicker::Draw(Renderer& renderer, const PickerStrings& strings,
     };
     DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 3, kFooterScale);
 
-    // The second line names both verbs and is the picker's own string, so it
-    // stays one label - its two halves are not button prompts.
-    DrawCenteredLabel(renderer, kScreenHeight - 80, strings.footer, kFooterScale,
-                      Palette::Dim);
+    // The second line IS a prompt row - three buttons, and only the two verbs
+    // differ between the three pickers. It was one flat string reading
+    // "SQUARE ALL   TRIANGLE NONE   O BACK", which named the buttons in words
+    // beside a footer that had already stopped doing that everywhere else.
+    const ButtonPrompt verbRow[] = {
+        { kBtnSquare,   strings.allVerb },
+        { kBtnTriangle, strings.noneVerb },
+        { kBtnCircle,   "BACK" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 80, verbRow, 3, kFooterScale);
 
     // The prompt goes last, over the list it is asking about, so the counts
     // it quotes can be read against the rows they came from.

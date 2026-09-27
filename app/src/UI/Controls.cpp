@@ -347,7 +347,9 @@ Color ButtonColor(const char* glyph) {
         case 0x81: return Palette::BtnCircle;
         case 0x82: return Palette::BtnTriangle;
         case 0x83: return Palette::BtnSquare;
-        case 0x84: return Palette::BtnDpad;
+        case 0x84:                       // the pad, all four arms lit
+        case 0x85:                       // up/down lit
+        case 0x86: return Palette::BtnDpad;   // left/right lit
         default:   return Palette::Dim;
     }
 }

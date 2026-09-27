@@ -184,7 +184,7 @@ const int kPanelPad = 14;
 // it rides as a plain prompt with the word in the label.
 const ButtonPrompt kFooterPrompts[] = {
     { kBtnDpad,  "MOVE" },
-    { nullptr,   "LEFT RIGHT CHANGE" },
+    { kBtnDpadHorz, "CHANGE" },
     { kBtnCross, "SELECT" },
     { kBtnCircle, "BACK" },
     { nullptr,   "OPTIONS SAVE AND ACTIVATE" },
@@ -1659,8 +1659,8 @@ void WorldEditorScreen::DrawEditName(Renderer& renderer) {
     }
 
     const ButtonPrompt moveRow[] = {
-        { nullptr,   "LEFT RIGHT SELECT" },
-        { kBtnDpad,  "UP DOWN CHANGE" },
+        { kBtnDpadHorz, "SELECT" },
+        { kBtnDpadVert, "CHANGE" },
     };
     DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 2, kFooterScale);
     DrawPromptRow(renderer, kScreenHeight - 80, kAcceptCancel, kAcceptCancelCount,
@@ -1691,8 +1691,8 @@ void WorldEditorScreen::DrawEditSeed(Renderer& renderer) {
     }
 
     const ButtonPrompt moveRow[] = {
-        { nullptr,     "LEFT RIGHT SELECT" },
-        { kBtnDpad,    "UP DOWN CHANGE" },
+        { kBtnDpadHorz, "SELECT" },
+        { kBtnDpadVert, "CHANGE" },
         { kBtnSquare,  "RANDOM" },
     };
     DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 3, kFooterScale);

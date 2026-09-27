@@ -56,17 +56,38 @@ SQUARE_CODE   = 131
 # 17px the arrowheads fill in and the whole thing reads as a blob.
 DPAD_CODE     = 132
 
+# The two AXIS d-pads: the whole pad is drawn either way, but only the arms the
+# prompt is about are lit. This is how the game's own footers do it - the pad is
+# always the pad, and which half you press is said by which half is bright.
+#
+# Two brightnesses inside ONE glyph, which the atlas can do because it stores
+# COVERAGE rather than colour: the dim arms are drawn at DIM_LEVEL and tint to a
+# darker shade of whatever colour the caller asks for. One glyph, one draw call,
+# no change to DrawText.
+DPAD_VERT_CODE = 133      # up/down lit
+DPAD_HORZ_CODE = 134      # left/right lit
+
 FIRST_CODE = CROSS_CODE
-LAST_CODE  = DPAD_CODE
-CODES = (CROSS_CODE, CIRCLE_CODE, TRIANGLE_CODE, SQUARE_CODE, DPAD_CODE)
+LAST_CODE  = DPAD_HORZ_CODE
+CODES = (CROSS_CODE, CIRCLE_CODE, TRIANGLE_CODE, SQUARE_CODE,
+         DPAD_CODE, DPAD_VERT_CODE, DPAD_HORZ_CODE)
+
+DPAD_CODES = (DPAD_CODE, DPAD_VERT_CODE, DPAD_HORZ_CODE)
 
 NAMES = {
-    CROSS_CODE:    "BUTTON CROSS",
-    CIRCLE_CODE:   "BUTTON CIRCLE",
-    TRIANGLE_CODE: "BUTTON TRIANGLE",
-    SQUARE_CODE:   "BUTTON SQUARE",
-    DPAD_CODE:     "DPAD",
+    CROSS_CODE:     "BUTTON CROSS",
+    CIRCLE_CODE:    "BUTTON CIRCLE",
+    TRIANGLE_CODE:  "BUTTON TRIANGLE",
+    SQUARE_CODE:    "BUTTON SQUARE",
+    DPAD_CODE:      "DPAD",
+    DPAD_VERT_CODE: "DPAD UP DOWN",
+    DPAD_HORZ_CODE: "DPAD LEFT RIGHT",
 }
+
+# How bright the UNLIT arms of an axis d-pad are, as coverage out of 255. Low
+# enough that the lit arms clearly win, high enough that the pad still reads as
+# a whole pad rather than as a bar floating in space.
+DIM_LEVEL = 64
 
 # Ink box as a fraction of the em, and where it sits relative to the baseline.
 #
@@ -90,6 +111,13 @@ SS = 8                    # supersampling factor, as mark_glyph.py
 RING_W = 0.085
 SYM_W  = 0.080
 
+# The d-pad's arms are much thicker than a face button's symbol, because a
+# d-pad IS a chunky plus and a thin cross reads as a maths symbol. It also does
+# the axis variants a favour: the lit/unlit difference is carried by area, and
+# at SYM_W there was not enough of either arm for the contrast to register at
+# 17px.
+DPAD_W = 0.185
+
 # How far in from the ring the symbol sits. The console's symbols are small
 # inside a generous ring; crowding them makes the glyph read as a solid dot.
 INSET = 0.30
@@ -101,17 +129,17 @@ def _ring(draw, size):
                  outline=255, width=max(1, int(round(r))))
 
 
-def _stroke(draw, size, points, closed=False):
-    w = max(1, int(round(SYM_W * size)))
+def _stroke(draw, size, points, closed=False, fill=255, w=None):
+    w = max(1, int(round((SYM_W if w is None else w) * size)))
     pts = [(x * size, y * size) for x, y in points]
     if closed:
         pts = pts + [pts[0]]
-    draw.line(pts, fill=255, width=w, joint="curve")
+    draw.line(pts, fill=fill, width=w, joint="curve")
     # Round the ends, as mark_glyph.py does: PIL's caps are square, and a
     # square cap on a diagonal reads as a cut-off staircase once downsampled.
     r = max(1, w // 2)
     for p in (pts[0], pts[-1]):
-        draw.ellipse([p[0] - r, p[1] - r, p[0] + r, p[1] + r], fill=255)
+        draw.ellipse([p[0] - r, p[1] - r, p[0] + r, p[1] + r], fill=fill)
 
 
 def _symbol(draw, size, code):
@@ -139,11 +167,26 @@ def _symbol(draw, size, code):
         s, t = a + 0.03, b - 0.03
         _stroke(draw, size, [(s, s), (t, s), (t, t), (s, t)], closed=True)
 
-    elif code == DPAD_CODE:
+    elif code in DPAD_CODES:
         # A plus, inscribed rather than ringed - the d-pad is not a round
         # button and giving it the ring would say it was one.
-        _stroke(draw, size, [(0.5, 0.14), (0.5, 0.86)])
-        _stroke(draw, size, [(0.14, 0.5), (0.86, 0.5)])
+        #
+        # The dim arm goes down FIRST and the lit one over it, so the centre of
+        # the pad - where the two cross - ends up lit in every variant. Drawn
+        # the other way round the middle would be dim and the pad would look
+        # broken rather than half-lit.
+        vert = [(0.5, 0.10), (0.5, 0.90)]
+        horz = [(0.10, 0.5), (0.90, 0.5)]
+        lit_vert = code in (DPAD_CODE, DPAD_VERT_CODE)
+        lit_horz = code in (DPAD_CODE, DPAD_HORZ_CODE)
+        if not lit_vert:
+            _stroke(draw, size, vert, fill=DIM_LEVEL, w=DPAD_W)
+        if not lit_horz:
+            _stroke(draw, size, horz, fill=DIM_LEVEL, w=DPAD_W)
+        if lit_vert:
+            _stroke(draw, size, vert, w=DPAD_W)
+        if lit_horz:
+            _stroke(draw, size, horz, w=DPAD_W)
 
     else:                                              # pragma: no cover
         raise ValueError("not a button codepoint: %r" % (code,))
@@ -161,8 +204,8 @@ def button_mask(code, pixel_size):
     big = Image.new("L", (w * SS, h * SS), 0)
     draw = ImageDraw.Draw(big)
 
-    # The d-pad has no ring; every face button does.
-    if code != DPAD_CODE:
+    # The d-pads have no ring; every face button does.
+    if code not in DPAD_CODES:
         _ring(draw, h * SS)
     _symbol(draw, h * SS, code)
 

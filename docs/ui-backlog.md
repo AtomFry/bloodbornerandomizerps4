@@ -175,6 +175,30 @@ Three things that fell out of it, all now pinned:
   their own literals: 0x80 and up are not valid UTF-8 alone, and a source file
   carrying them raw is at the mercy of how a compiler reads it.
 
+**Amended after the first hardware test, 2026-09-27.** Two things the console
+showed that a mockup could not:
+
+- **The three picker footers were still prose** — `SQUARE ALL   TRIANGLE NONE
+  O BACK` as a flat string, naming buttons in words on the one screen where
+  every other footer had stopped doing that. They are prompt rows now, and
+  `PickerStrings` carries the two VERBS rather than a whole line, since the
+  three buttons are the same on all three pickers and only the wording differs
+  (`ALL` / `SKIP ALL`).
+- **Left/right had no glyph at all.** There was one d-pad glyph, used wherever a
+  prompt meant *any* direction, and every horizontal prompt was plain text — so
+  `UP DOWN CHANGE` got a symbol and `LEFT RIGHT CHANGE` did not, in the same
+  footer. There are now **three** d-pads: all arms lit, up/down lit, left/right
+  lit. The unlit arms are baked at partial coverage, so they tint to a darker
+  shade of the same colour — two brightnesses inside one glyph, one draw call,
+  no change to `DrawText`. The words `LEFT RIGHT` and `UP DOWN` are gone from
+  the labels, because the glyph now says which half of the pad and the text was
+  saying it twice.
+
+The d-pad arms are drawn much thicker than a face button's symbol (`DPAD_W`
+0.185 against `SYM_W` 0.080). A thin cross reads as a maths symbol rather than a
+pad, and the axis variants need the area: at the symbol width there was not
+enough of either arm for the lit/unlit contrast to register at 17px.
+
 **L1/R1 keep their words.** They are labelled shoulder buttons rather than
 symbols, and inventing a glyph for a button with its name printed on it would be
 worse than the words. The picker's second footer line stays prose for the same

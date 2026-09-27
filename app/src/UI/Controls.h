@@ -99,9 +99,12 @@ namespace Palette {
     constexpr Color BtnCircle   = { 206, 86,  80  };   // red
     constexpr Color BtnTriangle = { 112, 184, 144 };   // green
     constexpr Color BtnSquare   = { 198, 120, 178 };   // pink
-    // The d-pad is not colour-coded on the pad, so it takes the label's own
-    // colour rather than inventing a fifth.
-    constexpr Color BtnDpad     = { 150, 140, 124 };
+    // The d-pad is not colour-coded on the pad, so it does not take a hue of
+    // its own - but it is warmed toward gold rather than left grey, because the
+    // AXIS variants carry their meaning in brightness: the lit arms are this
+    // colour and the unlit ones a darker shade of it, and a starting colour too
+    // close to the ground leaves nothing for the dim arms to be darker than.
+    constexpr Color BtnDpad     = { 186, 164, 116 };
 }
 
 // The Hunter's Mark, drawn as TEXT. app/tools/mark_glyph.py bakes it into the
@@ -131,6 +134,12 @@ constexpr const char* kBtnCircle   = "\x81";
 constexpr const char* kBtnTriangle = "\x82";
 constexpr const char* kBtnSquare   = "\x83";
 constexpr const char* kBtnDpad     = "\x84";
+// The two AXIS d-pads: the whole pad, with only the arms the prompt is about
+// lit. The unlit arms are baked at partial coverage, so they tint to a darker
+// shade of the same colour rather than needing a second draw call - see
+// button_glyphs.py DIM_LEVEL.
+constexpr const char* kBtnDpadVert = "\x85";   // up/down lit
+constexpr const char* kBtnDpadHorz = "\x86";   // left/right lit
 
 // How hard an overlay dims whatever is behind it - black at this alpha of 255.
 // A pixel behind an overlay survives at (255 - alpha) / 255 of its brightness.
