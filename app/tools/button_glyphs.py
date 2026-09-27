@@ -118,6 +118,19 @@ SYM_W  = 0.080
 # 17px.
 DPAD_W = 0.185
 
+# The hub. Four ARMS around a small hole, not two bars crossing - a pad whose
+# centre is solid reads as one plus-shaped button, and what it has to say is
+# that there are four directions to press. It also sharpens the axis variants:
+# with a hole in the middle, a lit pair is two separate lit arms rather than one
+# continuous bar through the centre.
+#
+# 0.16 of the square is about 3px at the footer size, which is the smallest gap
+# that survives the downsample as a gap rather than silting up to grey.
+DPAD_GAP = 0.16
+
+# How far the arms reach from the centre.
+DPAD_REACH = 0.90
+
 # How far in from the ring the symbol sits. The console's symbols are small
 # inside a generous ring; crowding them makes the glyph read as a solid dot.
 INSET = 0.30
@@ -175,18 +188,26 @@ def _symbol(draw, size, code):
         # the pad - where the two cross - ends up lit in every variant. Drawn
         # the other way round the middle would be dim and the pad would look
         # broken rather than half-lit.
-        vert = [(0.5, 0.10), (0.5, 0.90)]
-        horz = [(0.10, 0.5), (0.90, 0.5)]
+        #
+        # Drawn as four RECTANGLES rather than two strokes, because a stroke's
+        # rounded cap would fill the hub back in from both sides. Square inner
+        # ends are also what a real pad has.
+        half = DPAD_W * size / 2.0
+        gap = DPAD_GAP * size / 2.0
+        mid = 0.5 * size
+        far = DPAD_REACH * size
+        near = size - far
+
+        up    = [mid - half, near,      mid + half, mid - gap]
+        down  = [mid - half, mid + gap, mid + half, far]
+        left  = [near,       mid - half, mid - gap, mid + half]
+        right = [mid + gap,  mid - half, far,       mid + half]
+
         lit_vert = code in (DPAD_CODE, DPAD_VERT_CODE)
         lit_horz = code in (DPAD_CODE, DPAD_HORZ_CODE)
-        if not lit_vert:
-            _stroke(draw, size, vert, fill=DIM_LEVEL, w=DPAD_W)
-        if not lit_horz:
-            _stroke(draw, size, horz, fill=DIM_LEVEL, w=DPAD_W)
-        if lit_vert:
-            _stroke(draw, size, vert, w=DPAD_W)
-        if lit_horz:
-            _stroke(draw, size, horz, w=DPAD_W)
+        for arms, lit in ((( up, down), lit_vert), ((left, right), lit_horz)):
+            for arm in arms:
+                draw.rectangle(arm, fill=255 if lit else DIM_LEVEL)
 
     else:                                              # pragma: no cover
         raise ValueError("not a button codepoint: %r" % (code,))

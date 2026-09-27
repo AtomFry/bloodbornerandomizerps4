@@ -199,6 +199,14 @@ The d-pad arms are drawn much thicker than a face button's symbol (`DPAD_W`
 pad, and the axis variants need the area: at the symbol width there was not
 enough of either arm for the lit/unlit contrast to register at 17px.
 
+**The pad is four arms around a hub, not two crossing bars** — a small hole at
+the centre, so what the glyph says is *there are four directions to press*
+rather than *here is one plus-shaped button*. It also sharpens the axis
+variants: with the hub open, a lit pair reads as two separate lit arms instead
+of one bar running through the middle. They are drawn as rectangles rather than
+strokes for it, because a stroke's rounded cap fills the hub back in from both
+sides — and square inner ends are what a real pad has anyway.
+
 **L1/R1 keep their words.** They are labelled shoulder buttons rather than
 symbols, and inventing a glyph for a button with its name printed on it would be
 worse than the words. The picker's second footer line stays prose for the same
