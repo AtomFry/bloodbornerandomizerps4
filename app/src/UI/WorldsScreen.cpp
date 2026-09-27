@@ -62,7 +62,14 @@ const int kRuleThickness = 2;
 const int kBarOffsetY = -10;
 const int kBarHeight  = 64;
 
-const Color kRuleColor = { 64, 72, 82 };
+const Color kRuleColor = Palette::Rule;
+
+// U4 pass 1: one frame per column instead of a rule between them. See
+// WorldEditorScreen.cpp for why - the three screens carry their own copy of
+// this constant for the same reason they carry their own copy of the column
+// geometry, and settings_ui_verify.py compares them.
+const int kPanelPad = 14;
+
 
 // The rail: one row per world, in the same band and at the same pitch as the
 // settings pane opposite it. It scrolls, because the number of worlds is the
@@ -138,8 +145,22 @@ const int          kProblemTitleY    = 120;
 const int          kProblemSentenceY = 200;
 const ListLayout   kProgressLayout = { 300, 70, 920, 50 };
 
-const char* const kFooterLine =
-    "UP DOWN MOVE   LEFT RIGHT TABS   X SELECT   TRIANGLE DELETE   O EXIT";
+// U4 pass 4: the footer is a row of PROMPTS, not one string. Each glyph is
+// drawn in the button's own colour, which a single DrawText call cannot do -
+// and the letters X and O that used to stand in for the glyphs looked like
+// nothing on the pad.
+//
+// LEFT RIGHT and UP DOWN share the d-pad glyph, so they are one prompt each
+// with the direction in the label; the pad has one d-pad and saying so twice
+// would be inventing a second.
+const ButtonPrompt kFooterPrompts[] = {
+    { kBtnDpad,     "MOVE" },
+    { nullptr,      "LEFT RIGHT TABS" },
+    { kBtnCross,    "SELECT" },
+    { kBtnTriangle, "DELETE" },
+    { kBtnCircle,   "EXIT" },
+};
+const int kFooterPromptCount = (int)(sizeof(kFooterPrompts) / sizeof(kFooterPrompts[0]));
 
 // --- the strings this screen owns -----------------------------------------
 //
@@ -182,8 +203,14 @@ const char* const kDeleteLine1 =
     "REMOVES THIS WORLD AND ALL ITS REVISIONS";
 const char* const kDeleteLine2 =
     "ITS SAVE DATA IS KEPT";
-const char* const kDeleteFooter = "X DELETE   O CANCEL";
-const char* const kDeleteRefusedFooter = "O BACK";
+const ButtonPrompt kDeletePrompts[] = {
+    { kBtnCross,  "DELETE" },
+    { kBtnCircle, "CANCEL" },
+};
+const int kDeletePromptCount = (int)(sizeof(kDeletePrompts) / sizeof(kDeletePrompts[0]));
+
+const ButtonPrompt kBackPrompt[] = { { kBtnCircle, "BACK" } };
+const int kBackPromptCount = (int)(sizeof(kBackPrompt) / sizeof(kBackPrompt[0]));
 const char* const kDeleteKeptLine =
     "SAVE DATA KEPT IN SAVEBACKUPS";
 
@@ -219,14 +246,18 @@ const char* const kProblemCaptureFailed =
 const char* const kProblemNoSignedInPlayer =
     "NO PLAYER SIGNED IN";
 
-const char* const kProblemScrollHint = "UP DOWN SCROLL";
+// kProblemScrollHint went with the line it named: the startup problem
+// screen draws a d-pad prompt row now (U4 pass 4).
 
 // X for the three that leave a usable app behind; O for the one that does
 // not. Worlds are scoped to the account, so with nobody signed in every
 // action eventually refuses and offering to continue would be a dead end
 // dressed up as a choice (spec section 10).
-const char* const kPromptContinue = "X CONTINUE";
-const char* const kPromptExit     = "O EXIT";
+// U4 pass 4: the prompt is a glyph and a word now, so the table carries the
+// pair. The X and O that used to stand in for the glyphs are gone - they were
+// letters pretending to be symbols.
+const ButtonPrompt kPromptContinue = { kBtnCross,  "CONTINUE" };
+const ButtonPrompt kPromptExit     = { kBtnCircle, "EXIT" };
 
 // The outcome table (plan P6). One row per non-None StartupProblem: what the
 // screen says, and what it offers. A table rather than a switch so
@@ -237,7 +268,7 @@ const char* const kPromptExit     = "O EXIT";
 struct ProblemRow {
     StartupProblem problem;
     const char*    sentence;
-    const char*    prompt;
+    ButtonPrompt   prompt;
 };
 
 const ProblemRow kProblemTable[] = {
@@ -256,11 +287,14 @@ const char* ProblemSentence(StartupProblem problem) {
     return "";
 }
 
-const char* ProblemPrompt(StartupProblem problem) {
+ButtonPrompt ProblemPrompt(StartupProblem problem) {
     for (int i = 0; i < kProblemRowCount; i++) {
         if (kProblemTable[i].problem == problem) return kProblemTable[i].prompt;
     }
-    return "";
+    // Unreachable while the table stays total, which the comment above this
+    // table says it must be - but a blank label beats a null dereference.
+    ButtonPrompt none = { nullptr, "" };
+    return none;
 }
 
 // --- small formatters ------------------------------------------------------
@@ -890,7 +924,7 @@ void WorldsScreen::Draw(Renderer& renderer) {
 // WORLDS tab can do, and the screen behind it is not the context the question
 // is about - the world's own name is.
 void WorldsScreen::DrawConfirmDelete(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, 200, kDeleteTitle, kStartupTitleScale,
                       Palette::Heading);
@@ -900,8 +934,8 @@ void WorldsScreen::DrawConfirmDelete(Renderer& renderer) {
     if (!deleteRefusal_.empty()) {
         DrawCenteredLabel(renderer, 460, deleteRefusal_.c_str(), kRowScale,
                           Palette::Bad);
-        DrawCenteredLabel(renderer, kScreenHeight - 80, kDeleteRefusedFooter,
-                          kFooterScale, Palette::Dim);
+        DrawPromptRow(renderer, kScreenHeight - 80, kBackPrompt, kBackPromptCount,
+                      kFooterScale);
         return;
     }
 
@@ -914,22 +948,22 @@ void WorldsScreen::DrawConfirmDelete(Renderer& renderer) {
             DrawCenteredLabel(renderer, 520, kDeleteKeptLine, kRowScale,
                               Palette::Dim);
         }
-        DrawCenteredLabel(renderer, kScreenHeight - 80, kDeleteRefusedFooter,
-                          kFooterScale, Palette::Dim);
+        DrawPromptRow(renderer, kScreenHeight - 80, kBackPrompt, kBackPromptCount,
+                      kFooterScale);
         return;
     }
 
     DrawCenteredLabel(renderer, 460, kDeleteLine1, kRowScale, Palette::Text);
     DrawCenteredLabel(renderer, 520, kDeleteLine2, kRowScale, Palette::Good);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, kDeleteFooter, kFooterScale,
-                      Palette::Dim);
+    DrawPromptRow(renderer, kScreenHeight - 80, kDeletePrompts, kDeletePromptCount,
+                  kFooterScale);
 }
 
 // The loading state: four elements and nothing else, at any point in startup
 // (B2). No log, no phase name, no prompt and no input - a player who cannot
 // act on what a line says is only being made to watch it.
 void WorldsScreen::DrawLoading(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, kLoadWordmarkY, kWordmark, kStartupTitleScale,
                       Palette::Heading);
@@ -973,7 +1007,7 @@ void WorldsScreen::DrawLoading(Renderer& renderer) {
 // what went wrong. One sentence, the log beneath it, and a prompt - the
 // sentence is this screen's, and the job's own wording is in the log.
 void WorldsScreen::DrawProblem(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, kProblemTitleY, kProblemTitle,
                       kStartupTitleScale, Palette::Bad);
@@ -999,14 +1033,15 @@ void WorldsScreen::DrawProblem(Renderer& renderer) {
 
     DrawScrollHints(renderer, kProgressLayout, lineCount, offset, logRows);
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130, kProblemScrollHint, kFooterScale,
-                      Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, ProblemPrompt(problem_), kFooterScale,
-                      Palette::Dim);
+    const ButtonPrompt scrollRow[] = { { kBtnDpad, "SCROLL" } };
+    DrawPromptRow(renderer, kScreenHeight - 130, scrollRow, 1, kFooterScale);
+
+    ButtonPrompt prompt = ProblemPrompt(problem_);
+    DrawPromptRow(renderer, kScreenHeight - 80, &prompt, 1, kFooterScale);
 }
 
 void WorldsScreen::DrawBrowse(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawTabs(renderer, kTabWorlds);
     DrawLabelLeft(renderer, kTabX, kTabHeadingY, TabLabel(kTabWorlds), kTabHeadingScale,
@@ -1030,16 +1065,20 @@ void WorldsScreen::DrawBrowse(Renderer& renderer) {
 
     renderer.FillRect(kRailX, kHeaderRuleY, 1800, kRuleThickness,
                       kRuleColor.r, kRuleColor.g, kRuleColor.b);
-    renderer.FillRect(kPaneX - 20, kColumnRuleY, kRuleThickness, kColumnRuleH,
-                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
-    renderer.FillRect(kHelpX - 20, kColumnRuleY, kRuleThickness, kColumnRuleH,
-                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    // One frame per column, replacing the two vertical rules between them.
+    DrawPanelFrame(renderer, kRailX - kPanelPad, kColumnRuleY,
+                   kRailW + 2 * kPanelPad, kColumnRuleH);
+    DrawPanelFrame(renderer, kPaneX - kPanelPad, kColumnRuleY,
+                   kPaneW + 2 * kPanelPad, kColumnRuleH);
+    DrawPanelFrame(renderer, kHelpX - kPanelPad, kColumnRuleY,
+                   kHelpW + 2 * kPanelPad, kColumnRuleH);
 
     DrawRail(renderer);
     DrawDetails(renderer);
     DrawHelp(renderer);
 
-    DrawCenteredLabel(renderer, kFooterY, kFooterLine, kFooterScale, Palette::Dim);
+    DrawPromptRow(renderer, kFooterY, kFooterPrompts, kFooterPromptCount, kFooterScale);
 }
 
 void WorldsScreen::DrawRail(Renderer& renderer) {
@@ -1053,10 +1092,17 @@ void WorldsScreen::DrawRail(Renderer& renderer) {
         int  y       = kRailLayout.firstY + r * kRailLayout.spacing;
         bool focused = (index == railCursor_);
 
+        // U4 pass 2: a hairline under every row but the last DRAWN one - which
+        // is not the same as the last VISIBLE one, because the rail runs out of
+        // worlds before it runs out of slots. A line under the final row reads
+        // as the bottom of a box with no top.
+        bool lastDrawn = (r == visible - 1) || (index + 1 >= count);
+        if (!lastDrawn) {
+            DrawRowSeparator(renderer, kRailX, y + kBarOffsetY + kBarHeight, kRailW);
+        }
+
         if (focused) {
-            renderer.FillRect(kRailX, y + kBarOffsetY, kRailW, kBarHeight,
-                              Palette::SelectedBar.r, Palette::SelectedBar.g,
-                              Palette::SelectedBar.b);
+            DrawSelectionBand(renderer, kRailX, y + kBarOffsetY, kRailW, kBarHeight);
         }
         Color color = focused ? Palette::Selected : Palette::Text;
         DrawLabelLeft(renderer, kRailX + kMarkGutter, y, RowLabel(index).c_str(),

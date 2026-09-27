@@ -94,7 +94,111 @@ started fresh, and any refusal or store error (`storeError_`).
 
 ---
 
-## 3. Open — new screens wanted by randomization rows (1)
+## 3. Open — the look (1)
+
+| # | Item | What it does | Status | Cost |
+|---|---|---|---|---|
+| U4 | **Bloodborne menu styling** | Restyle every screen toward the game's own menus — warm near-black ground, gold headings, framed panels, banded selection, hairline row separators, a vignette, button glyphs. Not a layout change: the geometry U1, U2 and the settings screens settled stays put | **BUILT** 2026-09-27, all four passes — **not hardware-tested** | Medium, and spread across every screen |
+
+**Reference:** the in-game inventory screen (three framed columns, gold headings,
+parchment body text, banded selection, hairline separators, button glyphs in the
+footer). Provided by the developer 2026-09-26.
+
+**The observation this rests on.** The two hardest things to fake are already in
+place: the atlas is **EB Garamond**, a serif, and the palette already carries gold
+(`Selected`), parchment (`Text`) and blood red (`Mark`). What is wrong is mostly
+*hue* — `Heading` is a bright cyan-blue and the ground is a cool blue-grey, and
+there is no blue anywhere in the reference.
+
+**Planned as passes, because none of it can be verified off-console.** The
+verifiers check geometry and fit; whether a screen feels like Bloodborne is a
+television judgement, and colour in particular lies on a monitor.
+
+| Pass | What | Status |
+|---|---|---|
+| 1 | **Palette + frames** — the warm ground, gold headings, and framed panels with corner ticks | **BUILT** 2026-09-26 |
+| 2 | **Selection band + hairline row separators** — and the picker's first selection highlight | **BUILT** 2026-09-27 |
+| 3 | **Vignette** — as a graded ground rather than a blend | **BUILT** 2026-09-27 |
+| 4 | **Footer button glyphs** — five baked into the atlas, footers become prompt rows | **BUILT** 2026-09-27 |
+
+All four passes are built and **none is hardware-tested**. That is the whole of
+what U4 set out to do; the texture question below stays open and unattempted.
+
+**Pass 2 as built.** `DrawSelectionBand` replaced five flat `FillRect` highlights
+across three screens with a three-tone band closed by a bright edge, and
+`DrawRowSeparator` puts a 1px hairline between rows of both rails, both settings
+panes and the picker. The picker gained a selection band it never had — its
+cursor was a colour change and nothing else, which on 82 rows at scale 3 was the
+hardest cursor in the app to find.
+
+**Pass 3 is a graded ground, not a blend over the frame — and that is a
+performance decision with a measured reason.** This app draws through
+`SDL_CreateSoftwareRenderer`, so every pixel is CPU work and `FillRectBlend` is
+read-modify-write. Blending a 280px margin on four edges is **1,366,400 blended
+pixels on top of** the 2,073,600-pixel opaque clear: 66% more fill every frame,
+in the more expensive mode. Drawing the ground as fourteen concentric rings
+instead costs **exactly what the clear cost**, because the rings tile the screen
+and no pixel is written twice — and that tiling is re-derived by a verifier case
+on every run, because the whole cost argument depends on it.
+
+What it gives up: an opaque ground darkens the **background** only, so text and
+frames near the edges are not dimmed the way a blended vignette would dim them.
+On this app that is the better end of the trade — what sits near the edges is the
+tab strip, the headings and the footer prompts, and those are meant to stay
+readable.
+
+**Pass 4 baked five glyphs into the font atlas** — the four face buttons and a
+d-pad, at codepoints 128–132, drawn by `app/tools/button_glyphs.py` the way the
+Hunter's Mark is drawn by `mark_glyph.py`. No C++ changed to reach them:
+`FindGlyph` already took an `unsigned char` and `DrawText` already reinterpreted
+its text as unsigned.
+
+Every footer in the app became a **prompt row** — `DrawPromptRow` draws each
+glyph in the button's own colour and each label in `Dim`. That colour is the
+reason the row exists at all: one `DrawText` call carries one colour, so a
+footer built as a single string can only ever be monochrome, and the letters
+`X` and `O` that used to stand in for the glyphs looked like nothing on the pad.
+Nineteen rows across four screens, all measured against `DrawPromptRow`'s own
+arithmetic by the verifier.
+
+Three things that fell out of it, all now pinned:
+
+- **The buttons are excluded from the text ink box**, as the mark already was.
+  They happen to sit inside it and change nothing today — which is exactly why
+  it is written down rather than left to luck. Without it, resizing a glyph
+  would silently move every row clearance in the app.
+- **`font_atlas_verify.py` re-derives all five glyphs** from `button_glyphs.py`
+  and compares them to the bake. The failure it is really there for is editing
+  the drawing and forgetting to re-run the generator; confirmed to catch it
+  (40 mismatches on a deliberate 0.72 → 0.80 change).
+- **Escapes, not raw bytes.** `kBtnCross` and friends are written `""` in
+  their own literals: 0x80 and up are not valid UTF-8 alone, and a source file
+  carrying them raw is at the mercy of how a compiler reads it.
+
+**L1/R1 keep their words.** They are labelled shoulder buttons rather than
+symbols, and inventing a glyph for a button with its name printed on it would be
+worse than the words. The picker's second footer line stays prose for the same
+reason — its two halves are not button prompts.
+
+**The picker is deliberately NOT framed, and the measurement is kept as a
+verifier case.** A frame enclosing the list must enclose its scroll hints, so its
+top edge belongs between the count line's ink (ends at 229) and `MORE ABOVE`'s
+(starts at 237) — an **eight-pixel window** for a 2px line needing clearance on
+both sides. A first attempt at 236 drew the frame straight through the hint.
+Dropping the hints outside the frame does not rescue it either: the two picker
+layouts disagree about where that gap is. Buying the room means moving constants
+pinned so the shipped pickers render pixel for pixel, which is a layout change
+rather than a styling pass. The case fails if that window ever opens, which is
+when framing the picker becomes worth revisiting.
+
+**Out of reach without a platform change, and deliberately not attempted.** The
+parchment grain and painted page edges in the reference are bitmap textures.
+`Renderer` has no texture path at all — it is `FillRect`, `FillRectBlend` and baked
+atlas glyphs — so adding one is a Platform-layer change rather than a styling pass.
+Revisit only after pass 1–3 have been seen on a television, and only if they are
+not enough.
+
+## 4. Open — new screens wanted by randomization rows (1)
 
 | # | Item | What it does | Status | Cost |
 |---|---|---|---|---|
@@ -107,7 +211,7 @@ growing two.
 
 ---
 
-## 4. Related
+## 5. Related
 
 - `randomization-feature-spec.md` — the randomization settings backlog; rows 35
   and 36 are the two new randomization ideas captured alongside U1–U3

@@ -49,6 +49,7 @@ try:
 except ImportError:
     sys.exit("PIL/Pillow is required: python -m pip install Pillow")
 
+import button_glyphs
 import mark_glyph
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +60,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 127 (the first value after printable ASCII) rather than somewhere roomier.
 # It is not a character of the typeface: mark_glyph.py draws it, and
 # FontAtlas.cpp neither knows nor cares which of the two produced a glyph.
-FIRST_CH, LAST_CH = 32, mark_glyph.MARK_CODE
+#
+# The four PlayStation face buttons follow the mark at 128..131 (U4 pass 4),
+# which is why LAST_CH is button_glyphs.LAST_CODE rather than the mark's. They
+# are drawn by button_glyphs.py for the same reasons the mark is drawn by
+# mark_glyph.py, and the range stays contiguous either way.
+FIRST_CH, LAST_CH = 32, button_glyphs.LAST_CODE
 
 # UI text scale -> em size in pixels.
 #
@@ -97,6 +103,10 @@ def rasterize(font_path, pixel_size):
         if code == mark_glyph.MARK_CODE:
             w, h, ink = mark_glyph.mark_mask(pixel_size)
             m = mark_glyph.mark_metrics(pixel_size, ascent)
+            bearing_x, bearing_y, advance = m["bx"], m["by"], m["adv"]
+        elif code in button_glyphs.CODES:
+            w, h, ink = button_glyphs.button_mask(code, pixel_size)
+            m = button_glyphs.button_metrics(code, pixel_size, ascent)
             bearing_x, bearing_y, advance = m["bx"], m["by"], m["adv"]
         else:
             mask = font.getmask(ch, mode="L")
@@ -166,6 +176,9 @@ def main():
     out.append("// Typeface: EB Garamond (SIL Open Font License 1.1).")
     out.append("// Codepoint 127 is NOT from the typeface: it is the Hunter's Mark,")
     out.append("// drawn by app/tools/mark_glyph.py. See Controls.h kActiveMark.")
+    out.append("// Codepoints 128..131 are not either: they are the four PlayStation")
+    out.append("// face buttons, drawn by app/tools/button_glyphs.py. See Controls.h")
+    out.append("// kBtnCross and DrawPromptRow.")
     out.append("// The license text ships beside the source font at")
     out.append("// app/tools/fonts/OFL.txt and must stay with any redistribution.")
     out.append("//")
@@ -207,7 +220,8 @@ def main():
         for code, g in zip(range(FIRST_CH, LAST_CH + 1), b["glyphs"]):
             ch = chr(code)
             label = ("space" if ch == " " else
-                     "HUNTER'S MARK" if code == mark_glyph.MARK_CODE else ch)
+                     "HUNTER'S MARK" if code == mark_glyph.MARK_CODE
+                     else button_glyphs.NAMES.get(code, ch))
             out.append("    {%d,%d,%d,%d,%d,%d,%d,%d}, // '%s'"
                        % (g["off"], g["x"], g["y"], g["w"], g["h"],
                           g["bx"], g["by"], g["adv"], label))

@@ -149,7 +149,25 @@ const int kBarHeight  = 64;
 // SDL entry point to prove on hardware (plan P4). Dimmer than Palette::Dim,
 // which is text: a rule that reads as loud as a label is furniture competing
 // with content.
-const Color kRuleColor = { 64, 72, 82 };
+const Color kRuleColor = Palette::Rule;
+
+// --- U4 pass 1: the three column frames ------------------------------------
+//
+// The reference does not divide its columns with a line - it FRAMES each one,
+// and that is most of why it reads as a menu rather than as a page of text. The
+// two vertical rules that used to sit at kPaneX - 20 and kHelpX - 20 are gone:
+// the adjacent edges of two frames say the same thing the rule between them did.
+//
+// NO NEW COLUMN GEOMETRY. Each frame is its column's own x and width, padded,
+// and the band is the rule band the two vertical rules already used - so the
+// three columns settings_ui_verify.py pins are untouched and the frames are
+// derived from them rather than being a fourth copy.
+//
+// 14px of padding leaves 12px between adjacent frames (640 + 14 -> 680 - 14),
+// which is enough that two frames read as two panels and not as one box with a
+// line down it.
+const int kPanelPad = 14;
+
 
 // OPTIONS is on this screen now. It writes the world - creating it on the
 // first press - and opens Confirm, which is where the activation is
@@ -161,8 +179,24 @@ const Color kRuleColor = { 64, 72, 82 };
 // both: it writes the world (appending a revision only if the recipe
 // changed) and then opens the activation confirmation. It said only SAVE
 // while Confirm still committed a plain randomizer run.
-const char* const kFooterLine =
-    "UP DOWN MOVE   LEFT RIGHT CHANGE   X SELECT   O BACK   OPTIONS SAVE AND ACTIVATE";
+// U4 pass 4: a prompt row rather than one string - see WorldsScreen.cpp.
+// OPTIONS has no glyph of its own (it is a labelled button, not a symbol), so
+// it rides as a plain prompt with the word in the label.
+const ButtonPrompt kFooterPrompts[] = {
+    { kBtnDpad,  "MOVE" },
+    { nullptr,   "LEFT RIGHT CHANGE" },
+    { kBtnCross, "SELECT" },
+    { kBtnCircle, "BACK" },
+    { nullptr,   "OPTIONS SAVE AND ACTIVATE" },
+};
+const int kFooterPromptCount = (int)(sizeof(kFooterPrompts) / sizeof(kFooterPrompts[0]));
+
+// The name and seed editors end on the same pair, so it is written once.
+const ButtonPrompt kAcceptCancel[] = {
+    { kBtnCross,  "ACCEPT" },
+    { kBtnCircle, "CANCEL" },
+};
+const int kAcceptCancelCount = (int)(sizeof(kAcceptCancel) / sizeof(kAcceptCancel[0]));
 
 // The screen's own title. Named rather than inlined because three modes draw
 // it and settings_ui_verify.py measures it.
@@ -281,8 +315,14 @@ const char* const kDurationLong    = "ABOUT A MINUTE";
 // The ONE line Confirm ends on. `kConfirmFooterHint` - "UP DOWN SCROLL" - went
 // with the list it described (U2): the screen cannot scroll, so advertising the
 // control would be worse than saying nothing.
-const char* const kConfirmFooterGo   = "OPTIONS ACTIVATE   O BACK";
-const char* const kConfirmFooterBack = "O BACK";
+const ButtonPrompt kConfirmGo[] = {
+    { nullptr,    "OPTIONS ACTIVATE" },
+    { kBtnCircle, "BACK" },
+};
+const int kConfirmGoCount = (int)(sizeof(kConfirmGo) / sizeof(kConfirmGo[0]));
+
+const ButtonPrompt kConfirmBack[] = { { kBtnCircle, "BACK" } };
+const int kConfirmBackCount = (int)(sizeof(kConfirmBack) / sizeof(kConfirmBack[0]));
 
 // The activation log's band, used by Step::Problem alone since U1 - the
 // loading state draws no list at all. The numbers are unmoved, and are the same
@@ -353,8 +393,10 @@ const char* const kActRefusedFallback = "NOTHING WAS CHANGED";
 const char* const kActFailedSentence =
     "THIS WORLD WAS NOT ACTIVATED - THE LOG BELOW SAYS WHERE IT STOPPED";
 
-const char* const kActProblemScrollHint = "UP DOWN SCROLL";
-const char* const kActProblemPrompt     = "O RETURN TO WORLDS";
+// The problem screen's two footer lines are prompt rows now (U4 pass 4), built
+// where they are drawn. The strings they replaced - "UP DOWN SCROLL" and
+// "O RETURN TO WORLDS" - are gone with them: the d-pad and circle glyphs say
+// what the words UP DOWN and O were standing in for.
 
 // The problem screen's title and sentence band. The title sits where the old
 // screen's did; the sentence below it is WRAPPED, at the row scale, across the
@@ -1398,7 +1440,7 @@ void WorldEditorScreen::Draw(Renderer& renderer) {
 }
 
 void WorldEditorScreen::DrawSettings(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, kTitleY, kScreenTitle, kTitleScale, Palette::Heading);
 
@@ -1413,24 +1455,26 @@ void WorldEditorScreen::DrawSettings(Renderer& renderer) {
 
     renderer.FillRect(kRailX, kHeaderRuleY, 1800, kRuleThickness,
                       kRuleColor.r, kRuleColor.g, kRuleColor.b);
-    renderer.FillRect(kPaneX - 20, kColumnRuleY, kRuleThickness, kColumnRuleH,
-                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
-    renderer.FillRect(kHelpX - 20, kColumnRuleY, kRuleThickness, kColumnRuleH,
-                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    // One frame per column, replacing the two vertical rules between them.
+    DrawPanelFrame(renderer, kRailX - kPanelPad, kColumnRuleY,
+                   kRailW + 2 * kPanelPad, kColumnRuleH);
+    DrawPanelFrame(renderer, kPaneX - kPanelPad, kColumnRuleY,
+                   kPaneW + 2 * kPanelPad, kColumnRuleH);
+    DrawPanelFrame(renderer, kHelpX - kPanelPad, kColumnRuleY,
+                   kHelpW + 2 * kPanelPad, kColumnRuleH);
 
     DrawRail(renderer);
     DrawPane(renderer);
     DrawHelp(renderer);
 
-    DrawCenteredLabel(renderer, kFooterY, kFooterLine, kFooterScale, Palette::Dim);
+    DrawPromptRow(renderer, kFooterY, kFooterPrompts, kFooterPromptCount, kFooterScale);
 }
 
 void WorldEditorScreen::DrawRailRow(Renderer& renderer, int y, const char* text,
                                      bool focused, bool current) {
     if (focused) {
-        renderer.FillRect(kRailX, y + kBarOffsetY, kRailW, kBarHeight,
-                          Palette::SelectedBar.r, Palette::SelectedBar.g,
-                          Palette::SelectedBar.b);
+        DrawSelectionBand(renderer, kRailX, y + kBarOffsetY, kRailW, kBarHeight);
     }
     // The category the pane is showing stays in the selected colour without
     // the bar whenever the cursor is elsewhere - in the pane, or on SEED or
@@ -1522,10 +1566,16 @@ void WorldEditorScreen::DrawPane(Renderer& renderer) {
         int  y       = kPaneLayout.firstY + row * kPaneLayout.spacing;
         bool focused = (focus_ == Focus::List && index == listCursor_[lastCategory_]);
 
+        // U4 pass 2: a hairline between rows, never under the last drawn one.
+        // A category can be shorter than the band, so "last drawn" is the end of
+        // the CATEGORY as often as it is the end of the window.
+        bool lastDrawn = (row == visible - 1) || (index + 1 >= count);
+        if (!lastDrawn) {
+            DrawRowSeparator(renderer, kPaneX, y + kBarOffsetY + kBarHeight, kPaneW);
+        }
+
         if (focused) {
-            renderer.FillRect(kPaneX, y + kBarOffsetY, kPaneW, kBarHeight,
-                              Palette::SelectedBar.r, Palette::SelectedBar.g,
-                              Palette::SelectedBar.b);
+            DrawSelectionBand(renderer, kPaneX, y + kBarOffsetY, kPaneW, kBarHeight);
         }
         Color color = focused ? Palette::Selected : Palette::Text;
         DrawLabelLeft(renderer, kPaneX, y, def.label, kRowScale, color);
@@ -1581,7 +1631,7 @@ void WorldEditorScreen::DrawHelp(Renderer& renderer) {
 // exactly kNameLen characters, space-padded, so a name being typed from the
 // left does not jump about as it grows.
 void WorldEditorScreen::DrawEditName(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, 300, "WORLD NAME", kTitleScale, Palette::Heading);
 
@@ -1608,14 +1658,17 @@ void WorldEditorScreen::DrawEditName(Renderer& renderer) {
         pen += advance;
     }
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130,
-                      "LEFT RIGHT SELECT   UP DOWN CHANGE", kFooterScale, Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, "X ACCEPT   O CANCEL",
-                      kFooterScale, Palette::Dim);
+    const ButtonPrompt moveRow[] = {
+        { nullptr,   "LEFT RIGHT SELECT" },
+        { kBtnDpad,  "UP DOWN CHANGE" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 2, kFooterScale);
+    DrawPromptRow(renderer, kScreenHeight - 80, kAcceptCancel, kAcceptCancelCount,
+                  kFooterScale);
 }
 
 void WorldEditorScreen::DrawEditSeed(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, 300, "RANDOMIZER SEED", kTitleScale, Palette::Heading);
 
@@ -1637,11 +1690,14 @@ void WorldEditorScreen::DrawEditSeed(Renderer& renderer) {
         pen += renderer.TextWidth(single, kEditScale);
     }
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130,
-                      "LEFT RIGHT SELECT   UP DOWN CHANGE   SQUARE RANDOM",
-                      kFooterScale, Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, "X ACCEPT   O CANCEL",
-                      kFooterScale, Palette::Dim);
+    const ButtonPrompt moveRow[] = {
+        { nullptr,     "LEFT RIGHT SELECT" },
+        { kBtnDpad,    "UP DOWN CHANGE" },
+        { kBtnSquare,  "RANDOM" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 3, kFooterScale);
+    DrawPromptRow(renderer, kScreenHeight - 80, kAcceptCancel, kAcceptCancelCount,
+                  kFooterScale);
 }
 
 // Roughly how long the activation takes (B10). Three phrases, chosen from
@@ -1751,7 +1807,7 @@ std::vector<WorldEditorScreen::ConfirmRow> WorldEditorScreen::ConfirmWorldRows()
 }
 
 void WorldEditorScreen::DrawConfirm(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, 140, kScreenTitle, kTitleScale, Palette::Heading);
 
@@ -1837,16 +1893,17 @@ void WorldEditorScreen::DrawConfirm(Renderer& renderer) {
     // advertises a button which silently declines is worse than one that does
     // not mention it.
     bool canActivate = planReady_ && plan_.ok && storeError_.empty();
-    DrawCenteredLabel(renderer, kScreenHeight - 80,
-                      canActivate ? kConfirmFooterGo : kConfirmFooterBack,
-                      kFooterScale, Palette::Dim);
+    DrawPromptRow(renderer, kScreenHeight - 80,
+                  canActivate ? kConfirmGo : kConfirmBack,
+                  canActivate ? kConfirmGoCount : kConfirmBackCount,
+                  kFooterScale);
 }
 
 // The revision list (B16): newest first, with a cursor, because selecting one
 // is what makes it current again. A world that has never been written has no
 // revisions and says so rather than drawing an empty band.
 void WorldEditorScreen::DrawHistory(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, 140, kScreenTitle, kTitleScale, Palette::Heading);
     DrawCenteredLabel(renderer, 240, "HISTORY", kItemScale, Palette::Text);
@@ -1855,8 +1912,8 @@ void WorldEditorScreen::DrawHistory(Renderer& renderer) {
     if (items.empty()) {
         DrawCenteredLabel(renderer, kHistoryLayout.firstY,
                           "THIS WORLD HAS NOT BEEN SAVED YET", kRowScale, Palette::Dim);
-        DrawCenteredLabel(renderer, kScreenHeight - 80, "O BACK", kFooterScale,
-                          Palette::Dim);
+        DrawPromptRow(renderer, kScreenHeight - 80, kConfirmBack, kConfirmBackCount,
+                      kFooterScale);
         return;
     }
 
@@ -1865,10 +1922,14 @@ void WorldEditorScreen::DrawHistory(Renderer& renderer) {
     DrawScrollableList(renderer, kHistoryLayout, items, historyCursor_, offset,
                        kRowScale, Palette::Text, Palette::Selected);
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130, "UP DOWN MOVE", kFooterScale,
-                      Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, "X MAKE CURRENT   O BACK",
-                      kFooterScale, Palette::Dim);
+    const ButtonPrompt moveRow[] = { { kBtnDpad, "MOVE" } };
+    DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 1, kFooterScale);
+
+    const ButtonPrompt historyRow[] = {
+        { kBtnCross,  "MAKE CURRENT" },
+        { kBtnCircle, "BACK" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 80, historyRow, 2, kFooterScale);
 }
 
 // The loading state: four elements and nothing else, at any point in the
@@ -1881,7 +1942,7 @@ void WorldEditorScreen::DrawHistory(Renderer& renderer) {
 // screen at two moments, and sharing the code would mean a shared widget whose
 // only two callers want it to differ in exactly the way the bar differs.
 void WorldEditorScreen::DrawProgress(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, kActHeadlineY, kActHeadline, kTitleScale,
                       Palette::Heading);
@@ -1920,7 +1981,7 @@ void WorldEditorScreen::DrawProgress(Renderer& renderer) {
 // the mirror of WorldsScreen::DrawProblem, on the same band, for the same
 // reason. One sentence from the screen, the job's own wording beneath it.
 void WorldEditorScreen::DrawProblem(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     const char* title = (outcome_ == Outcome::Refused) ? kActRefusedTitle
                                                        : kActFailedTitle;
@@ -1957,10 +2018,11 @@ void WorldEditorScreen::DrawProblem(Renderer& renderer) {
 
     DrawScrollHints(renderer, kProgressLayout, lineCount, offset, logRows);
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130, kActProblemScrollHint,
-                      kFooterScale, Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, kActProblemPrompt,
-                      kFooterScale, Palette::Dim);
+    const ButtonPrompt scrollRow[] = { { kBtnDpad, "SCROLL" } };
+    DrawPromptRow(renderer, kScreenHeight - 130, scrollRow, 1, kFooterScale);
+
+    const ButtonPrompt backRow[] = { { kBtnCircle, "RETURN TO WORLDS" } };
+    DrawPromptRow(renderer, kScreenHeight - 80, backRow, 1, kFooterScale);
 }
 
 } // namespace bbr

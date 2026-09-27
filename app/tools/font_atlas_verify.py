@@ -22,6 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import button_glyphs  # noqa: E402  - the source of truth for 128..132
 import mark_glyph  # noqa: E402  - the source of truth for codepoint 127
 
 try:
@@ -162,6 +163,51 @@ def check_mark(sizes, glyphs):
     return failures
 
 
+def check_buttons(sizes, glyphs):
+    """The five button glyphs at 128..132, re-derived from button_glyphs.py.
+
+    Same treatment as the mark and for the same reason: they are not in the
+    typeface, so check_metrics cannot speak for them. Every baked number is
+    re-drawn independently and compared, which is what catches the failure this
+    is really here for - editing button_glyphs.py and forgetting to re-run
+    gen_font_atlas.py. The header would keep the old shapes and nothing else in
+    the project would notice.
+
+    They must HAVE ink, for the mark's reason: a button that baked empty would
+    draw as a blank gap in a footer, because DrawText advances for a glyph it
+    cannot see. And they must sit inside the typeface's vertical band, because
+    they are drawn on footer rows sized from the atlas's own ink box.
+    """
+    failures = []
+    for size in sizes:
+        scale = size["uiScale"]
+        for code in button_glyphs.CODES:
+            name = button_glyphs.NAMES[code]
+            g = glyphs[scale][code - 32]
+            w, h, ink = button_glyphs.button_mask(code, size["pixel"])
+            m = button_glyphs.button_metrics(code, size["pixel"], size["ascent"])
+
+            if (g["w"], g["h"]) != (w, h):
+                failures.append("scale %d %s: size baked %s, drawn %s"
+                                % (scale, name, (g["w"], g["h"]), (w, h)))
+            if (g["bx"], g["by"], g["adv"]) != (m["bx"], m["by"], m["adv"]):
+                failures.append("scale %d %s: metrics baked %s, drawn %s"
+                                % (scale, name, (g["bx"], g["by"], g["adv"]),
+                                   (m["bx"], m["by"], m["adv"])))
+            if not any(ink):
+                failures.append("scale %d %s: drawn glyph is blank" % (scale, name))
+            if g["adv"] <= 0:
+                failures.append("scale %d %s: advance %d" % (scale, name, g["adv"]))
+
+            top = size["ascent"] - g["by"]
+            bottom = top + g["h"]
+            if top < 0 or bottom > size["ascent"] + size["descent"]:
+                failures.append("scale %d %s: ink %d..%d escapes the line 0..%d"
+                                % (scale, name, top, bottom,
+                                   size["ascent"] + size["descent"]))
+    return failures
+
+
 def check_layout(font_path, sizes, glyphs):
     """Replays FontAtlasDrawText's arithmetic and compares against PIL."""
     failures = []
@@ -229,13 +275,21 @@ def main():
           % (len(sizes), "OK" if not mark_failures
              else "%d MISMATCHES" % len(mark_failures)))
 
+    print("\nchecking the button glyphs against button_glyphs.py...")
+    button_failures = check_buttons(sizes, glyphs)
+    print("  %d glyphs x %d sizes: %s"
+          % (len(button_glyphs.CODES), len(sizes),
+             "OK" if not button_failures
+             else "%d MISMATCHES" % len(button_failures)))
+
     print("\nreplaying the C++ draw loop against PIL's own layout...")
     layout_failures = check_layout(args.font, sizes, glyphs)
     print("  %d samples x %d sizes: %s"
           % (len(SAMPLES), len(sizes), "OK" if not layout_failures
              else "%d MISMATCHES" % len(layout_failures)))
 
-    failures = metric_failures + mark_failures + layout_failures
+    failures = (metric_failures + mark_failures + button_failures
+                + layout_failures)
     if failures:
         print("\nFAILURES:")
         for f in failures[:40]:

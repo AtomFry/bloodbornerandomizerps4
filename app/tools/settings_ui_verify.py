@@ -234,6 +234,15 @@ def parse_spec_categories():
 # requirements below because load_atlas, which runs on import, needs it.
 MARK_CODE = 127
 
+# U4 pass 4 baked the five button glyphs at 128..132. They are kept OUT of the
+# TEXT ink box for exactly the reason the mark is: they are drawn in footers at
+# a size chosen for them, not in running text, so letting them widen the box
+# would move every row clearance in the app the next time one is resized.
+#
+# As it happens they currently sit inside it and change nothing - which is
+# precisely why this is written down rather than left to luck.
+BUTTON_CODES = range(128, 133)
+
 
 def load_atlas():
     """(advances, text ink box, mark ink box) per scale, from the generated H.
@@ -272,6 +281,8 @@ def load_atlas():
                 # explicitly instead.
                 mark_ink[scale] = (m["ascent"] - v[6],
                                    m["ascent"] - v[6] + v[4])
+            elif code in BUTTON_CODES:
+                pass                      # see BUTTON_CODES
             elif v[3] and v[4]:
                 max_bearing_y = max(max_bearing_y, v[6])
                 max_below = max(max_below, v[4] - v[6])
@@ -387,6 +398,12 @@ CONFIRM_SCALE = 4
 # space and a half at scale 4, and a row tighter than that reads as one word.
 CONFIRM_MIN_GAP = 40
 
+# U4 pass 4: DrawPromptRow's two gaps, mirrored from Controls.cpp. Parsed
+# rather than repeated would be better, but they are file-local constants in an
+# anonymous namespace; the case below fails loudly if they drift.
+PROMPT_GLYPH_GAP = 10
+PROMPT_GAP = 46
+
 # Spelled as a name so the joiner below reads without an escape inside it.
 NEWLINE = chr(10)
 
@@ -480,6 +497,9 @@ def widest_title_id():
 #                  that differ are pinned by the `mirror` dict, so they are
 #                  unshared and not unpinned.
 SHARED_GEOMETRY = [
+    # U4 pass 1: the column frames' padding. A fourth copy of a shared number,
+    # in the same three files, compared for the same reason as the rest.
+    "kPanelPad",
     "kRailX", "kRailW", "kPaneX", "kPaneW", "kPaneValueRight", "kHelpX", "kHelpW",
     "kHeaderRuleY", "kColumnRuleY", "kColumnRuleH",
     "kRailRow0Y",
@@ -534,6 +554,59 @@ DETAIL_LABELS = ["STATUS", "SEED", "SETTINGS", "REVISION", "SAVE DATA",
 DETAIL_VALUES = ["ACTIVE", "NOT ACTIVE", "9999999999", "99 OF 99 ON",
                  "99 OF 99", "9999 MB IN 9999 FILES", "NONE", "REVISION 9999",
                  "2026-09-22 12:00:00", "NEVER", "-"]
+
+
+def parse_prompt_rows(filename):
+    """Every `const ButtonPrompt kFoo[] = {...}` in a screen, as {name: rows}.
+
+    A row is a list of (glyph_or_None, label). U4 pass 4 replaced the footer
+    STRINGS with these, so what used to be a string-width check is now a check
+    against the same arithmetic DrawPromptRow does.
+    """
+    body = strip_comments(read(os.path.join(UI, filename)))
+    out = {}
+    for name, inner in re.findall(
+            r"const ButtonPrompt (\w+)\[\]\s*=\s*\{(.*?)\};", body, re.S):
+        rows = []
+        for glyph, label in re.findall(r"\{\s*([A-Za-z_]\w*)\s*,\s*\"([^\"]*)\"\s*\}",
+                                       inner):
+            rows.append((None if glyph == "nullptr" else glyph, label))
+        if rows:
+            out[name] = rows
+    # The singletons the problem table carries are declared one per line rather
+    # than as arrays, so they are picked up separately.
+    for name, glyph, label in re.findall(
+            r"const ButtonPrompt (\w+)\s*=\s*\{\s*([A-Za-z_]\w*)\s*,\s*\"([^\"]*)\"\s*\}",
+            body):
+        out[name] = [(None if glyph == "nullptr" else glyph, label)]
+    return out
+
+
+def prompt_row_width(rows, scale):
+    """The width DrawPromptRow will lay out, by its own arithmetic.
+
+    Controls.cpp: glyph + kPromptGlyphGap + label per prompt, kPromptGap
+    between prompts. The glyph advance comes from button_glyphs, which is what
+    the atlas baked, so this is measured rather than assumed.
+    """
+    total = 0
+    for i, (glyph, label) in enumerate(rows):
+        if glyph:
+            total += button_advance(scale) + PROMPT_GLYPH_GAP
+        total += width(label, scale)
+        if i + 1 < len(rows):
+            total += PROMPT_GAP
+    return total
+
+
+def button_advance(scale):
+    """One baked button glyph's advance at this UI scale.
+
+    Read out of the generated header, not recomputed from button_glyphs.py:
+    what matters is what the atlas actually carries, and the two would agree
+    only for as long as nobody forgets to re-run the generator.
+    """
+    return ADV[scale][chr(128)]
 
 
 def parse_geometry(filename):
@@ -927,9 +1000,9 @@ def main():
                   width(longest_word, ROW_SCALE) <= HELP_W))
     # Not in the plan's list, but this milestone writes the footer and nothing
     # else measures it: it is centred, so its budget is the whole screen.
-    cases.append(("5: the footer line fits the screen (%d px of 1920)"
-                  % width(FOOTER_LINE, ROW_SCALE),
-                  width(FOOTER_LINE, ROW_SCALE) <= 1920))
+    # (The Setup Defaults footer is a prompt row since U4 pass 4 and is
+    # measured with every other row further down, against DrawPromptRow's own
+    # arithmetic rather than as a string.)
 
     # --- 6: the vertical constants do not overlap ----------------------------
     # Two rails now, not one: the DEFAULTS tab's seven rows and the world
@@ -1051,9 +1124,44 @@ def main():
     if absent or differ:
         detail.append("   geometry absent=%s differ=%s"
                       % (absent, [(k, wiz.get(k), setup.get(k)) for k in differ]))
-    cases.append(("6: both screens draw their rules in the same colour",
-                  wiz.get("kRuleColor") is not None and
-                  wiz.get("kRuleColor") == setup.get("kRuleColor")))
+    # U4 PASS 1 TURNED THIS INTO A STRONGER CLAIM. The three screens each used
+    # to declare `const Color kRuleColor = { 64, 72, 82 }` - a fourth copy of a
+    # constant, compared here so the copies could not drift. They now all read
+    # `= Palette::Rule`, so there is nothing left to drift: one definition, three
+    # aliases. What is checked is that none of them has gone back to a literal.
+    rule_src = {name: strip_comments(read(os.path.join(UI, name + ".cpp")))
+                for name in ("WorldEditorScreen", "SetupDefaultsScreen", "WorldsScreen")}
+    aliased = {n: "const Color kRuleColor = Palette::Rule;" in s
+               for n, s in rule_src.items()}
+    cases.append(("U4: all %d screens take their rule colour from the palette"
+                  % len(aliased), all(aliased.values())))
+    if not all(aliased.values()):
+        detail.append("   rule colour still a literal in: %s"
+                      % [n for n, ok in aliased.items() if not ok])
+
+    # ...and nothing clears the screen for itself any more. DrawGround() is the
+    # single caller, which is what makes the ground - and, in pass 3, the
+    # vignette - one change rather than thirteen.
+    clears = {n: "renderer.Clear(" in s for n, s in rule_src.items()}
+    cases.append(("U4: no screen calls renderer.Clear directly - DrawGround does",
+                  not any(clears.values())))
+    if any(clears.values()):
+        detail.append("   still clears for itself: %s"
+                      % [n for n, bad in clears.items() if bad])
+
+    # THE THREE COLUMN FRAMES MUST NOT TOUCH. Each is its column padded by
+    # kPanelPad, and the padding is a fourth copy of a shared number, so this
+    # checks the gap the padding actually leaves rather than the number itself.
+    # At 14px of padding the 40px gutters leave 12px between frames - enough
+    # that two frames read as two panels rather than as one box with a line
+    # down it. A padding that closed the gap would merge them.
+    pad = wiz.get("kPanelPad")
+    gaps = []
+    if pad is not None:
+        gaps = [(PANE_X - pad) - (RAIL_X + RAIL_W + pad),
+                (HELP_X - pad) - (PANE_X + PANE_W + pad)]
+    cases.append(("U4: the three column frames leave a gap between them (%s px)"
+                  % gaps, pad is not None and all(g > 0 for g in gaps)))
 
     # --- U1: the activation loading screen IS the startup loading screen ------
     #
@@ -1152,10 +1260,36 @@ def main():
                   "starts at %d)" % (target_start - title_end, target_start),
                   target_start > title_end and HEADER_TARGET_RIGHT <= SCREEN_W and
                   target_start > RAIL_X))
-    editor_footer = editor_strings["kFooterLine"]
-    cases.append(("5: the editor footer line fits the screen (%d px of %d)"
-                  % (width(editor_footer, ROW_SCALE), SCREEN_W),
-                  width(editor_footer, ROW_SCALE) <= SCREEN_W))
+    # --- U4 pass 4: every footer is a PROMPT ROW now -------------------------
+    #
+    # What used to be one centred string per screen is a row of glyph/label
+    # pairs, so the width check has to reproduce DrawPromptRow's arithmetic
+    # rather than measure a string. Every row in every screen is checked, not
+    # just the three that used to have named constants - the conversion turned
+    # a handful of strings into a dozen rows and they all have to fit.
+    all_rows = {}
+    for src in ("WorldEditorScreen.cpp", "WorldsScreen.cpp",
+                "SetupDefaultsScreen.cpp", "ModelPicker.cpp"):
+        for name, rows in parse_prompt_rows(src).items():
+            all_rows[src.replace(".cpp", "") + "." + name] = rows
+    widest_prompt_name = max(all_rows,
+                             key=lambda k: prompt_row_width(all_rows[k], ROW_SCALE))
+    widest_prompt_px = prompt_row_width(all_rows[widest_prompt_name], ROW_SCALE)
+    cases.append(("U4: all %d prompt rows fit the screen (widest %s, %d px of %d)"
+                  % (len(all_rows), widest_prompt_name, widest_prompt_px, SCREEN_W),
+                  all(prompt_row_width(r, ROW_SCALE) <= SCREEN_W
+                      for r in all_rows.values())))
+
+    # A prompt whose glyph is not one of the five baked ones would draw a blank
+    # gap - DrawText advances for a glyph it cannot find.
+    known = {"kBtnCross", "kBtnCircle", "kBtnTriangle", "kBtnSquare", "kBtnDpad"}
+    unknown = sorted({g for r in all_rows.values() for g, _ in r if g and g not in known})
+    cases.append(("U4: every prompt glyph is one of the five baked buttons",
+                  not unknown))
+    if unknown:
+        detail.append("   unknown prompt glyphs: %s" % unknown)
+
+    editor_footer = " ".join(l for _, l in all_rows["WorldEditorScreen.kFooterPrompts"])
     # OPTIONS saves the world AND opens the activation confirmation, and the
     # footer has to say both - it said only SAVE until 2026-09-25.
     cases.append(("5: the editor footer says OPTIONS both saves and activates",
@@ -1329,13 +1463,10 @@ def main():
     # Confirm's ONE footer line, which says ACTIVATE rather than COMMIT and drops
     # the OPTIONS half entirely when there is nothing to activate. U2 removed the
     # UP DOWN SCROLL line above it along with the list it described.
-    for key in ("kConfirmFooterGo", "kConfirmFooterBack"):
-        cases.append(("5: %s fits the screen at the footer scale (%d px)"
-                      % (key, width(editor_strings[key], ROW_SCALE)),
-                      width(editor_strings[key], ROW_SCALE) <= SCREEN_W))
+    go_labels = " ".join(l for _, l in all_rows["WorldEditorScreen.kConfirmGo"])
+    back_labels = " ".join(l for _, l in all_rows["WorldEditorScreen.kConfirmBack"])
     cases.append(("6: the Confirm footer offers OPTIONS only when it activates",
-                  "OPTIONS" in editor_strings["kConfirmFooterGo"] and
-                  "OPTIONS" not in editor_strings["kConfirmFooterBack"]))
+                  "OPTIONS" in go_labels and "OPTIONS" not in back_labels))
 
     # HISTORY: one line per revision, "REVISION n   <seed>   n CHANGED", with a
     # cursor, at the row scale. The revision count is unbounded, so the widest
@@ -1545,17 +1676,18 @@ def main():
     # The two footers this milestone writes. The DEFAULTS tab now has two -
     # Left/Right change a value in the pane and switch tabs on the rail, and
     # the footer says whichever is true right now (B31).
-    worlds_footer = worlds_strings["kFooterLine"]
-    rail_footer = parse_named_strings("SetupDefaultsScreen.cpp")["kRailFooterLine"]
-    cases.append(("5: the worlds footer fits the screen (%d px of %d)"
-                  % (width(worlds_footer, ROW_SCALE), SCREEN_W),
-                  width(worlds_footer, ROW_SCALE) <= SCREEN_W and
-                  "LEFT RIGHT TABS" in worlds_footer and
-                  "TRIANGLE DELETE" in worlds_footer))
-    cases.append(("5: the DEFAULTS rail footer fits the screen (%d px of %d)"
-                  % (width(rail_footer, ROW_SCALE), SCREEN_W),
-                  width(rail_footer, ROW_SCALE) <= SCREEN_W and
-                  "LEFT RIGHT TABS" in rail_footer))
+    # Both are prompt rows since U4 pass 4, and their WIDTHS are checked with
+    # every other row above. What is checked here is that each still SAYS what
+    # this milestone put in it - the two facts that made them two footers.
+    worlds_row = all_rows["WorldsScreen.kFooterPrompts"]
+    rail_row = all_rows["SetupDefaultsScreen.kRailFooterPrompts"]
+    worlds_labels = " ".join(l for _, l in worlds_row)
+    rail_labels = " ".join(l for _, l in rail_row)
+    cases.append(("5: the worlds footer still names tabs, and delete on TRIANGLE",
+                  "LEFT RIGHT TABS" in worlds_labels and
+                  any(g == "kBtnTriangle" and l == "DELETE" for g, l in worlds_row)))
+    cases.append(("5: the DEFAULTS rail footer still names tabs",
+                  "LEFT RIGHT TABS" in rail_labels))
 
     # The delete confirmation (B17). Centred on the whole screen rather than
     # drawn into the details pane, so these are measured against 1920 - which
@@ -1597,10 +1729,14 @@ def main():
     if row_outcomes != expected_outcomes:
         detail.append("   outcome table %s vs enum %s" % (row_outcomes, expected_outcomes))
 
-    missing = [n for r in problem_rows for n in (r[1], r[2])
-               if n not in worlds_strings]
-    cases.append(("10: every sentence and prompt the table names is a measurable "
-                  "named string", not missing))
+    # The SENTENCE is still a named string. The PROMPT became a ButtonPrompt in
+    # U4 pass 4, so it is checked against the parsed prompt rows instead - it is
+    # no longer a string and cannot be measured as one.
+    missing = [r[1] for r in problem_rows if r[1] not in worlds_strings]
+    missing += [r[2] for r in problem_rows
+                if ("WorldsScreen." + r[2]) not in all_rows]
+    cases.append(("10: every sentence and prompt the table names resolves",
+                  not missing))
     if missing:
         detail.append("   outcome table names unmeasurable: %s" % missing)
 
@@ -1636,13 +1772,14 @@ def main():
 
     # The two footer lines the error state draws, in the band ui_scroll_verify
     # already checks: the scroll hint above, the outcome's prompt below.
-    footers = [worlds_strings["kProblemScrollHint"],
-               worlds_strings["kPromptContinue"], worlds_strings["kPromptExit"]]
-    cases.append(("5: the scroll hint and both prompts fit the screen at scale %d "
-                  "(widest %d px)"
-                  % (worlds["kFooterScale"],
-                     max(width(t, worlds["kFooterScale"]) for t in footers)),
-                  all(width(t, worlds["kFooterScale"]) <= SCREEN_W for t in footers)))
+    # Both are single-prompt rows since U4 pass 4, and their widths ride the
+    # all_rows check above. What is asserted here is that the problem table
+    # still offers a way OFF the screen for each outcome - an error state with
+    # no prompt is the one thing an error state cannot be.
+    problem_prompts = [all_rows["WorldsScreen.kPromptContinue"],
+                       all_rows["WorldsScreen.kPromptExit"]]
+    cases.append(("5: both startup problem prompts name a button and a verb",
+                  all(len(r) == 1 and r[0][0] and r[0][1] for r in problem_prompts)))
 
     # --- 5/6 (startup screen): the loading state ----------------------------
     #
@@ -1781,6 +1918,69 @@ def main():
                   % (band, widest_label, widest_row, widest_flag, gap))
     cases.append(("9: the picker band is centred on the 1920 surface",
                   row_x + band // 2 == 960))
+
+    # --- U4 pass 2: the picker's row box and its panel ----------------------
+    #
+    # Both of these are tight, and both were arithmetic before they were code.
+    pick = parse_geometry("ModelPicker.cpp")
+    pitch = PICKER_PITCH if "PICKER_PITCH" in globals() else 52
+    box_top = pick["kPickerBarOffsetY"]
+    box_bot = box_top + pick["kPickerBarHeight"]
+
+    # The band must contain the row's whole ink box - scale 3 puts ink 9..44
+    # below the draw y - and must not reach into the next row's band.
+    ink_a, ink_b = INK[PICKER_ROW_SCALE][0], INK[PICKER_ROW_SCALE][1]
+    cases.append(("U4: the picker band holds the row's ink (%d..%d inside %d..%d)"
+                  % (ink_a, ink_b, box_top, box_bot),
+                  box_top <= ink_a and box_bot >= ink_b))
+    # One band ends at box_bot; the next begins a whole pitch after box_top, so
+    # what separates them is pitch - height and nothing to do with the offset.
+    cases.append(("U4: picker bands do not touch (%d px between them)"
+                  % (pitch - pick["kPickerBarHeight"]),
+                  box_bot < pitch + box_top))
+
+    # --- U4 pass 3: the graded ground ---------------------------------------
+    #
+    # The vignette is drawn as opaque concentric rings rather than blended over
+    # the frame, and the ENTIRE justification for that is that the rings tile the
+    # screen exactly once - same pixel count as the clear they replace, on a
+    # software renderer where every pixel is CPU work. If they ever overlap or
+    # leave a gap, that argument is void and the screen is visibly wrong, so the
+    # tiling is re-derived here rather than trusted.
+    ctrl = parse_geometry("Controls.cpp")
+    vm, vs = ctrl["kVignetteMargin"], ctrl["kVignetteSteps"]
+    vstep = vm // vs
+    ring_px = 0
+    for i in range(vs):
+        inset = i * vstep
+        w, h = SCREEN_W - 2 * inset, SCREEN_H - 2 * inset
+        ring_px += 2 * (w * vstep) + 2 * (vstep * (h - 2 * vstep))
+    centre_px = (SCREEN_W - 2 * vm) * (SCREEN_H - 2 * vm)
+    cases.append(("U4: the vignette's %d rings tile the screen exactly once "
+                  "(%d + %d == %d)" % (vs, ring_px, centre_px, SCREEN_W * SCREEN_H),
+                  ring_px + centre_px == SCREEN_W * SCREEN_H))
+    cases.append(("U4: the vignette margin divides into whole rings (%d / %d = %d)"
+                  % (vm, vs, vstep), vm % vs == 0 and 2 * vm < SCREEN_H))
+
+    # The ground must stay darkest at the edge and reach full Ground at the
+    # centre; a floor at or above 100 would be no vignette at all.
+    cases.append(("U4: the vignette darkens toward the edge (floor %d%%)"
+                  % ctrl["kVignetteFloor"],
+                  0 < ctrl["kVignetteFloor"] < 100))
+
+    # THE PICKER HAS NO PANEL FRAME, and this is the measurement that says why -
+    # kept as a case so the conclusion is re-derived on every run rather than
+    # remembered. A frame enclosing the list must enclose its scroll hints, so
+    # its top edge belongs between the count line's ink and MORE ABOVE's. That
+    # window is eight pixels wide, for a 2px line needing clearance either side.
+    #
+    # If this case ever FAILS, the window has opened - somebody moved the count
+    # line or the list - and framing the picker is worth revisiting.
+    hint_above = parse_list_layout("ModelPicker.cpp", "kPickerLayout")[0] -                  parse_list_layout("ModelPicker.cpp", "kPickerLayout")[3]
+    window = ink_top(hint_above, PICKER_ROW_SCALE) - ink_bottom(185, PICKER_ROW_SCALE)
+    cases.append(("U4: the picker still has no room for a panel frame "
+                  "(%d px between the count line and MORE ABOVE)" % window,
+                  window < 16 and "DrawPanelFrame" not in picker_src))
 
     failures = 0
     for name, ok in cases:

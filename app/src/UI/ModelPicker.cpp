@@ -49,6 +49,37 @@ const int kRowX         = 420;
 const int kRowFlagRight = 1500;
 const int kRowW         = kRowFlagRight - kRowX;
 
+// --- U4 pass 2: the picker's band and its frame ----------------------------
+//
+// THE ROW BOX IS THIS PICKER'S OWN, and not the -10/64 the three categorised
+// screens share. Those rows sit on a 76px pitch; these sit on 52, so a 64px
+// band would run into its neighbour. At +2/48 the band holds the row's whole
+// ink box - scale 3 puts ink 9..44 below the draw y - with 7px above it, 6
+// below, and 4px of ground between one band and the next.
+const int kPickerBarOffsetY = 2;
+const int kPickerBarHeight  = 48;
+
+// THIS PICKER GETS NO PANEL FRAME, and the reason is arithmetic rather than
+// taste. It was tried, and the numbers refuse it.
+//
+// A frame that encloses the list has to enclose its scroll hints too - a hint
+// is part of the list it is about - so its top edge must sit between the count
+// line's ink, which ends at 229, and MORE ABOVE's, which starts at 237. That is
+// an EIGHT PIXEL window for a 2px line that needs clearance on both sides, and
+// a first attempt at 236 drew the frame straight through the hint.
+//
+// Dropping the hints outside the frame does not rescue it: that puts the top
+// edge in the 10px between MORE ABOVE's ink and the first row's band, and the
+// two layouts disagree about where that is - kPickerLayoutWithInstruction
+// starts 52px lower and its own hint ends at 324.
+//
+// The vertical budget here is simply spoken for: heading, count line, optional
+// instruction, two hints, eleven or twelve rows and two footer lines in 1080px.
+// Buying room means moving constants that are deliberately pinned so the two
+// shipped pickers keep rendering pixel for pixel, which is a layout change and
+// not a styling pass. The rows get the band and the separators; the panel
+// belongs to a later item that is allowed to move the furniture.
+
 std::string RowLabel(const ModelPoolEntry& m) {
     std::string label = std::string(m.model) + " " + m.displayName;
     // Uppercase the model id so it matches the name beside it; the table
@@ -156,7 +187,22 @@ void ModelPicker::Draw(Renderer& renderer, const PickerStrings& strings,
         if (index >= count) break;
 
         int   y     = layout.firstY + row * layout.spacing;
-        Color color = (index == cursor_) ? Palette::Selected : Palette::Text;
+        bool  focused = (index == cursor_);
+        Color color = focused ? Palette::Selected : Palette::Text;
+
+        // U4 pass 2. This list had NO band at all - the cursor was a colour
+        // change and nothing else, which on an 82-row list at scale 3 is the
+        // hardest cursor in the app to find. It gets the same band every other
+        // list has, in this picker's own row box.
+        bool lastDrawn = (row == visible - 1) || (index + 1 >= count);
+        if (!lastDrawn) {
+            DrawRowSeparator(renderer, kRowX, y + kPickerBarOffsetY + kPickerBarHeight,
+                             kRowW);
+        }
+        if (focused) {
+            DrawSelectionBand(renderer, kRowX, y + kPickerBarOffsetY, kRowW,
+                              kPickerBarHeight);
+        }
 
         DrawLabelLeft(renderer, kRowX, y, RowLabel(table[index]).c_str(), kItemScale, color);
         DrawLabelRight(renderer, kRowFlagRight, y,
@@ -165,8 +211,18 @@ void ModelPicker::Draw(Renderer& renderer, const PickerStrings& strings,
 
     DrawPaneScrollHints(renderer, layout, kRowX, kRowW, count, offset, visible);
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130,
-                      "UP DOWN MOVE   L1 R1 PAGE   X TOGGLE", kFooterScale, Palette::Dim);
+    // U4 pass 4. L1/R1 are labelled shoulder buttons rather than symbols, so
+    // they stay as a plain prompt - inventing a glyph for a button that has
+    // its name printed on it would be worse than the words.
+    const ButtonPrompt moveRow[] = {
+        { kBtnDpad,  "MOVE" },
+        { nullptr,   "L1 R1 PAGE" },
+        { kBtnCross, "TOGGLE" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 3, kFooterScale);
+
+    // The second line names both verbs and is the picker's own string, so it
+    // stays one label - its two halves are not button prompts.
     DrawCenteredLabel(renderer, kScreenHeight - 80, strings.footer, kFooterScale,
                       Palette::Dim);
 

@@ -184,4 +184,209 @@ std::vector<std::string> WrapText(Renderer& renderer, const char* text, int scal
     return lines;
 }
 
+// --- U4 pass 1 -------------------------------------------------------------
+
+namespace {
+// --- U4 pass 3: the vignette -----------------------------------------------
+//
+// THE GROUND IS GRADED, NOT DARKENED AFTERWARDS, and that is a performance
+// decision with a measured reason rather than a stylistic one.
+//
+// The obvious way to vignette is to blend black over the finished frame. This
+// app draws through SDL_CreateSoftwareRenderer - every pixel is CPU work - and
+// FillRectBlend is read-modify-write. Covering a 280px margin on four edges is
+// 1,366,400 blended pixels ON TOP of the 2,073,600-pixel opaque clear it would
+// no longer replace: 66% more fill every frame, in the more expensive mode, on
+// a console whose menu already redraws in full each time.
+//
+// Drawing the ground as concentric RINGS instead costs exactly what the clear
+// cost, because each pixel is still written precisely once - the rings tile the
+// screen and never overlap. The gradient is free.
+//
+// WHAT IT GIVES UP, stated plainly: an opaque ground darkens the BACKGROUND
+// only, so text and frames near the edges are not dimmed the way a blended
+// vignette would dim them. On this app that is arguably the better end of the
+// trade - what sits near the edges is the tab strip, the headings and the
+// footer prompts, and those are meant to stay readable.
+const int kVignetteMargin = 280;   // how far in the darkening reaches
+const int kVignetteSteps  = 14;    // 20px per ring; must divide the margin
+const int kVignetteFloor  = 40;    // the outermost ring, as a percentage of Ground
+
+// Ring `i` of `kVignetteSteps`, counted inward from the screen edge. Integer
+// throughout: the floor is a percentage so nothing here needs floating point.
+Color VignetteTone(int i) {
+    const Color& g = Palette::Ground;
+    // 0 at the outer edge, 100 at the inner one, sampled at the ring's middle
+    // so the outermost ring is not fully at the floor and the innermost is not
+    // fully at the ground - which would band visibly at both ends.
+    int t = (200 * i + 100) / (2 * kVignetteSteps);
+    int pct = kVignetteFloor + (100 - kVignetteFloor) * t / 100;
+    Color out;
+    out.r = (unsigned char)(g.r * pct / 100);
+    out.g = (unsigned char)(g.g * pct / 100);
+    out.b = (unsigned char)(g.b * pct / 100);
+    return out;
+}
+} // namespace
+
+void DrawGround(Renderer& renderer) {
+    const int step = kVignetteMargin / kVignetteSteps;
+
+    // The middle, at full ground. Everything outside it is a ring.
+    renderer.FillRect(kVignetteMargin, kVignetteMargin,
+                      kScreenWidth - 2 * kVignetteMargin,
+                      kScreenHeight - 2 * kVignetteMargin,
+                      Palette::Ground.r, Palette::Ground.g, Palette::Ground.b);
+
+    // Each ring is four strips. The left and right strips stop short of the
+    // top and bottom ones rather than running the full height, so no pixel is
+    // written twice - which is the whole basis of the cost argument above.
+    for (int i = 0; i < kVignetteSteps; i++) {
+        Color c = VignetteTone(i);
+        int inset = i * step;
+        int w = kScreenWidth - 2 * inset;
+        int h = kScreenHeight - 2 * inset;
+
+        renderer.FillRect(inset, inset, w, step, c.r, c.g, c.b);
+        renderer.FillRect(inset, inset + h - step, w, step, c.r, c.g, c.b);
+        renderer.FillRect(inset, inset + step, step, h - 2 * step, c.r, c.g, c.b);
+        renderer.FillRect(inset + w - step, inset + step, step, h - 2 * step,
+                          c.r, c.g, c.b);
+    }
+}
+
+namespace {
+// How far a corner tick runs along each edge, and how far the inner line sits
+// inside the outer one. Both are deliberately small: at 1px in and 28px long
+// the frame reads as a drawn border at three metres rather than as two
+// rectangles, which is what it looks like when the gap is opened up.
+const int kFrameInset   = 3;
+const int kFrameTickLen = 28;
+const int kFrameLine    = 2;   // matches every rule in the app
+} // namespace
+
+void DrawPanelFrame(Renderer& renderer, int x, int y, int w, int h) {
+    const Color& o = Palette::Rule;
+    const Color& s = Palette::RuleSoft;
+
+    // The outer rectangle, as four fills. Corners overlap, which costs nothing
+    // and avoids four off-by-one cases at the ends of each run.
+    renderer.FillRect(x, y, w, kFrameLine, o.r, o.g, o.b);                    // top
+    renderer.FillRect(x, y + h - kFrameLine, w, kFrameLine, o.r, o.g, o.b);   // bottom
+    renderer.FillRect(x, y, kFrameLine, h, o.r, o.g, o.b);                    // left
+    renderer.FillRect(x + w - kFrameLine, y, kFrameLine, h, o.r, o.g, o.b);   // right
+
+    // The inner line is NOT a second rectangle - it is eight short runs, one
+    // stepping in from each corner along each edge. A full inner rectangle
+    // reads as a double border all the way round, which the reference does not
+    // do; the ticks are what make a corner look drawn rather than mitred.
+    int ix = x + kFrameInset;
+    int iy = y + kFrameInset;
+    int iw = w - 2 * kFrameInset;
+    int ih = h - 2 * kFrameInset;
+    if (iw <= 2 * kFrameTickLen || ih <= 2 * kFrameTickLen) return;
+
+    // top-left and top-right, along the top edge
+    renderer.FillRect(ix, iy, kFrameTickLen, kFrameLine, s.r, s.g, s.b);
+    renderer.FillRect(ix + iw - kFrameTickLen, iy, kFrameTickLen, kFrameLine, s.r, s.g, s.b);
+    // the same two along the bottom
+    renderer.FillRect(ix, iy + ih - kFrameLine, kFrameTickLen, kFrameLine, s.r, s.g, s.b);
+    renderer.FillRect(ix + iw - kFrameTickLen, iy + ih - kFrameLine, kFrameTickLen,
+                      kFrameLine, s.r, s.g, s.b);
+    // and four down the sides
+    renderer.FillRect(ix, iy, kFrameLine, kFrameTickLen, s.r, s.g, s.b);
+    renderer.FillRect(ix, iy + ih - kFrameTickLen, kFrameLine, kFrameTickLen, s.r, s.g, s.b);
+    renderer.FillRect(ix + iw - kFrameLine, iy, kFrameLine, kFrameTickLen, s.r, s.g, s.b);
+    renderer.FillRect(ix + iw - kFrameLine, iy + ih - kFrameTickLen, kFrameLine,
+                      kFrameTickLen, s.r, s.g, s.b);
+}
+
+// --- U4 pass 2 -------------------------------------------------------------
+
+namespace {
+// The bright rule closing the band top and bottom. Two pixels, matching every
+// other rule in the app - this one is meant to be seen.
+const int kBandEdge = 2;
+} // namespace
+
+void DrawSelectionBand(Renderer& renderer, int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) return;
+
+    const Color& base = Palette::SelectedBar;
+    const Color& lit  = Palette::SelectedBarLit;
+    const Color& edge = Palette::SelectedEdge;
+
+    // Lower half first, then the lit upper half over it. Two fills rather than a
+    // gradient: there is no gradient primitive here, and at these two tones a
+    // television reads the split as a falloff rather than as a seam.
+    renderer.FillRect(x, y, w, h, base.r, base.g, base.b);
+    renderer.FillRect(x, y, w, h / 2, lit.r, lit.g, lit.b);
+
+    // The edges. A band closed top and bottom reads as drawn; the same band
+    // without them reads as a rectangle behind the text, which is what the flat
+    // fill this replaces looked like.
+    if (h >= 2 * kBandEdge) {
+        renderer.FillRect(x, y, w, kBandEdge, edge.r, edge.g, edge.b);
+        renderer.FillRect(x, y + h - kBandEdge, w, kBandEdge, edge.r, edge.g, edge.b);
+    }
+}
+
+namespace {
+// The gap between a glyph and its own label, and between one prompt and the
+// next. The second is much larger on purpose: what separates "CROSS SELECT"
+// from "CIRCLE BACK" has to be unmistakably wider than what joins a glyph to
+// its word, or the row reads as one run of alternating symbols and nouns.
+const int kPromptGlyphGap = 10;
+const int kPromptGap      = 46;
+} // namespace
+
+Color ButtonColor(const char* glyph) {
+    if (glyph == nullptr || glyph[0] == '\0') return Palette::Dim;
+    switch ((unsigned char)glyph[0]) {
+        case 0x80: return Palette::BtnCross;
+        case 0x81: return Palette::BtnCircle;
+        case 0x82: return Palette::BtnTriangle;
+        case 0x83: return Palette::BtnSquare;
+        case 0x84: return Palette::BtnDpad;
+        default:   return Palette::Dim;
+    }
+}
+
+void DrawPromptRow(Renderer& renderer, int y, const ButtonPrompt* prompts, int count,
+                   int scale) {
+    if (prompts == nullptr || count <= 0) return;
+
+    // Measured first, then drawn from the left edge of the measured row, so
+    // the row is centred as a WHOLE. Centring each prompt independently would
+    // not be centring at all, and measuring with TextWidth rather than by
+    // character count is the same reason every other block in this app does:
+    // the atlas is proportional.
+    int total = 0;
+    for (int i = 0; i < count; i++) {
+        if (prompts[i].glyph) {
+            total += renderer.TextWidth(prompts[i].glyph, scale) + kPromptGlyphGap;
+        }
+        total += renderer.TextWidth(prompts[i].label, scale);
+        if (i + 1 < count) total += kPromptGap;
+    }
+
+    int x = (kScreenWidth - total) / 2;
+    for (int i = 0; i < count; i++) {
+        if (prompts[i].glyph) {
+            Color c = ButtonColor(prompts[i].glyph);
+            DrawLabelLeft(renderer, x, y, prompts[i].glyph, scale, c);
+            x += renderer.TextWidth(prompts[i].glyph, scale) + kPromptGlyphGap;
+        }
+        DrawLabelLeft(renderer, x, y, prompts[i].label, scale, Palette::Dim);
+        x += renderer.TextWidth(prompts[i].label, scale);
+        if (i + 1 < count) x += kPromptGap;
+    }
+}
+
+void DrawRowSeparator(Renderer& renderer, int x, int y, int w) {
+    if (w <= 0) return;
+    const Color& c = Palette::RuleSoft;
+    renderer.FillRect(x, y, w, 1, c.r, c.g, c.b);
+}
+
 } // namespace bbr

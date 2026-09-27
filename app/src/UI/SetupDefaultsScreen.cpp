@@ -78,17 +78,40 @@ const int kBarHeight  = 64;
 // SDL entry point to prove on hardware (plan P4). Dimmer than Palette::Dim,
 // which is text: a rule that reads as loud as a label is furniture competing
 // with content.
-const Color kRuleColor = { 64, 72, 82 };
+const Color kRuleColor = Palette::Rule;
 
-const char* const kFooterLine =
-    "UP DOWN MOVE   LEFT RIGHT CHANGE   X SELECT   O BACK   OPTIONS SAVE";
+// U4 pass 1: one frame per column instead of a rule between them. See
+// WorldEditorScreen.cpp for why - the three screens carry their own copy of
+// this constant for the same reason they carry their own copy of the column
+// geometry, and settings_ui_verify.py compares them.
+const int kPanelPad = 14;
+
+
+// U4 pass 4: prompt rows rather than strings - see WorldsScreen.cpp. The two
+// differ in exactly one prompt, which is the point of having two: Left/Right
+// changes a value in the pane and switches tabs on the rail.
+const ButtonPrompt kFooterPrompts[] = {
+    { kBtnDpad,   "MOVE" },
+    { nullptr,    "LEFT RIGHT CHANGE" },
+    { kBtnCross,  "SELECT" },
+    { kBtnCircle, "BACK" },
+    { nullptr,    "OPTIONS SAVE" },
+};
+const int kFooterPromptCount = (int)(sizeof(kFooterPrompts) / sizeof(kFooterPrompts[0]));
 
 // Left/Right mean two different things on this screen and always have: a
 // value change in the pane, and - since the tabs landed - a tab switch on the
 // rail (B31, spec worlds D19). Nothing is re-bound; the rail simply stopped
 // throwing both inputs away.
-const char* const kRailFooterLine =
-    "UP DOWN MOVE   LEFT RIGHT TABS   X SELECT   O BACK   OPTIONS SAVE";
+const ButtonPrompt kRailFooterPrompts[] = {
+    { kBtnDpad,   "MOVE" },
+    { nullptr,    "LEFT RIGHT TABS" },
+    { kBtnCross,  "SELECT" },
+    { kBtnCircle, "BACK" },
+    { nullptr,    "OPTIONS SAVE" },
+};
+const int kRailFooterPromptCount =
+    (int)(sizeof(kRailFooterPrompts) / sizeof(kRailFooterPrompts[0]));
 
 char CycleLetter(char c, int dir) {
     int idx = ((c - 'A') + dir + 26) % 26;
@@ -283,7 +306,7 @@ void SetupDefaultsScreen::Draw(Renderer& renderer) {
 }
 
 void SetupDefaultsScreen::DrawSettings(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     // The tab strip, and the active tab's name as the heading beneath it
     // (B1). The screen title that used to sit here said SETUP DEFAULTS; the
@@ -297,26 +320,30 @@ void SetupDefaultsScreen::DrawSettings(Renderer& renderer) {
     // beside its own row and again in a header put it on screen three times.
     renderer.FillRect(kRailX, kHeaderRuleY, 1800, kRuleThickness,
                       kRuleColor.r, kRuleColor.g, kRuleColor.b);
-    renderer.FillRect(kPaneX - 20, kColumnRuleY, kRuleThickness, kColumnRuleH,
-                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
-    renderer.FillRect(kHelpX - 20, kColumnRuleY, kRuleThickness, kColumnRuleH,
-                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    // One frame per column, replacing the two vertical rules between them.
+    DrawPanelFrame(renderer, kRailX - kPanelPad, kColumnRuleY,
+                   kRailW + 2 * kPanelPad, kColumnRuleH);
+    DrawPanelFrame(renderer, kPaneX - kPanelPad, kColumnRuleY,
+                   kPaneW + 2 * kPanelPad, kColumnRuleH);
+    DrawPanelFrame(renderer, kHelpX - kPanelPad, kColumnRuleY,
+                   kHelpW + 2 * kPanelPad, kColumnRuleH);
 
     DrawRail(renderer);
     DrawPane(renderer);
     DrawHelp(renderer);
 
-    DrawCenteredLabel(renderer, kFooterY,
-                      focus_ == Focus::Rail ? kRailFooterLine : kFooterLine,
-                      kFooterScale, Palette::Dim);
+    bool onRail = (focus_ == Focus::Rail);
+    DrawPromptRow(renderer, kFooterY,
+                  onRail ? kRailFooterPrompts : kFooterPrompts,
+                  onRail ? kRailFooterPromptCount : kFooterPromptCount,
+                  kFooterScale);
 }
 
 void SetupDefaultsScreen::DrawRailRow(Renderer& renderer, int y, const char* text,
                                       bool focused, bool current) {
     if (focused) {
-        renderer.FillRect(kRailX, y + kBarOffsetY, kRailW, kBarHeight,
-                          Palette::SelectedBar.r, Palette::SelectedBar.g,
-                          Palette::SelectedBar.b);
+        DrawSelectionBand(renderer, kRailX, y + kBarOffsetY, kRailW, kBarHeight);
     }
     // The category the pane is showing stays in the selected colour without
     // the bar whenever the cursor is elsewhere - in the pane, or on row 0 - so
@@ -378,10 +405,16 @@ void SetupDefaultsScreen::DrawPane(Renderer& renderer) {
         int  y       = kPaneLayout.firstY + row * kPaneLayout.spacing;
         bool focused = (focus_ == Focus::List && index == listCursor_[lastCategory_]);
 
+        // U4 pass 2: a hairline between rows, never under the last drawn one.
+        // A category can be shorter than the band, so "last drawn" is the end of
+        // the CATEGORY as often as it is the end of the window.
+        bool lastDrawn = (row == visible - 1) || (index + 1 >= count);
+        if (!lastDrawn) {
+            DrawRowSeparator(renderer, kPaneX, y + kBarOffsetY + kBarHeight, kPaneW);
+        }
+
         if (focused) {
-            renderer.FillRect(kPaneX, y + kBarOffsetY, kPaneW, kBarHeight,
-                              Palette::SelectedBar.r, Palette::SelectedBar.g,
-                              Palette::SelectedBar.b);
+            DrawSelectionBand(renderer, kPaneX, y + kBarOffsetY, kPaneW, kBarHeight);
         }
         Color color = focused ? Palette::Selected : Palette::Text;
         DrawLabelLeft(renderer, kPaneX, y, def.label, kRowScale, color);
@@ -427,7 +460,7 @@ void SetupDefaultsScreen::DrawHelp(Renderer& renderer) {
 }
 
 void SetupDefaultsScreen::DrawEditTitleId(Renderer& renderer) {
-    renderer.Clear(20, 24, 28);
+    DrawGround(renderer);
 
     DrawCenteredLabel(renderer, 300, "BLOODBORNE TITLE ID", kEditTitleScale,
                       Palette::Heading);
@@ -447,8 +480,17 @@ void SetupDefaultsScreen::DrawEditTitleId(Renderer& renderer) {
         pen += renderer.TextWidth(single, kEditScale);
     }
 
-    DrawCenteredLabel(renderer, kScreenHeight - 130, "LEFT RIGHT SELECT   UP DOWN CHANGE", kFooterScale, Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 80, "X SAVE   O CANCEL", kFooterScale, Palette::Dim);
+    const ButtonPrompt moveRow[] = {
+        { nullptr,  "LEFT RIGHT SELECT" },
+        { kBtnDpad, "UP DOWN CHANGE" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 130, moveRow, 2, kFooterScale);
+
+    const ButtonPrompt saveRow[] = {
+        { kBtnCross,  "SAVE" },
+        { kBtnCircle, "CANCEL" },
+    };
+    DrawPromptRow(renderer, kScreenHeight - 80, saveRow, 2, kFooterScale);
 }
 
 } // namespace bbr

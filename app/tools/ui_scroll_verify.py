@@ -38,6 +38,15 @@ HEADER = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 FIRST_CODE = 32
 MARK_CODE = 127
 
+# U4 pass 4 baked the five button glyphs at 128..132. They are kept OUT of the
+# TEXT ink box for exactly the reason the mark is: they are drawn in footers at
+# a size chosen for them, not in running text, so letting them widen the box
+# would move every row clearance in the app the next time one is resized.
+#
+# As it happens they currently sit inside it and change nothing - which is
+# precisely why this is written down rather than left to luck.
+BUTTON_CODES = range(128, 133)
+
 
 def load_ink_box(path):
     """Per-scale (inkTop, inkBottom, lineHeight), in pixels below the y passed
@@ -90,8 +99,8 @@ def load_ink_box(path):
             if not g:
                 continue
             code += 1
-            if code == MARK_CODE:
-                continue          # the emblem, not a letter - see the docstring
+            if code == MARK_CODE or code in BUTTON_CODES:
+                continue          # emblem and buttons, not letters - see BUTTON_CODES
             # dataOffset, atlasX, atlasY, width, height, bearingX, bearingY, advance
             v = [int(x) for x in g.group(1).split(",")]
             w, h, bearing_y = v[3], v[4], v[6]
