@@ -66,7 +66,7 @@ list further down.
 
 ---
 
-## 3. Enemy and boss pickers and placement protection (1 remaining — all three pickers shipped)
+## 3. Enemy and boss pickers and placement protection (2 remaining — all three global pickers shipped)
 
 **Our design, but not new capability.** The reference already has all four
 semantics; what it lacks is a usable front-end. Today you type raw five-character
@@ -227,6 +227,43 @@ one list covers all ten.
 The two settings compose rather than compete: the global exclusion still wins where
 it applies, and this one only adds protection where it does not.
 
+### Row 35 — per-map enemy pools
+
+| # | Feature | What it does | Status | Cost |
+|---|---|---|---|---|
+| 35 | Per-map enemy pools | A per-map version of row 9's `ENEMIES INCLUDED`. For a chosen map, the pool becomes that map's own list rather than the global one — an **override**, not an intersection. Leaves every other map on the global list | **TODO — NEW**, no reference equivalent | Medium. The picker component exists (rows 9, 10, 32); the map axis, the override/inherit state, its config encoding and the engine lookup do not |
+
+**NEW capability, not a front-end.** The reference has one pool for the whole
+run: `oopsAll`/`excludeEnemiesBool` filter `enemyData` once, before any map is
+touched. There is no per-map pool anywhere in it, so this row has no reference
+behaviour to match and §7 of `CLAUDE.md` does not constrain its shape.
+
+Open questions for its spec, all unanswered:
+
+- **Override or intersect.** The developer's statement is *override* — a map's
+  list wins over the global one. That is the simpler rule to explain and the
+  easier one to show on screen. Intersection would be the safer default but it
+  makes an empty result easy to reach by accident.
+- **How a map says "inherit".** A map with no override must be distinguishable
+  from a map whose override happens to have everything ticked, or the screen
+  cannot show which maps the player has touched. That is a third state, not a
+  bit per model.
+- **Config cost is the real constraint.** Row 32 took `defaults.cfg` to 555 of
+  its 1024 bytes. A naive encoding — 82 characters per map across the map
+  table — does not fit, so this needs a sparse encoding storing only overridden
+  maps, and possibly a larger buffer. Measure before designing the screen.
+- **Which map list.** The map table, the zone list used by the per-zone chance
+  gate, and the 14 zones of row 17's boss toggles are three different
+  granularities. Picking the wrong one makes the screen either unusably long or
+  too coarse to be worth having.
+- **Pool starvation, again.** Row 32's resolution (spec 032 D4) was a
+  non-failing run that says so on screen. A per-map override can starve one map
+  while the rest are fine, which is a narrower case than anything that gate has
+  seen.
+
+Its front-end is `ui-backlog.md` row U3, which should share a map-axis component
+with row 17 if the two are built near each other.
+
 ---
 
 ## 4. Items and shop (2 remaining)
@@ -291,6 +328,53 @@ boss randomizers already perform, so all four are one small table-driven pass.
 
 ---
 
+## 8A. Modes — our own ideas (1)
+
+Numbered 8A rather than 9 on purpose: §9, §10 and §11 are referred to by number
+from other documents, so this section is inserted without renumbering them.
+
+Everything above is a **setting** — a flag that changes how randomization
+behaves. This section is for items that change what a run *is*.
+
+| # | Feature | What it does | Status | Cost |
+|---|---|---|---|---|
+| 36 | Boss rush mode | Clears a map's ordinary enemy placements entirely and places **bosses** at chosen points along it, spaced far enough apart that only one is ever engaged at a time | **IDEA — NEW**, no reference equivalent | **High**, and the highest-uncertainty item on this list |
+
+**Why this is the largest item here despite sounding small.** Every shipped
+feature substitutes one identity for another at a placement that already exists
+and already works — the game's own scripts, collision, navmesh and triggers stay
+intact. This one does the opposite: it removes placements and invents new ones.
+That crosses into territory nothing in this port has touched:
+
+- **Deleting placements is not a poke.** The existing engine overwrites three
+  fields of an existing MSB part. Removing parts means editing the MSB's part
+  lists and every index that refers into them, and `Msb` was written for
+  in-place edits.
+- **Bosses are not just enemies.** A boss placement in this game comes with arena
+  scripting, fog gates, an emevd trigger, a health bar and usually a region — the
+  mechanism `docs/features/018-easy-shadows/` had to understand to do the far
+  smaller job of statue-ing a duplicate add. Dropping `c5070` at a spot in Central
+  Yharnam does not give you a boss fight; the open question is what it *does*
+  give you, and that is a hardware question by construction.
+- **"Spaced enough" needs coordinates we do not have a source for.** Choosing
+  placement points means either authoring them by hand per map, or deriving them
+  from the vanilla placements' own transforms. Which is available, and whether
+  the results are traversable ground rather than mid-air or inside geometry, is
+  unknown.
+- **The scale of the deletion decides whether the map still loads.** Scripts that
+  wait on an enemy that no longer exists, and doors gated on clearing a group,
+  are the obvious failure class.
+
+**Suggested first step is an investigation, not a spec.** The cheapest way to
+learn whether this is a small feature or a project is one hardware probe: a
+single map, enemies left alone, one extra boss placed at a known-traversable
+point. If that fights, the rest is scoping. If it does not, the reason it does
+not is the actual feature. Because the uncertainty is this concentrated, this row
+should stay **IDEA** until that probe has run — it is not yet a thing anyone can
+write a spec against.
+
+---
+
 ## 9. Out of scope
 
 ### Chalice dungeons — OUT, by earlier decision
@@ -329,14 +413,24 @@ belongs at the end, not the front, and it needs its own spec.
 | Group | Remaining |
 |---|---|
 | Ready (code exists, needs a row) | 0 |
-| Enemy / boss pickers and placement protection (new) | 1 |
+| Enemy / boss pickers and placement protection (new) | 2 |
 | Items and shop | 1 real + 1 dead |
 | Enemy and boss pool | 4 |
 | Difficulty helpers | 4 |
 | Scaling | 2 |
 | Combat and cosmetic params | 8 |
-| **Total actionable** | **20** |
+| Modes (new) | 1 idea |
+| **Total actionable** | **21 + 1 idea** |
 | Out of scope (chalice) | 3 |
+
+Of those, **19 are unimplemented reference settings** — §4 through §8, every
+checkbox the Windows tool has that this port does not. Finishing that set is a
+standing goal in its own right and needs no separate row: the rows below *are*
+the list, and the order in §11 is how to work through them. Rows 35 and 36 are
+ours and sit outside it.
+
+UI and platform work is tracked separately in `ui-backlog.md`, which is where
+the two screen-simplification items live.
 
 ## 11. Suggested order
 
@@ -355,3 +449,12 @@ Grouped so each block reuses one piece of machinery and can share a validator:
 6. **Scaling** (22, 23).
 7. **Cosmetic params** (26, 28, 29, 30, 31).
 8. **Key items with logic** (12) — own spec, last.
+
+Two later additions, both ours rather than the reference's:
+
+- **Row 35 (per-map enemy pools)** belongs in block 5 — it is the same
+  eligibility code and the same picker component as the rest of that block, and
+  it should share a map-axis sub-screen with row 17.
+- **Row 36 (boss rush)** is sequenced by nothing on this list. It needs a
+  hardware probe before it can be specified, and that probe can happen at any
+  time because it shares no machinery with anything here.

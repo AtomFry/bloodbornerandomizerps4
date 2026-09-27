@@ -168,25 +168,61 @@ const char* const kFooterLine =
 // it and settings_ui_verify.py measures it.
 const char* const kScreenTitle = "WORLD EDITOR";
 
-// Confirm's list is still a flat review list, so it keeps the band the flat
-// settings list used: from under the sub-heading down to just above where the
-// "MORE BELOW" hint has to clear the footer.
-//
-// Milestone 6 moved it down and tightened its pitch: the B10 statement needs
-// two wrapped rows above the list, and at 420/90 the list's MORE ABOVE hint
-// sat inside the second of them. 470/80 keeps the same six visible rows with
-// the band cleared - ui_scroll_verify.py asserts both ends.
-const ListLayout kSettingsLayout = { 470, 80, 870, 60 };
+// CONFIRM'S LIST LAYOUT IS GONE (U2). `kSettingsLayout` - { 470, 80, 870, 60 },
+// the band the flat review list scrolled in - had exactly one user, and Confirm
+// draws two fixed blocks now. Nothing else on this screen used it: the settings
+// pane has its own geometry, shared with Setup Defaults.
 
 // --- Confirm, which is now the ACTIVATION confirmation (B10) ---------------
 //
-// The B10 statement is eight label/value rows at the head of that same list -
-// the three that were already there plus the five activation adds - rather
-// than a block of its own above it. Two reasons: the band between the state
-// line and the list is two scale-3 rows deep and the statement is five rows,
-// and a statement that scrolls with the recipe it is about is one list to
-// read instead of two.
-const char* const kConfirmGap = "   ";   // what every row puts between the two
+// TWO TIERS AND NO LIST (UI backlog U2). This screen used to be one flat
+// scrolling review of 27 rows - eight statement rows followed by every setting
+// - and it read as a settings dump rather than as a question. The complaint was
+// not its length but its flatness: the irreversible save-data consequence had
+// exactly the same weight as EASY ROM   NO.
+//
+// It is now a fixed screen of two blocks that never scrolls:
+//
+//   TIER 1  WHAT IS ABOUT TO HAPPEN - the five B10 facts, at the item scale.
+//           These are the consequential ones, and they are what "do you want
+//           to continue?" is actually asking about.
+//   TIER 2  WHAT THIS WORLD IS - the seed, the target, and the settings as a
+//           COUNT. At the row scale, under a rule, because it is context for
+//           the question rather than the question.
+//
+// THE SETTINGS LIST IS GONE FROM THIS SCREEN, and that is the developer's
+// decision rather than a consequence of the layout: no drill-in, no expansion.
+// The recipe is what the player just finished editing one step back, the rail
+// they came from states the same count against the row, and every value is in
+// live.log once the run starts. What this screen owes them is the CONSEQUENCE,
+// which the settings list was burying.
+// Both tiers are label-left / value-right inside one centred block, the way the
+// settings pane opposite them is, rather than centred "LABEL   VALUE" strings.
+// A column of values that starts at a different x on every row is a block the
+// eye cannot scan, which is half of why the old list read as a log.
+//
+// 1920 - 2 * 260 = 1400, and it is 1400 rather than the 1200 first tried
+// because the verifier refused that: OUTGOING SAVE + BACKED UP - NO WORLD TO
+// SAVE IT TO is 1190px at scale 4, which left 10px between label and value and
+// read as one run-on row. settings_ui_verify.py measures every tier row against
+// this block rather than against the screen, and holds each to a 40px minimum
+// gap - a row that fits 1920 but not the block collides with itself in the
+// middle, which is the failure a screen-width budget cannot see.
+const int kConfirmBlockX     = 260;
+const int kConfirmBlockRight = 1660;
+
+// Tier 1: five rows at the item scale. The pitch clears scale 4's 59px line box
+// with 7px to spare.
+const int kConfirmPlanY     = 430;
+const int kConfirmPlanPitch = 66;
+const int kConfirmPlanRows  = 5;
+
+// The rule between the tiers, and tier 2: three rows at the row scale. The last
+// of them ends its ink at 968, and the footer's starts at 989.
+const int kConfirmTierRuleY  = 780;
+const int kConfirmWorldY     = 820;
+const int kConfirmWorldPitch = 52;
+const int kConfirmWorldRows  = 3;
 
 // What OPTIONS on the Settings step did to the world on disk is still stated
 // here, on the state line, and so is the reason an activation is refused. The
@@ -212,6 +248,16 @@ const char* const kRowActivating    = "ACTIVATING";
 const char* const kRowIncomingSave  = "INCOMING SAVE";
 const char* const kRowHowLong       = "HOW LONG";
 
+// Tier 2's three labels, named for the same reason: settings_ui_verify.py
+// measures the widest row of each tier rather than guessing which it is.
+const char* const kRowSeed     = "SEED";
+const char* const kRowTarget   = "TARGET";
+const char* const kRowSettings = "SETTINGS";
+
+// What tier 2 says for VANILLA, which has no recipe at all (B20).
+const char* const kConfirmNone            = "NONE";
+const char* const kConfirmVanillaSettings = "NONE - THE RANDOMIZER IS REMOVED";
+
 // Where the outgoing world's save goes (B10). Four cases, and the two that say
 // nothing happens are as important as the two that say something does: a
 // player who is told their save was filed away when it was not has been
@@ -232,15 +278,102 @@ const char* const kDurationShort   = "A FEW SECONDS";
 const char* const kDurationMedium  = "UNDER A MINUTE";
 const char* const kDurationLong    = "ABOUT A MINUTE";
 
-// The two lines Confirm ends on, and the two the activation can end on.
-const char* const kConfirmFooterHint = "UP DOWN SCROLL";
+// The ONE line Confirm ends on. `kConfirmFooterHint` - "UP DOWN SCROLL" - went
+// with the list it described (U2): the screen cannot scroll, so advertising the
+// control would be worse than saying nothing.
 const char* const kConfirmFooterGo   = "OPTIONS ACTIVATE   O BACK";
 const char* const kConfirmFooterBack = "O BACK";
 
-// The progress log is denser and starts higher. One slot is given up to the
-// live status line while the run is going, so the log itself shows one fewer
-// line then than it does once the run has finished.
+// The activation log's band, used by Step::Problem alone since U1 - the
+// loading state draws no list at all. The numbers are unmoved, and are the same
+// four WorldsScreen's startup problem screen uses: one geometry for "something
+// went wrong, here is the log", on both screens that can say it.
+//
+// It no longer gives a slot to a live status line, because there is no longer a
+// live status line: nothing draws this band while a job is running.
 const ListLayout kProgressLayout = { 300, 70, 920, 50 };
+
+// --- the loading state (U1) ------------------------------------------------
+//
+// THE STARTUP SCREEN'S GEOMETRY, DELIBERATELY IDENTICAL. These are
+// WorldsScreen's kLoad* values to the pixel, because the two screens are the
+// same screen at different moments of the same session and the player should
+// not be able to tell that two files drew them. settings_ui_verify.py compares
+// the two sets and fails if either moves.
+const int kActHeadlineY = 390;   // drawn at kTitleScale
+const int kActRuleY     = 480;
+const int kActBarY      = 530;
+const int kActBarH      = 28;
+const int kActNameY     = 610;   // drawn at kHeadingScale
+const int kActBlockX    = 460;   // (1920 - kActBlockW) / 2
+const int kActBlockW    = 1000;  // shared by the rule and the bar
+
+// ONE CONTINUOUS FILL, and since the startup screen was changed to match it
+// (developer's request, 2026-09-26) the two bars are the same bar.
+//
+// It was built this way here first, and the reason is worth keeping written
+// down: WorldActivationJob::Progress() is a real 0..1 across all seven phases
+// WITH sub-phase progress inside the three long ones, and phase 4 alone is 10-20
+// seconds of it. Discrete cells - seven, one per phase - would have sat
+// motionless through most of that wait, which is the one thing a loading screen
+// must not do. A still bar on a console with no other feedback reads as a hang,
+// and the log this screen replaced is what used to disprove that.
+//
+// Startup's five stages are coarser and all but one are instant, so its fill
+// still advances in fifths rather than smoothly. Same bar, different thing
+// driving it - which is behaviour, and not something the player has to be shown
+// twice.
+const int kActBarMinFillW = 4;   // so 0% is visibly a bar and not an empty slot
+
+// The loading state's headline, and the only word it says about what is
+// happening. It does not name the phase - which phase is running is internals
+// the player has no context for, and a phase name that flickers past is worse
+// than a bar that does not. That is spec 10 D2 on the startup screen, and it
+// applies here for the same reason.
+const char* const kActHeadline = "ACTIVATING";
+const char* const kActVanillaName = "VANILLA";
+
+// --- the problem state (U1) ------------------------------------------------
+//
+// Two titles, because a refusal and a failure mean OPPOSITE things about the
+// console, and one word for both would keep the misleading half of what the old
+// screen did: a refusal wrote nothing at all, and a failure stopped partway
+// through a transaction that reconciliation finishes or rolls back at next
+// launch.
+const char* const kActRefusedTitle = "ACTIVATION REFUSED";
+const char* const kActFailedTitle  = "ACTIVATION FAILED";
+
+// A refusal always carries its own designed sentence, so this is the fallback
+// for the impossible case of one arriving without one - not the normal path.
+const char* const kActRefusedFallback = "NOTHING WAS CHANGED";
+
+// A failure's sentence is FIXED, and the phase's own wording stays in the log
+// below it. Same division the startup problem screen makes: the screen says
+// what it means for the player, the job says what happened to the files.
+const char* const kActFailedSentence =
+    "THIS WORLD WAS NOT ACTIVATED - THE LOG BELOW SAYS WHERE IT STOPPED";
+
+const char* const kActProblemScrollHint = "UP DOWN SCROLL";
+const char* const kActProblemPrompt     = "O RETURN TO WORLDS";
+
+// The problem screen's title and sentence band. The title sits where the old
+// screen's did; the sentence below it is WRAPPED, at the row scale, across the
+// same 1800px Confirm wraps its copy of the same sentences across.
+//
+// IT MUST WRAP. A refusal's sentence is not a fixed string - four of them
+// append a path, a setting's label or a directory name at runtime, so the
+// longest one on screen is not the longest one in the source and no character
+// budget measured off WorldActivation.cpp would bound it. Confirm learned this
+// and wraps to two lines; drawing it unwrapped here would run a refusal about a
+// long vanilla path straight off both edges of the television.
+//
+// Two lines at this pitch end their ink at 290, and the log's first row starts
+// its ink at 309 - so the band cannot collide with the list beneath it.
+const int kActProblemTitleY      = 120;
+const int kActProblemSentenceY   = 200;
+const int kActProblemSentencePitch = 46;
+const int kActProblemSentenceW   = 1800;
+const int kActProblemSentenceMax = 2;
 
 // HISTORY is a full-screen list with a cursor, unlike Confirm, so it runs at
 // the row scale rather than the item scale: a revision line carries three
@@ -395,7 +528,6 @@ std::string WorldEditorScreen::SeedDisplayText() const { return SeedText(seed_);
 // has not been drawn yet cannot say it is working.
 void WorldEditorScreen::OpenConfirm() {
     if (!isVanilla_) SaveWorld();
-    confirmScroll_ = 0;   // the only place Confirm's scroll is zeroed
     plan_        = ActivationPlan();
     planReady_   = false;
     planPending_ = true;
@@ -437,6 +569,7 @@ void WorldEditorScreen::Update(const ButtonEdges& input) {
         case Step::History:       UpdateHistory(input); break;
         case Step::Confirm:       UpdateConfirm(input); break;
         case Step::Progress:      UpdateProgress(input); break;
+        case Step::Problem:       UpdateProblem(input); break;
     }
 }
 
@@ -865,13 +998,9 @@ void WorldEditorScreen::UpdateConfirm(const ButtonEdges& input) {
         return;
     }
 
-    // No cursor here - this is a review list - so up/down move the window
-    // itself, which is the only way to read the settings that don't fit.
-    int visible = VisibleRowCount(kSettingsLayout);
-    int count   = (int)ConfirmItems().size();
-    if (input.up)   confirmScroll_--;
-    if (input.down) confirmScroll_++;
-    confirmScroll_ = ClampScroll(confirmScroll_, count, visible);
+    // NO UP/DOWN. The screen is two fixed blocks of eight rows between them and
+    // nothing on it can be off-screen, so there is nothing to scroll and no
+    // cursor to move (U2). OPTIONS and O are the whole of its input.
 
     // OPTIONS activates, and only when there is something to activate: a
     // refusal has already said nothing will be written, and a world the store
@@ -903,26 +1032,40 @@ void WorldEditorScreen::UpdateConfirm(const ButtonEdges& input) {
 }
 
 void WorldEditorScreen::UpdateProgress(const ButtonEdges& input) {
+    (void)input;   // nothing on this screen is interruptible, so nothing reads it
+
     // One coarse unit of activation work per frame. The frame loop is serial
     // (Update -> Draw -> Present), so doing the whole transaction in one call
     // would leave nothing on screen until it finished - stepping it here is
-    // what makes the progress display possible at all.
+    // what keeps the bar moving at all.
     //
     // The job says what each phase did; this screen only relays it. Its lines
     // are pushed straight into the log rather than through AddProgressLine,
     // because the job has already written every one of them to live.log under
     // its own prefix and logging them twice makes the one record that survives
     // a hardware test harder to read.
-    if (job_) {
-        job_->Step();
-        std::vector<std::string> lines = job_->TakeLines();
-        for (size_t i = 0; i < lines.size(); i++) progressLines_.push_back(lines[i]);
-        if (job_->Done()) FinishCommit();
-        return; // input is ignored while the activation is still running
-    }
+    //
+    // NO INPUT AT ALL, and that is not an omission. The seven-phase transaction
+    // has no cancel - there is no phase it would be safe to abandon between -
+    // so a button that appeared to offer one would be lying. The old screen
+    // ignored input here for the same reason and only accepted it afterwards;
+    // there is no afterwards on this step any more, because FinishCommit either
+    // leaves for the WORLDS tab or switches to Step::Problem.
+    if (!job_) return;
 
-    // The run is over, so the log is static and can be read back: up/down
-    // scroll it, which also unpins it from the tail.
+    job_->Step();
+    std::vector<std::string> lines = job_->TakeLines();
+    for (size_t i = 0; i < lines.size(); i++) progressLines_.push_back(lines[i]);
+    if (job_->Done()) FinishCommit();
+}
+
+// The one activation state that holds, and the only one that shows the log.
+// Reached only from FinishCommit, and only when the activation refused or
+// failed - a success has left for the WORLDS tab by the time this could run.
+void WorldEditorScreen::UpdateProblem(const ButtonEdges& input) {
+    // The log is static here, so up/down read back through it and unpin it from
+    // the tail. This is the whole of why the scroll state survived U1: the
+    // success path has no list to scroll, and this path still needs one.
     if (input.up) {
         progressFollowTail_ = false;
         progressScroll_--;
@@ -932,8 +1075,9 @@ void WorldEditorScreen::UpdateProgress(const ButtonEdges& input) {
         progressScroll_++;
     }
 
-    // O is the only other thing that does anything here - this is a result
-    // screen, not a step with its own choices.
+    // O is the only other thing that does anything - this states an outcome, it
+    // does not offer a choice. Retrying belongs on the WORLDS rail, which is
+    // where the refusal's own sentence is already shown against the row.
     if (input.circle) {
         Log("world editor: returning to the WORLDS tab");
         requestedScreen_ = ScreenId::Worlds;
@@ -952,10 +1096,10 @@ void WorldEditorScreen::AddProgressLine(const std::string& line) {
 
 void WorldEditorScreen::StartCommit() {
     progressLines_.clear();
-    completionLineStart_ = (std::size_t)-1;
-    commitFinished_ = false;
     progressScroll_ = 0;
     progressFollowTail_ = true;
+    outcome_ = Outcome::None;
+    outcomeSentence_.clear();
     job_.reset();
 
     // Vanilla has no seed and no recipe: activating it deletes a tree (B8,
@@ -1020,10 +1164,17 @@ void WorldEditorScreen::FinishCommit() {
     bool failed  = false;
     bool refused = false;
 
+    // Taken from the JOB's refusal rather than from plan_, which is the copy
+    // Confirm built a frame earlier. Phase 1 re-checks everything that screen
+    // showed, and if the two ever disagree the one that actually stopped the
+    // transaction is the one to quote.
+    std::string refusalSentence;
+
     if (job_) {
         const ActivationResult& activation = job_->Result();
         failed  = !activation.ok;
         refused = activation.refusal.Refused();
+        refusalSentence = activation.refusal.sentence;
 
         // The job has already said what every phase did, refusal and failure
         // included - those lines arrived through TakeLines. What is added here
@@ -1181,23 +1332,38 @@ void WorldEditorScreen::FinishCommit() {
         job_.reset();
     }
 
-    // The closing flourish reads as "it worked, go play" - showing it after a
-    // refusal or a failure would be actively misleading, so it is gated on
-    // neither having happened above. A refusal is called out separately from a
-    // failure because the two mean opposite things about the console: a
-    // refusal changed nothing at all, and a failure stopped partway.
-    completionLineStart_ = progressLines_.size();
+    // WHERE THE SCREEN GOES, which since U1 is the whole of how an activation
+    // ends. Three outcomes, two destinations:
+    //
+    //   refused  nothing was written at all      -> Step::Problem, its sentence
+    //   failed   stopped partway, journal stands -> Step::Problem, fixed sentence
+    //   ok       the world is live               -> the WORLDS tab, immediately
+    //
+    // Success does not draw a screen. It used to end on three lines of flourish
+    // over a log the player had to dismiss, and that dismissal bought nothing:
+    // the rail it returns to already marks the world ACTIVE, which is the same
+    // fact stated where the player would look for it. This is the startup
+    // screen handing to the rail, one step later in the same session.
+    //
+    // The generation's counts are NOT lost with that screen - every one of them
+    // went through AddProgressLine above, which Log()s as well as stores, so
+    // live.log carries the identical record it did before. That is what made
+    // dropping the success screen cheap enough to be worth doing.
     if (refused) {
+        outcome_ = Outcome::Refused;
+        outcomeSentence_ = refusalSentence.empty() ? kActRefusedFallback
+                                                  : refusalSentence;
         AddProgressLine("ACTIVATION REFUSED - NOTHING WAS CHANGED");
+        GoToStep(Step::Problem);
     } else if (failed) {
+        outcome_ = Outcome::Failed;
+        outcomeSentence_ = kActFailedSentence;
         AddProgressLine("ACTIVATION FAILED - CHECK THE LOG FOR DETAILS");
+        GoToStep(Step::Problem);
     } else {
-        AddProgressLine("WHAT ARE YOU STILL DOING HERE");
-        AddProgressLine("ENOUGH TREMBLING IN YOUR BOOTS");
-        AddProgressLine("A HUNTER MUST HUNT");
+        Log("world editor: activation complete - returning to the WORLDS tab");
+        requestedScreen_ = ScreenId::Worlds;
     }
-
-    commitFinished_ = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1227,6 +1393,7 @@ void WorldEditorScreen::Draw(Renderer& renderer) {
         case Step::History:       DrawHistory(renderer); break;
         case Step::Confirm:       DrawConfirm(renderer); break;
         case Step::Progress:      DrawProgress(renderer); break;
+        case Step::Problem:       DrawProblem(renderer); break;
     }
 }
 
@@ -1503,50 +1670,84 @@ const char* OutgoingSaveText(const ActivationPlan& p, bool ready) {
 }
 } // namespace
 
-// The B10 statement: eight rows, always eight, whatever the plan says. A row
-// that appears only sometimes is a list whose geometry has to be measured
-// twice and a screen whose shape moves under the player.
-std::vector<std::string> WorldEditorScreen::ConfirmHeadRows() const {
-    std::vector<std::string> rows;
-    // The three that were here before activation was: what this world IS.
-    rows.push_back(std::string("NAME") + kConfirmGap + NameDisplayText());
-    rows.push_back(std::string("SEED") + kConfirmGap +
-                   (isVanilla_ ? std::string("NONE") : SeedDisplayText()));
-    rows.push_back(std::string("TARGET") + kConfirmGap + run_.bloodborneTitleId);
-    // The five activation adds: what is deactivated, where its save goes, what
-    // is activated, what happens to the incoming save, and how long it takes.
-    rows.push_back(std::string(kRowDeactivating) + kConfirmGap +
-                   (plan_.fromWorldId.empty() ? std::string(kNoOutgoingWorld)
-                                              : plan_.fromWorldName));
+// TIER 1 - the B10 statement: five rows, always five, whatever the plan says. A
+// row that appears only sometimes is a screen whose shape moves under the
+// player, and this is the block they are being asked to agree to.
+//
+// NAME IS NOT HERE ANY MORE. It was one of eight head rows and it said the same
+// thing ACTIVATING says one row below it - the only difference being that NAME
+// read this screen's working copy and ACTIVATING reads the plan. Stating it
+// twice was the clearest example of the density this item is about.
+std::vector<WorldEditorScreen::ConfirmRow> WorldEditorScreen::ConfirmPlanRows() const {
+    std::vector<ConfirmRow> rows;
+    ConfirmRow row;
+
+    row.label = kRowDeactivating;
+    row.value = plan_.fromWorldId.empty() ? std::string(kNoOutgoingWorld)
+                                          : plan_.fromWorldName;
+    rows.push_back(row);
+
     // A refused activation does nothing to either save, so neither row states
     // one: they say "-" rather than describing a copy that will not happen.
     bool willRun = planReady_ && plan_.ok;
-    rows.push_back(std::string(kRowOutgoingSave) + kConfirmGap +
-                   OutgoingSaveText(plan_, willRun));
-    rows.push_back(std::string(kRowActivating) + kConfirmGap +
-                   (plan_.toWorldName.empty() ? NameDisplayText() : plan_.toWorldName));
-    rows.push_back(std::string(kRowIncomingSave) + kConfirmGap +
-                   (willRun ? SaveActionName(plan_.saveAction) : "-"));
-    rows.push_back(std::string(kRowHowLong) + kConfirmGap + DurationText());
+
+    row.label = kRowOutgoingSave;
+    row.value = OutgoingSaveText(plan_, willRun);
+    rows.push_back(row);
+
+    row.label = kRowActivating;
+    row.value = plan_.toWorldName.empty() ? NameDisplayText() : plan_.toWorldName;
+    rows.push_back(row);
+
+    row.label = kRowIncomingSave;
+    row.value = willRun ? SaveActionName(plan_.saveAction) : "-";
+    rows.push_back(row);
+
+    row.label = kRowHowLong;
+    row.value = DurationText();
+    rows.push_back(row);
+
     return rows;
 }
 
-// The statement, then the recipe it is about. There is no second hardcoded
-// copy of the settings list anywhere in this file - that parallel structure,
-// and the row constants it had to agree with, is what feature 034 removed.
+// TIER 2 - what this world IS, in three rows, as context rather than as the
+// question. Also always three.
 //
-// Vanilla contributes no settings rows at all: it has no recipe (B20), and
-// showing the DEFAULTS tab's settings beside VANILLA would be stating a
-// randomization that is about to be deleted.
-std::vector<std::string> WorldEditorScreen::ConfirmItems() const {
-    std::vector<std::string> items = ConfirmHeadRows();
-    if (isVanilla_) return items;
-    for (int i = 0; i < SettingCount(); i++) {
-        const SettingDef& def = SettingAt(i);
-        items.push_back(std::string(def.label) + kConfirmGap +
-                        SettingValueText(def, run_));
+// THE SETTINGS ROW IS A COUNT, not a list, and it is deliberately the SAME
+// SENTENCE the WORLDS rail already shows against the row - EnabledToggleCount
+// over ToggleCount, "n OF m ON". Two screens stating one fact two ways is how a
+// player learns not to trust either.
+//
+// SaveChoice is excluded from that count by SettingsModel and must stay
+// excluded: the save policy is stated in full in tier 1, where it belongs, and
+// counting it here as though it were a randomization toggle would both
+// double-state it and make the count mean two things.
+//
+// Vanilla has no recipe (B20), so it states no seed and no settings rather than
+// borrowing the DEFAULTS tab's - describing a randomization that is about to be
+// deleted is worse than saying nothing.
+std::vector<WorldEditorScreen::ConfirmRow> WorldEditorScreen::ConfirmWorldRows() const {
+    std::vector<ConfirmRow> rows;
+    ConfirmRow row;
+
+    row.label = kRowSeed;
+    row.value = isVanilla_ ? std::string(kConfirmNone) : SeedDisplayText();
+    rows.push_back(row);
+
+    row.label = kRowTarget;
+    row.value = run_.bloodborneTitleId;
+    rows.push_back(row);
+
+    row.label = kRowSettings;
+    if (isVanilla_) {
+        row.value = kConfirmVanillaSettings;
+    } else {
+        row.value = std::to_string(EnabledToggleCount(run_)) + " OF " +
+                    std::to_string(ToggleCount()) + " ON";
     }
-    return items;
+    rows.push_back(row);
+
+    return rows;
 }
 
 void WorldEditorScreen::DrawConfirm(Renderer& renderer) {
@@ -1594,23 +1795,49 @@ void WorldEditorScreen::DrawConfirm(Renderer& renderer) {
         }
     }
 
-    std::vector<std::string> items = ConfirmItems();
-    DrawScrollableList(renderer, kSettingsLayout, items, -1, confirmScroll_, kItemScale,
-                       Palette::Text, Palette::Selected);
+    // TIER 1 - what is about to happen, at the item scale. Label left, value
+    // right, in one centred block, so the values line up into a column the eye
+    // can run down.
+    // Bounded by the CONSTANT and not by the vector: "always five rows" is the
+    // contract settings_ui_verify.py measures the block against, so a builder
+    // that returned a different number should draw five and be caught, not
+    // silently redraw the screen at a new height.
+    std::vector<ConfirmRow> planRows = ConfirmPlanRows();
+    for (int i = 0; i < kConfirmPlanRows && i < (int)planRows.size(); i++) {
+        int y = kConfirmPlanY + i * kConfirmPlanPitch;
+        DrawLabelLeft(renderer, kConfirmBlockX, y, planRows[(std::size_t)i].label.c_str(),
+                      kItemScale, Palette::Dim);
+        DrawLabelRight(renderer, kConfirmBlockRight, y,
+                       planRows[(std::size_t)i].value.c_str(), kItemScale,
+                       Palette::Text);
+    }
 
-    // 30px lower than every other footer in the app, and deliberately so:
-    // under the atlas's real ink box no hint gap can clear both this list's
-    // last row at y=870 and a footer at kScreenHeight - 130. Moving the pair
-    // down is what keeps six visible rows instead of five - see
-    // ui_scroll_verify.py, which asserts both ends.
+    renderer.FillRect(kConfirmBlockX, kConfirmTierRuleY,
+                      kConfirmBlockRight - kConfirmBlockX, kRuleThickness,
+                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    // TIER 2 - what this world is, at the row scale, under the rule. Quieter on
+    // purpose: the whole point of the two tiers is that these are not the same
+    // kind of fact as the five above.
+    std::vector<ConfirmRow> worldRows = ConfirmWorldRows();
+    for (int i = 0; i < kConfirmWorldRows && i < (int)worldRows.size(); i++) {
+        int y = kConfirmWorldY + i * kConfirmWorldPitch;
+        DrawLabelLeft(renderer, kConfirmBlockX, y, worldRows[(std::size_t)i].label.c_str(),
+                      kRowScale, Palette::Dim);
+        DrawLabelRight(renderer, kConfirmBlockRight, y,
+                       worldRows[(std::size_t)i].value.c_str(), kRowScale,
+                       Palette::Text);
+    }
+
+    // ONE FOOTER LINE, not two. The screen no longer scrolls, so the UP DOWN
+    // SCROLL hint that used to sit above the prompt is gone with the list - a
+    // hint for a control that does nothing is worse than no hint.
     //
     // OPTIONS is offered only when it would do something. A footer that
     // advertises a button which silently declines is worse than one that does
     // not mention it.
     bool canActivate = planReady_ && plan_.ok && storeError_.empty();
-    DrawCenteredLabel(renderer, kScreenHeight - 100, kConfirmFooterHint, kFooterScale,
-                      Palette::Dim);
-    DrawCenteredLabel(renderer, kScreenHeight - 50,
+    DrawCenteredLabel(renderer, kScreenHeight - 80,
                       canActivate ? kConfirmFooterGo : kConfirmFooterBack,
                       kFooterScale, Palette::Dim);
 }
@@ -1644,57 +1871,96 @@ void WorldEditorScreen::DrawHistory(Renderer& renderer) {
                       kFooterScale, Palette::Dim);
 }
 
+// The loading state: four elements and nothing else, at any point in the
+// activation (UI backlog U1). No log, no phase name, no percentage and no
+// prompt - a player who cannot act on what a line says, and cannot cancel what
+// it describes, is only being made to watch it.
+//
+// This is WorldsScreen::DrawLoading with one more element and one fewer
+// abstraction, and the duplication is the point: the two screens are the same
+// screen at two moments, and sharing the code would mean a shared widget whose
+// only two callers want it to differ in exactly the way the bar differs.
 void WorldEditorScreen::DrawProgress(Renderer& renderer) {
     renderer.Clear(20, 24, 28);
 
-    DrawCenteredLabel(renderer, 120, kScreenTitle, kTitleScale, Palette::Heading);
-    DrawCenteredLabel(renderer, 200, "PROGRESS", kItemScale, Palette::Text);
+    DrawCenteredLabel(renderer, kActHeadlineY, kActHeadline, kTitleScale,
+                      Palette::Heading);
 
-    // The log scrolls, so it draws a window rather than everything. While the
-    // run is going the bottom slot belongs to the live status line, which is
-    // why the log gets one fewer row then than it does afterwards.
-    int slots     = VisibleRowCount(kProgressLayout);
-    int logRows   = job_ ? slots - 1 : slots;
+    renderer.FillRect(kActBlockX, kActRuleY, kActBlockW, kRuleThickness,
+                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    // The track first, then the fill over it, so an empty bar still reads as a
+    // bar rather than as a gap where one should be.
+    renderer.FillRect(kActBlockX, kActBarY, kActBlockW, kActBarH,
+                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    // A null job means FinishCommit has already run and this frame is the last
+    // one before the WORLDS tab replaces the screen - the transaction is over,
+    // so the bar is full. Without this the very last frame of a successful
+    // activation would flash an empty bar.
+    float progress = job_ ? job_->Progress() : 1.0f;
+    if (progress < 0.0f) progress = 0.0f;
+    if (progress > 1.0f) progress = 1.0f;
+
+    int fillW = (int)(progress * (float)kActBlockW + 0.5f);
+    if (fillW < kActBarMinFillW) fillW = kActBarMinFillW;
+    renderer.FillRect(kActBlockX, kActBarY, fillW, kActBarH,
+                      Palette::Selected.r, Palette::Selected.g, Palette::Selected.b);
+
+    // WHICH world, under the bar - the one piece of context the startup screen
+    // does not need and this screen does. An activation replaces whatever is
+    // live, so "which one is this" is the question a player interrupted halfway
+    // through would ask, and the name is a fact rather than a phase.
+    const char* what = isVanilla_ ? kActVanillaName : name_.c_str();
+    if (!isVanilla_ && name_.empty()) what = worldId_.c_str();
+    DrawCenteredLabel(renderer, kActNameY, what, kHeadingScale, Palette::Text);
+}
+
+// The one activation state that holds, and the only one that draws the log -
+// the mirror of WorldsScreen::DrawProblem, on the same band, for the same
+// reason. One sentence from the screen, the job's own wording beneath it.
+void WorldEditorScreen::DrawProblem(Renderer& renderer) {
+    renderer.Clear(20, 24, 28);
+
+    const char* title = (outcome_ == Outcome::Refused) ? kActRefusedTitle
+                                                       : kActFailedTitle;
+    DrawCenteredLabel(renderer, kActProblemTitleY, title, kTitleScale, Palette::Bad);
+
+    std::vector<std::string> sentence =
+        WrapText(renderer, outcomeSentence_.c_str(), kRowScale, kActProblemSentenceW);
+    for (int i = 0; i < (int)sentence.size() && i < kActProblemSentenceMax; i++) {
+        DrawCenteredLabel(renderer,
+                          kActProblemSentenceY + i * kActProblemSentencePitch,
+                          sentence[(std::size_t)i].c_str(), kRowScale, Palette::Text);
+    }
+
+    // No job is running here, so the band draws its full complement of rows -
+    // there is no live status line to reserve one for any more.
+    int logRows = VisibleRowCount(kProgressLayout);
     if (logRows < 1) logRows = 1;
     int lineCount = (int)progressLines_.size();
 
-    // Pinned to the tail until the user scrolls away from it. Writing the
-    // resolved offset back means a later up/down starts from what's actually
+    // Pinned to the tail until the player scrolls away from it. Writing the
+    // resolved offset back means a later up/down starts from what is actually
     // on screen rather than from a stale value.
     int offset = progressFollowTail_ ? lineCount - logRows : progressScroll_;
     offset = ClampScroll(offset, lineCount, logRows);
     progressScroll_ = offset;
 
-    // The trailing completion message is colored distinctly to read as
-    // "done", not as another status line.
-    int drawn = 0;
     for (int row = 0; row < logRows; row++) {
         int index = offset + row;
         if (index >= lineCount) break;
-        Color c = ((std::size_t)index >= completionLineStart_) ? Palette::Good : Palette::Text;
         DrawCenteredLabel(renderer, kProgressLayout.firstY + row * kProgressLayout.spacing,
-                          progressLines_[(std::size_t)index].c_str(), kProgressScale, c);
-        drawn++;
-    }
-
-    // While the randomizer is running this is the only line that changes,
-    // and it's the whole point of the screen - what's happening right now.
-    // It sits directly under the last log line, inside the reserved slot.
-    if (job_) {
-        std::string live = job_->StatusText() + "  " +
-                           std::to_string((int)(job_->Progress() * 100.0f + 0.5f)) + "%";
-        DrawCenteredLabel(renderer, kProgressLayout.firstY + drawn * kProgressLayout.spacing,
-                          live.c_str(), kProgressScale, Palette::Heading);
+                          progressLines_[(std::size_t)index].c_str(), kProgressScale,
+                          Palette::Text);
     }
 
     DrawScrollHints(renderer, kProgressLayout, lineCount, offset, logRows);
 
-    if (commitFinished_) {
-        DrawCenteredLabel(renderer, kScreenHeight - 130, "UP DOWN SCROLL", kFooterScale,
-                          Palette::Dim);
-        DrawCenteredLabel(renderer, kScreenHeight - 80, "O RETURN TO WORLDS", kFooterScale,
-                          Palette::Dim);
-    }
+    DrawCenteredLabel(renderer, kScreenHeight - 130, kActProblemScrollHint,
+                      kFooterScale, Palette::Dim);
+    DrawCenteredLabel(renderer, kScreenHeight - 80, kActProblemPrompt,
+                      kFooterScale, Palette::Dim);
 }
 
 } // namespace bbr

@@ -112,13 +112,24 @@ const int kLoadBarH      = 28;
 const int kLoadWordY     = 610;   // drawn at kStartupSubScale
 const int kLoadBlockX    = 460;   // (1920 - kLoadBlockW) / 2
 const int kLoadBlockW    = 1000;  // shared by the rule and the bar
-const int kLoadCellGap   = 20;
-const int kLoadCellW     = 184;   // (kLoadBlockW - 4 * kLoadCellGap) / 5
-// Five EQUAL steps, one per stage of the startup sequence (spec 4.7), and the
-// denominator stagesDone_ counts to. settings_ui_verify.py asserts the
-// arithmetic above divides exactly: a bar whose cells were rounded would drift
-// off the block's right edge.
+
+// ONE CONTINUOUS FILL, not the five discrete cells this shipped with. The
+// activation screen was built as a single bar because its progress is a real
+// 0..1, and the developer asked for this one to match it: two loading screens in
+// one session that disagree about what a bar looks like is a seam the player can
+// see, and that seam was the whole reason U1 copied this screen's geometry to the
+// pixel.
+//
+// kLoadCellGap and kLoadCellW went with the cells. What did NOT change is the
+// stage machine behind it: stagesDone_ still counts the same five stages, so the
+// fill advances in fifths rather than smoothly. That is honest - the startup
+// sequence knows five things about its own progress and no more - and it is why
+// the denominator below stays.
 const int kLoadStageCount = 5;
+
+// So a bar at stage 0 still reads as a bar rather than as an empty slot. The
+// activation screen's kActBarMinFillW, for the same reason.
+const int kLoadBarMinFillW = 4;
 
 // The startup problem state: the wizard's progress-log geometry, unmoved -
 // ui_scroll_verify.py's "Worlds startup" entry is these numbers, and the
@@ -926,18 +937,26 @@ void WorldsScreen::DrawLoading(Renderer& renderer) {
     renderer.FillRect(kLoadBlockX, kLoadRuleY, kLoadBlockW, kRuleThickness,
                       kRuleColor.r, kRuleColor.g, kRuleColor.b);
 
-    // Five discrete cells, not one filled bar: the cell being worked on is
-    // drawn in Selected so that "the bar shows the step whose work is running"
-    // is something the player can SEE rather than something the code merely
-    // claims (B5, P5). Completed cells are Good; the rest are the rule's own
-    // colour, so an untouched bar reads as furniture and not as an error.
-    for (int i = 0; i < kLoadStageCount; i++) {
-        Color color = kRuleColor;
-        if (i < stagesDone_)       color = Palette::Good;
-        else if (i == stagesDone_) color = Palette::Selected;
-        renderer.FillRect(kLoadBlockX + i * (kLoadCellW + kLoadCellGap), kLoadBarY,
-                          kLoadCellW, kLoadBarH, color.r, color.g, color.b);
-    }
+    // ONE BAR: the track across the whole block, then the fill over it. The
+    // track goes down first so a bar at stage 0 still reads as a bar and not as
+    // a gap where one should be.
+    //
+    // This replaces five discrete cells. What the cells bought was a visible
+    // distinction between the stage RUNNING and the stages done - the running
+    // cell was drawn in Selected (B5, P5). The fill keeps the claim that matters
+    // without it: its edge IS the boundary between finished and running work,
+    // because SetStagesDone only advances once a stage is over and stageDrawn_
+    // still holds the next stage back until this frame has been presented.
+    renderer.FillRect(kLoadBlockX, kLoadBarY, kLoadBlockW, kLoadBarH,
+                      kRuleColor.r, kRuleColor.g, kRuleColor.b);
+
+    int done = stagesDone_;
+    if (done < 0) done = 0;
+    if (done > kLoadStageCount) done = kLoadStageCount;
+    int fillW = kLoadBlockW * done / kLoadStageCount;
+    if (fillW < kLoadBarMinFillW) fillW = kLoadBarMinFillW;
+    renderer.FillRect(kLoadBlockX, kLoadBarY, fillW, kLoadBarH,
+                      Palette::Selected.r, Palette::Selected.g, Palette::Selected.b);
 
     DrawCenteredLabel(renderer, kLoadWordY, kLoadingWord, kStartupSubScale,
                       Palette::Text);

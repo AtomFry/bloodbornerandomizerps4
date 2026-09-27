@@ -27,6 +27,7 @@ docs/
 | Document | Authority on |
 |---|---|
 | `randomization-feature-spec.md` | The feature backlog and completion status. Wins over any plan or index that disagrees |
+| `ui-backlog.md` | The UI and platform backlog — screens, navigation, presentation, packaging. Same authority for non-randomization work that `randomization-feature-spec.md` has for settings |
 | `ps4-homebrew-findings.md` | Hardware-confirmed platform behaviour — sandbox, filesystem, toolchain, packaging, SDL2. Beats assumptions drawn from SDK headers |
 | `windows-randomizer-technical-review.md` | The reference tool's architecture, algorithms and known bugs |
 | `design-decisions.md` | Standing design decisions and compatibility rules |

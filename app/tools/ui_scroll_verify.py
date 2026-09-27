@@ -199,19 +199,18 @@ SCREENS = [
     # it differs, and a rail is not a scrolling list.
     ("Editor Settings", 330, 76, 880, 3, 52, 4, 220, 4, 1000, 1),
     # Confirm is still a flat review list, and in worlds milestone 6 it became
-    # the ACTIVATION confirmation (B10): EIGHT head rows now, not three - NAME,
-    # SEED, TARGET, then what is deactivated, where its save goes, what is
-    # activated, what happens to the incoming save and roughly how long it
-    # takes - followed by all 19 settings. Its two footers sit 30px lower than
-    # every other screen's. Under the ink box, kSettingsLayout's last row at
-    # y=870 and a footer at SCREEN_H - 130 leave an EMPTY feasible band for the
-    # hint between them: it needs >= 57 to clear the row and <= 45 to clear the
-    # footer. Moving the footer is what keeps six visible rows instead of five.
+    # THE CONFIRM ENTRY IS GONE, and its absence is the point of U2. It used to
+    # read ("Editor Confirm", 470, 80, 870, 4, 60, 27, 352, 3, SCREEN_H-100, 2):
+    # a 27-row scrolling review - eight head rows plus all 19 settings - whose
+    # footers sat 30px lower than every other screen's just to win a sixth
+    # visible row.
     #
-    # What sits above the list is no longer the state line at y=260: it is the
-    # second line of the wrapped sentence under it, at kConfirmSentenceY +
-    # kConfirmSentencePitch = 366, at the row scale.
-    ("Editor Confirm",  470, 80, 870, 4, 60, 27, 352, 3, SCREEN_H - 100, 2),
+    # Confirm is now two FIXED blocks, five rows of what is about to happen and
+    # three of what this world is, with no list, no scroll and no hint. Nothing
+    # on it can be off-screen, so there is no window for this file to check.
+    # settings_ui_verify.py's U2 cases own it instead: they measure both tiers
+    # against the block, and walk the five vertical gaps from the state line
+    # down to the footer.
     # The editor's revision list (kHistoryLayout). It HAS a cursor, unlike
     # Confirm, because selecting a revision is what makes it current again -
     # so it runs at the row scale and the scroll properties below are the ones
@@ -222,8 +221,11 @@ SCREENS = [
     # rows the band fits, so the window is exercised rather than trivially
     # satisfied.
     ("Editor history",  340, 60, 820, 3, 50, 24, 240, 4, SCREEN_H - 130, 2),
-    # Progress: worst case is the finished state (no live line, footer present).
-    ("Progress log",    300, 70, 920, 3, 50, 18, 200, 4, SCREEN_H - 130, 2),
+    # The activation log, which since U1 is drawn by Step::Problem ALONE - a
+    # refusal or a failure. There is no other case left: the loading state draws
+    # no list, and a successful activation draws no screen at all, so this band's
+    # worst case is now its only case (no live line, footer present).
+    ("Activation log",  300, 70, 920, 3, 50, 18, 200, 4, SCREEN_H - 130, 2),
     # The enemy picker (UI/ModelPicker.cpp): 82 rows is far too many at the
     # settings screens' scale 4 / 90px pitch, so it runs denser - scale 3 at
     # 52px, which fits 12 and turns 14 pages into 7. Heading at y=120 (scale
@@ -347,21 +349,34 @@ for (name, first_y, spacing, bottom, scale, hint_gap, count,
              ink_top(first_y, scale) - ink_bottom(hint_above_y, HINT_SCALE),
              ink_top(hint_below_y, HINT_SCALE) - ink_bottom(last_row_y, scale)))
 
-# Progress screen while RUNNING gives one slot to the live status line.
-first_y, spacing, bottom, scale, foot_y = 300, 70, 920, 3, SCREEN_H - 130
-slots = visible_row_count(first_y, spacing, bottom)
-log_rows = max(1, slots - 1)
+# THE RUNNING CASE IS GONE, and its absence is the point of U1.
+#
+# The progress screen used to draw this same band while the activation ran, with
+# its bottom slot given up to a live status line - so the log showed one fewer
+# row then than afterwards, and this block existed to prove that the live line
+# could never collide with the footer.
+#
+# Step::Progress now draws four centred elements and no list at all, so there is
+# no window, no tail to follow and no live line to collide with anything. The
+# band above is drawn only by Step::Problem, whose geometry is the old finished
+# state exactly.
+#
+# The loading state is not unpinned by this removal, only checked elsewhere:
+# settings_ui_verify.py case U1 asserts its seven geometry constants EQUAL the
+# startup screen's, and cases 5 and 6 already prove that set is in order, clear
+# of itself and inside the screen. Two screens, one set of numbers, one check.
+first_y, spacing, bottom, scale = 300, 70, 920, 3
+log_rows = visible_row_count(first_y, spacing, bottom)
 for line_count in range(0, 18):
     off = clamp_scroll(line_count - log_rows, line_count, log_rows)
     drawn = min(log_rows, max(0, line_count - off))
-    live_y = first_y + drawn * spacing
-    if ink_bottom(live_y, scale) > ink_top(foot_y, HINT_SCALE) and line_count > 0:
-        failures.append("running: live line ink bottom %d collides with footer"
-                        % ink_bottom(live_y, scale))
-    # tail-follow must always show the newest line
+    # Tail-follow must always show the newest line: a problem screen that opens
+    # anywhere but the end hides the phase that failed, which is the one line
+    # the player is there to read.
     if line_count and off + drawn != line_count:
-        failures.append("running: tail not followed at %d lines" % line_count)
-print("%-16s %2d log rows + 1 live slot while running" % ("Progress (run)", log_rows))
+        failures.append("problem: tail not followed at %d lines" % line_count)
+print("%-16s %2d log rows, no live slot - the running state draws no list"
+      % ("Activation (run)", log_rows))
 
 print()
 print("ink box, parsed from FontAtlasData.h:")

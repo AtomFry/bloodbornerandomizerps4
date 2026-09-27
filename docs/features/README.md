@@ -20,6 +20,8 @@ spec, the plan, the reviews, and the append-only `log.md`.
 | — | Font atlas (replaces the 8×8 bitmap font with EB Garamond) | **n/a — skipped** | [font-atlas/](font-atlas/) | — | — | — |
 | — | Worlds (named playthroughs with their own save data; retires the Enable/Disable wizards) | **DONE** | [worlds/](worlds/) | [spec.md](worlds/spec.md) — re-approved 2026-09-22 with D20–D25 from milestone 0; D13 superseded, amended with D17–D19; evidence in [technical-findings.md](worlds/technical-findings.md) | [plan.md](worlds/plan.md) — **DONE**, approved 2026-09-22, six milestones built 2026-09-22..24; [plan-evidence.md](worlds/plan-evidence.md), [log.md](worlds/log.md) | Hardware test **passed in full 2026-09-25** — [hardware-test-plan.md](worlds/hardware-test-plan.md) |
 | — | Startup screen — replace the streaming log with a loading screen | **APPROVED** | [startup-screen/](startup-screen/) | [spec.md](startup-screen/spec.md) — **APPROVED** 2026-09-26, three questions answered the same day; [proposal.md](startup-screen/proposal.md) is the agreed shape it was written from | [plan.md](startup-screen/plan.md) — **APPROVED** 2026-09-26, both milestones implemented the same day; [plan-evidence.md](startup-screen/plan-evidence.md), [log.md](startup-screen/log.md) | **AWAITING HARDWARE TEST** — [hardware-test-plan.md](startup-screen/hardware-test-plan.md), [implementation-report.md](startup-screen/implementation-report.md) |
+| U1 | Activation screens — replace the streaming progress log with a loading screen | **n/a — skipped** | [U1-activation-screens/](U1-activation-screens/) | — | — | **BUILT** 2026-09-26, awaiting hardware test — [implementation-report.md](U1-activation-screens/implementation-report.md) |
+| U2 | Confirm screen — two fixed tiers replacing the 27-row scrolling review | **n/a — skipped** | [U2-confirm-screen/](U2-confirm-screen/) | — | — | **BUILT** 2026-09-26, awaiting hardware test — [implementation-report.md](U2-confirm-screen/implementation-report.md) |
 | — | Randomizer Settings UI (six-category Settings screen; also re-models Setup Defaults and removes the save-data handling) | **APPROVED** | [randomizer-settings-ui/](randomizer-settings-ui/) | [spec.md](randomizer-settings-ui/spec.md) — approved 2026-09-20 | [plan.md](randomizer-settings-ui/plan.md) — **approved 2026-09-20; all four milestones implemented, none hardware tested**; [plan-evidence.md](randomizer-settings-ui/plan-evidence.md), [log.md](randomizer-settings-ui/log.md) | — |
 
 ## What this index is, and is not
@@ -52,19 +54,22 @@ spec or a plan. Such a folder holds an `implementation-report.md` written after
 the fact and nothing else. The report says so at the top, because a folder that
 merely looks thin is indistinguishable from one where the stages were forgotten.
 
-Two items are marked this way: row 34, and `font-atlas/`.
+Four items are marked this way: row 34, `font-atlas/`, `U1-activation-screens/`
+and `U2-confirm-screen/`. U1 and U2 are the first folders to use the `U<n>-`
+prefix from `docs/ui-backlog.md`.
 
-`font-atlas/`, `randomizer-settings-ui/` and `worlds/` are the folders with no
-`NNN-` prefix — every other folder is numbered after a row in
-`docs/randomization-feature-spec.md`, and platform/UI work has no row to be named
-after. Only `font-atlas/` is skipped; the other two are going through the normal
-spec → plan → review → implementation stages and simply have no backlog row to be
-numbered after.
+`font-atlas/`, `randomizer-settings-ui/`, `worlds/` and `startup-screen/` are the
+four folders with no `NNN-` prefix — every other folder is numbered after a row in
+`docs/randomization-feature-spec.md`, and none of these four had a row to be named
+after, because that backlog covers randomization settings only. Of the four, only
+`font-atlas/` is skipped; the other three went through the normal spec → plan →
+review → implementation stages.
 
-**That is now three, which was the stated threshold: platform/UI work needs its
-own backlog.** It is no longer occasional. Until one exists, unnumbered folders
-are the convention — but the numbering scheme is documenting an absence rather
-than a decision, and `worlds/` is a large enough item to make that awkward.
+**That threshold was reached at three, and the backlog now exists:**
+`docs/ui-backlog.md`. New UI and platform items get a `U`-prefixed row there and
+a folder named `U<n>-<slug>/`. The four existing unnumbered folders keep their
+names — renaming them would break every inbound link for no gain — and are listed
+in that backlog's §1 as the shipped rows U0a–U0d.
 
 ## Layout and naming
 
@@ -116,5 +121,6 @@ keep their original wording; only the tooling was relabelled.
 - `docs/ai-dev-process.md` — the canonical process definition; §3.1 is the artifact split, §5 stage B, §7 stage C, §8 stage D, §9 stage E, §13 the artifact layout
 - `docs/features/_templates/spec.md` — the template every spec starts from
 - `docs/features/_templates/plan.md` — the implementation contract, and its 400-line budget
+- `docs/ui-backlog.md` — the UI and platform backlog; rows U1 onward
 - `docs/plans/` — flat plans predating the pipeline; frozen, still useful as reference and house style
 - `docs/plans/ai-dev-process-vision.md` — the retired build plan: workflow principles §3, open questions §11, progress log §13

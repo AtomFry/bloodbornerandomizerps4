@@ -46,10 +46,32 @@ From the `WORLDS` rail: **X** opens a world in the editor (or creates one on
 * **Left/Right or X** changes the highlighted setting; drill-in rows — the enemy
   and boss lists — open with **X**.
 * **OPTIONS** saves the world and opens the confirmation.
-* The confirmation tells you exactly what is about to happen: which world is
-  being deactivated and where its save is going, which is being activated, what
-  happens to your save data, and roughly how long it will take. **Nothing is
-  written until you press OPTIONS there.**
+* The confirmation is one screen that never scrolls, in two parts. The top half
+  is **what is about to happen** — which world is being deactivated and where its
+  save is going, which is being activated, what happens to your save data, and
+  roughly how long it will take. Under a rule, the bottom half is **what this
+  world is** — its seed, the target title, and how many settings are on.
+  **Nothing is written until you press OPTIONS there.**
+* It does **not** list your individual settings. That list is the screen you just
+  came from, the `WORLDS` rail shows the same count against the row, and every
+  value goes to `live.log` when the run starts. What the confirmation owes you is
+  the consequence, and the settings list was burying it.
+* Activating then shows a loading screen — a bar and the world's name, nothing
+  else — and drops you back on the `WORLDS` tab when it is done, with the world
+  marked `ACTIVE`. There is nothing to read and nothing to dismiss.
+
+**If an activation cannot proceed, it says so and waits.** Two different things
+can go wrong and the screen distinguishes them, because they mean opposite
+things about your console:
+
+| Screen | What it means |
+| --- | --- |
+| `ACTIVATION REFUSED` | Nothing was written **at all**. The sentence under the title says what is in the way — usually a missing save, a missing vanilla source, or a setting turned on with nothing selected. Fix that and try again |
+| `ACTIVATION FAILED` | It started and stopped partway. The log on screen says which phase. The app finishes or rolls back the unfinished work by itself at next launch — so relaunch it before doing anything else |
+
+Everything an activation did is written to `live.log` either way, including all
+the counts the old progress screen used to list on screen. If you want to know
+exactly what a run changed, that is where it is.
 
 ### Save data
 
@@ -164,6 +186,8 @@ Earlier builds showed **Backup existing save** and **Replace save** rows and
 printed `(SIMULATED)` lines about them in the progress log. Nothing behind
 those rows was ever implemented, so they have been removed rather than left
 looking functional. Backup and restore may return as a designed feature later.
+(That progress log is itself gone now — see the activation loading screen
+above.)
 
 **Back your save up yourself before starting a randomized run.** A randomized
 run is still an ordinary playthrough as far as the game is concerned, but a
@@ -463,8 +487,9 @@ If you just want to see what this does:
 4. Leave the rolled seed alone, or write it down if you want to replay it.
 5. Leave `SAVE DATA` on **KEEP EXISTING** — the new world will adopt your current
    save, so you keep your character.
-6. **OPTIONS**, read the confirmation, **OPTIONS** again. Wait for the progress
-   log, then launch Bloodborne.
+6. **OPTIONS**, read the confirmation, **OPTIONS** again. Wait for the loading
+   bar — you land back on the `WORLDS` tab when it is done — then launch
+   Bloodborne.
 
 To get the normal game back at any point: `X` on **VANILLA** and activate it.
 

@@ -15,8 +15,22 @@
 // incoming world's tree is generated into a staging directory and swapped in,
 // and its save becomes live. This screen no longer names an output path, an
 // EnemyRandomizerOptions field or the vanilla source at all; it starts the
-// job, drains its lines into the progress log, and reports what the
-// generation half of it did once it is over.
+// job, drains its lines into the log, and reports what the generation half of
+// it did once it is over.
+//
+// PROGRESS IS A LOADING SCREEN, NOT A LOG (UI backlog U1). It draws four
+// things - a headline, a rule, a bar and the world's name - and never the
+// job's lines, which go to live.log and to Step::Problem alone. On success it
+// does not hold: the WORLDS tab replaces it the moment phase 7 finishes, the
+// way the startup screen hands to the rail. Every count the generation
+// reported is still Log()'d, so live.log is unchanged and remains the record a
+// hardware test reads.
+//
+// Step::Problem is the one state that holds and the only one that shows the
+// log, deliberately mirroring WorldsScreen's own Loading/Problem pair: a
+// refusal changed nothing and says its own sentence, a failure stopped partway
+// and puts the reason in the log beneath it. A player who cannot act on what a
+// line says is only being made to watch it.
 //
 // VANILLA OPENS STRAIGHT ON CONFIRM. X on the worlds rail's VANILLA row routes
 // here with the id "vanilla" (B8). Vanilla has no editable settings and no
@@ -97,7 +111,15 @@ private:
     // into the table, the count, the flags and the vocabulary. Naming the
     // three lists here would put a settings identity back in the screen.
     enum class Step { Settings, EditName, EditSeed, Picker, History, Confirm,
-                      Progress };
+                      Progress, Problem };
+
+    // How the activation ended. None while it runs and on success - success
+    // never draws a screen of its own - so this is read by Step::Problem and
+    // nowhere else. One enum rather than the pair of booleans the progress log
+    // used, which is the correction the startup screen made for the same
+    // reason: `refused` and `failed` mean opposite things about the console and
+    // two bools let a caller claim both.
+    enum class Outcome { None, Refused, Failed };
 
     // The two focus targets on the Settings step. The header band draws and
     // never takes focus (plan 9 D1).
@@ -138,6 +160,7 @@ private:
     void UpdateHistory(const ButtonEdges& input);
     void UpdateConfirm(const ButtonEdges& input);
     void UpdateProgress(const ButtonEdges& input);
+    void UpdateProblem(const ButtonEdges& input);
 
     void DrawSettings(Renderer& renderer);
     void DrawRail(Renderer& renderer);
@@ -150,6 +173,7 @@ private:
     void DrawHistory(Renderer& renderer);
     void DrawConfirm(Renderer& renderer);
     void DrawProgress(Renderer& renderer);
+    void DrawProblem(Renderer& renderer);
 
     void GoToStep(Step step);
     // OPTIONS's destination: writes the world, then opens Confirm with the
@@ -178,13 +202,22 @@ private:
     SettingCategory Category() const { return kCategories[lastCategory_]; }
     const SettingDef& SelectedSetting() const;
     // The name row, the seed row, then all settings in category order - one
-    // list, built from the model, shown on Confirm (plan 9 D3).
-    std::vector<std::string> ConfirmItems() const;
+    // One label/value row of either Confirm tier. Built as a pair rather than
+    // as a joined string because the two are drawn at opposite edges of the
+    // block - label left, value right - so nothing may concatenate them.
+    struct ConfirmRow {
+        std::string label;
+        std::string value;
+    };
     // The B10 statement, as label/value rows: which world is deactivated and
     // where its save goes, which is activated, and what happens to the save.
     // Always the same number of rows, refused or not, so one geometry covers
     // both (settings_ui_verify.py measures it).
-    std::vector<std::string> ConfirmHeadRows() const;
+    // Confirm's two fixed tiers (UI backlog U2): five rows of what is about to
+    // happen, three of what this world is. Always five and always three - there
+    // is no list and no scroll on that step any more.
+    std::vector<ConfirmRow> ConfirmPlanRows() const;
+    std::vector<ConfirmRow> ConfirmWorldRows() const;
     // Roughly how long this activation takes (B10), coarse on purpose.
     const char* DurationText() const;
     // One line per revision, newest first: which revision, its seed, and how
@@ -206,11 +239,6 @@ private:
                            // NAME, SEED or HISTORY (P13)
     int listCursor_[kCategoryCount] = { 0 };
     int listScroll_[kCategoryCount] = { 0 };
-
-    // Confirm is a review list with no cursor, so it owns a scroll offset of
-    // its own - zeroed when Confirm is entered from OPTIONS, and never by
-    // anything else.
-    int confirmScroll_ = 0;
 
     // Phase 1's answer, which is also everything the B10 statement is built
     // from. Costly - PlanActivation reads the whole save container - so it is
@@ -269,23 +297,30 @@ private:
     char          nameBuf_[kNameLen + 1] = "                "; // 16 spaces
     int           nameCursor_ = 0;
 
+    // Every line the activation produced, in order: the job's own phase lines
+    // and this screen's report of what the generation did. Step::Progress does
+    // not draw them - Step::Problem does, and it is the only state that ever
+    // did after U1. They are still Log()'d on the way in, which is what makes
+    // dropping them from the success path free.
     std::vector<std::string> progressLines_;
 
-    // Top visible line of the progress log. While the run is going this
-    // tracks the tail automatically (you want to see what's happening now);
-    // once it finishes, up/down scroll back through what scrolled past.
+    // Top visible line of that log, on the problem screen. Tracks the tail
+    // until up/down unpin it, exactly as WorldsScreen's startup log does.
     int  progressScroll_ = 0;
     bool progressFollowTail_ = true;
 
     // Non-null only while the activation is actually running - StartCommit
-    // creates it, UpdateProgress steps it, FinishCommit clears it.
+    // creates it, UpdateProgress steps it, FinishCommit clears it. DrawProgress
+    // reads Progress() through it, so a null job means the bar is full.
     std::unique_ptr<WorldActivationJob> job_;
-    bool commitFinished_ = false;
 
-    // Index of the first "the run is over" line in progressLines_, which
-    // DrawProgress colors differently. Nothing is a completion line until
-    // FinishCommit says so, hence the out-of-range default.
-    std::size_t completionLineStart_ = (std::size_t)-1;
+    // Set by FinishCommit, read by Step::Problem. The sentence is the screen's
+    // own: a refusal's is the designed one Game/WorldActivation already shows
+    // in the details pane, and a failure's is fixed, because a phase error
+    // carries wording and return codes that have no business being the largest
+    // text on a television.
+    Outcome     outcome_ = Outcome::None;
+    std::string outcomeSentence_;
 
     ScreenId requestedScreen_ = ScreenId::None;
 

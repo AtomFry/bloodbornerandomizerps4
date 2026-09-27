@@ -378,8 +378,17 @@ NAME_CAP_ROWS = 16            # the name cap, as a sanity bound on the parse
 # goes, which is activated, what happens to its save, and roughly how long it
 # takes.
 CONFIRM_SCALE = 4
-CONFIRM_HEAD_ROWS = 8
-CONFIRM_GAP = "   "           # what ConfirmItems puts between label and value
+
+# U2 replaced that flat list with two fixed tiers of label-left/value-right rows,
+# so there is no CONFIRM_GAP string between them any more and no head-row count:
+# the label sits at the block's left edge and the value at its right. What has to
+# be checked instead is that the two never meet in the middle, which is this - the
+# smallest gap a row is allowed to leave between label and value. 40px is about a
+# space and a half at scale 4, and a row tighter than that reads as one word.
+CONFIRM_MIN_GAP = 40
+
+# Spelled as a name so the joiner below reads without an escape inside it.
+NEWLINE = chr(10)
 
 # What a refusal sentence's runtime half is measured as: a title id is 9
 # characters, a block count up to 10 digits, and a stored-save error is
@@ -689,8 +698,16 @@ def parse_editor_rail(categories):
 
 def ui_scroll_count(entry):
     """A screen's row count as the OTHER mirror carries it, so the two cannot
-    disagree about how many rows Confirm has."""
-    body = read(os.path.join(HERE, "ui_scroll_verify.py"))
+    disagree about how many rows a list has. None means that file has no entry
+    for the screen, which since U2 is itself the assertion for Confirm.
+
+    COMMENTED-OUT LINES ARE SKIPPED. ui_scroll_verify.py keeps U2's removed
+    Confirm entry in a comment as the record of what it used to be, and a
+    literal-text search finds that tuple and reports a list where there is none.
+    """
+    body = NEWLINE.join(line for line in
+                     read(os.path.join(HERE, "ui_scroll_verify.py")).splitlines()
+                     if not line.lstrip().startswith("#"))
     m = re.search(r'\("%s",\s*[-0-9]+,\s*[-0-9]+,\s*[-0-9]+,\s*[-0-9]+,\s*'
                   r'[-0-9]+,\s*(\d+),' % re.escape(entry), body)
     return int(m.group(1)) if m else None
@@ -1038,6 +1055,48 @@ def main():
                   wiz.get("kRuleColor") is not None and
                   wiz.get("kRuleColor") == setup.get("kRuleColor")))
 
+    # --- U1: the activation loading screen IS the startup loading screen ------
+    #
+    # Two files draw the same four elements at two moments of one session - the
+    # startup screen while the app comes up, the editor while a world activates.
+    # A player who can tell that two files drew them is looking at a bug, so the
+    # geometry is compared rather than merely copied, exactly as the rail's is
+    # above. The editor's names are kAct*, the startup screen's kLoad*.
+    #
+    # THE BAR IS NOW IN THIS LIST TOO. It was excluded while startup drew five
+    # discrete cells and the activation one continuous fill; the developer asked
+    # for startup to match the activation, so both are now a track with a fill
+    # over it and the minimum-fill width is twinned along with the band. The one
+    # remaining difference is what DRIVES the fill - five coarse stages there, a
+    # real 0..1 here - which is behaviour rather than geometry.
+    worlds_geo = parse_geometry("WorldsScreen.cpp")
+    LOADING_TWINS = [
+        ("kActHeadlineY", "kLoadWordmarkY"),   # the headline
+        ("kActRuleY",     "kLoadRuleY"),       # the rule under it
+        ("kActBarY",      "kLoadBarY"),        # the bar's band
+        ("kActBarH",      "kLoadBarH"),
+        ("kActBarMinFillW", "kLoadBarMinFillW"),
+        ("kActNameY",     "kLoadWordY"),       # the line under the bar
+        ("kActBlockX",    "kLoadBlockX"),      # the block both are centred on
+        ("kActBlockW",    "kLoadBlockW"),
+    ]
+    missing = [(a, b) for a, b in LOADING_TWINS
+               if a not in wiz or b not in worlds_geo]
+    moved = [(a, wiz.get(a), b, worlds_geo.get(b)) for a, b in LOADING_TWINS
+             if a in wiz and b in worlds_geo and wiz[a] != worlds_geo[b]]
+    cases.append(("U1: the activation loading screen's %d geometry constants "
+                  "equal the startup screen's" % len(LOADING_TWINS),
+                  not missing and not moved))
+    if missing or moved:
+        detail.append("   loading geometry missing=%s moved=%s" % (missing, moved))
+
+    # The block has to be centred on the screen, which is the one property the
+    # twin comparison above cannot catch: both files could be wrong together.
+    cases.append(("U1: the loading block is centred on the screen",
+                  wiz.get("kActBlockX") is not None and
+                  wiz.get("kActBlockW") is not None and
+                  2 * wiz["kActBlockX"] + wiz["kActBlockW"] == SCREEN_W))
+
     # This file's own constants are a THIRD copy. Checking cases 5 and 6
     # against numbers that no longer match the screens would pass a screen that
     # is wrong, which is the one failure a geometry mirror must not have.
@@ -1135,30 +1194,75 @@ def main():
     # of the two is wider.
     widest_world = max([widest_name(name_cap), editor_strings["kNoOutgoingWorld"]],
                        key=lambda t: width(t, CONFIRM_SCALE))
-    confirm = ["NAME" + CONFIRM_GAP + widest_name(name_cap),
-               "SEED" + CONFIRM_GAP + digit * SEED_DIGITS,
-               "TARGET" + CONFIRM_GAP + widest_title_id(),
-               editor_strings["kRowDeactivating"] + CONFIRM_GAP + widest_world,
-               editor_strings["kRowOutgoingSave"] + CONFIRM_GAP + widest_outgoing,
-               editor_strings["kRowActivating"] + CONFIRM_GAP + widest_name(name_cap),
-               editor_strings["kRowIncomingSave"] + CONFIRM_GAP + widest_action,
-               editor_strings["kRowHowLong"] + CONFIRM_GAP + widest_duration]
-    confirm += [e["label"] + CONFIRM_GAP + widest_value(e) for e in entries]
-    widest_confirm = max(confirm, key=lambda s: width(s, CONFIRM_SCALE))
-    cases.append(("6: Confirm lists %d rows - %d head rows and all %d settings"
-                  % (len(confirm), CONFIRM_HEAD_ROWS, len(entries)),
-                  len(confirm) == len(entries) + CONFIRM_HEAD_ROWS and
-                  ui_scroll_count("Editor Confirm") == len(confirm)))
-    cases.append(("5: every Confirm row fits the screen at scale 4 (widest %d px, %s)"
-                  % (width(widest_confirm, CONFIRM_SCALE), widest_confirm),
-                  width(widest_confirm, CONFIRM_SCALE) <= SCREEN_W))
+    # --- U2: two fixed tiers, label left and value right, and NO list --------
+    #
+    # Each row is a label at the block's left edge and a value at its right, so
+    # what has to fit is label + value + a gap that keeps them apart - measured
+    # against the BLOCK (1200px), not the screen. A row that fits 1920 but not
+    # the block would collide with itself in the middle.
+    block_w = wiz["kConfirmBlockRight"] - wiz["kConfirmBlockX"]
+    tier1 = [(editor_strings["kRowDeactivating"], widest_world),
+             (editor_strings["kRowOutgoingSave"], widest_outgoing),
+             (editor_strings["kRowActivating"],   widest_name(name_cap)),
+             (editor_strings["kRowIncomingSave"], widest_action),
+             (editor_strings["kRowHowLong"],      widest_duration)]
+    # Tier 2's settings value is a COUNT, and the widest it can be is every
+    # toggle on at two digits each - "99 OF 99 ON" is past what the model can
+    # reach and is therefore a safe bound.
+    tier2 = [(editor_strings["kRowSeed"],     digit * SEED_DIGITS),
+             (editor_strings["kRowTarget"],   widest_title_id()),
+             (editor_strings["kRowSettings"],
+              max("99 OF 99 ON", editor_strings["kConfirmVanillaSettings"],
+                  key=lambda t: width(t, ROW_SCALE)))]
+
+    def tier_fits(rows, scale):
+        """The widest (label, value) pair and whether it clears the block."""
+        worst = max(rows, key=lambda r: width(r[0], scale) + width(r[1], scale))
+        used = width(worst[0], scale) + width(worst[1], scale)
+        return worst, used
+
+    worst1, used1 = tier_fits(tier1, CONFIRM_SCALE)
+    worst2, used2 = tier_fits(tier2, ROW_SCALE)
+    cases.append(("U2: Confirm is %d fixed rows - %d plan and %d world, no list"
+                  % (wiz["kConfirmPlanRows"] + wiz["kConfirmWorldRows"],
+                     wiz["kConfirmPlanRows"], wiz["kConfirmWorldRows"]),
+                  wiz["kConfirmPlanRows"] == len(tier1) and
+                  wiz["kConfirmWorldRows"] == len(tier2) and
+                  ui_scroll_count("Editor Confirm") is None))
+    cases.append(("U2: every tier 1 row fits the block at scale %d "
+                  "(worst %d of %d px, %s / %s)"
+                  % (CONFIRM_SCALE, used1, block_w, worst1[0], worst1[1]),
+                  used1 + CONFIRM_MIN_GAP <= block_w))
+    cases.append(("U2: every tier 2 row fits the block at scale %d "
+                  "(worst %d of %d px, %s / %s)"
+                  % (ROW_SCALE, used2, block_w, worst2[0], worst2[1]),
+                  used2 + CONFIRM_MIN_GAP <= block_w))
+    cases.append(("U2: the Confirm block is centred on the screen",
+                  wiz["kConfirmBlockX"] + wiz["kConfirmBlockRight"] == SCREEN_W))
+
+    # THE SETTINGS LIST MUST NOT COME BACK without the layout changing with it.
+    # U2 removed it deliberately - no drill-in, no expansion - and the failure
+    # this guards against is a well-meaning edit that reinstates a per-setting
+    # loop into a screen whose geometry has no room to scroll it.
+    editor_src = strip_comments(read(os.path.join(UI, "WorldEditorScreen.cpp")))
+    confirm_body = editor_src.split("ConfirmWorldRows")[-1]
+    cases.append(("U2: Confirm builds no per-setting rows and cannot scroll",
+                  "SettingValueText" not in confirm_body and
+                  "confirmScroll_" not in editor_src and
+                  "kConfirmGap" not in editor_src))
+    # The count it shows instead has to be the SAME sentence the WORLDS rail
+    # shows against the row, or two screens state one fact two ways.
+    cases.append(("U2: the settings row is EnabledToggleCount over ToggleCount",
+                  "EnabledToggleCount" in editor_src and
+                  "ToggleCount()" in editor_src))
 
     # B10 says the confirmation states which world is deactivated and where its
     # save goes, which is activated, what happens to its save, and roughly how
     # long it takes. Five rows, and this is what stops one of them quietly
-    # going away.
+    # going away - U2 moved them into tier 1 and dropped NAME, which ACTIVATING
+    # already said, but B10 itself is unchanged.
     cases.append(("6: Confirm states all five B10 activation facts",
-                  all(editor_strings[k] in "".join(confirm[3:8]) for k in
+                  all(editor_strings[k] in "".join(r[0] for r in tier1) for k in
                       ("kRowDeactivating", "kRowOutgoingSave", "kRowActivating",
                        "kRowIncomingSave", "kRowHowLong"))))
 
@@ -1185,30 +1289,47 @@ def main():
                      worst),
                   all(len(wrap(t, ROW_SCALE, band_w)) <= band_max for t in banded)))
 
-    # ...and the band itself clears the state line above it and the list's
-    # MORE ABOVE hint below it. ui_scroll_verify.py owns the hint's own
-    # clearance; what is checked here is that the two rows fit in between.
-    confirm_layout = parse_list_layout("WorldEditorScreen.cpp", "kSettingsLayout")
+    # ...and the whole screen stacks without collision, top to bottom. There is
+    # no list any more, so this replaces the old "clears the MORE ABOVE hint"
+    # check with the run of five gaps that now decide the screen's shape:
+    # state -> sentence -> tier 1 -> rule -> tier 2 -> footer.
     band_last_y = wiz["kConfirmSentenceY"] + (band_max - 1) * wiz["kConfirmSentencePitch"]
-    hint_y = confirm_layout[0] - confirm_layout[3]
-    cases.append(("5: the sentence band clears the state line above it "
-                  "(%d px)" % (ink_top(wiz["kConfirmSentenceY"], ROW_SCALE) -
-                               ink_bottom(wiz["kConfirmStateY"], CONFIRM_SCALE)),
-                  ink_top(wiz["kConfirmSentenceY"], ROW_SCALE) >
-                  ink_bottom(wiz["kConfirmStateY"], CONFIRM_SCALE)))
-    cases.append(("5: the sentence band clears the list's MORE ABOVE hint "
-                  "(%d px)" % (ink_top(hint_y, ROW_SCALE) -
-                               ink_bottom(band_last_y, ROW_SCALE)),
-                  ink_top(hint_y, ROW_SCALE) > ink_bottom(band_last_y, ROW_SCALE)))
-    cases.append(("5: the band's own rows do not overlap each other (pitch %d, "
-                  "line box %d)" % (wiz["kConfirmSentencePitch"],
-                                    INK[ROW_SCALE][1] - INK[ROW_SCALE][0]),
-                  wiz["kConfirmSentencePitch"] >=
-                  INK[ROW_SCALE][1] - INK[ROW_SCALE][0]))
+    tier1_last_y = wiz["kConfirmPlanY"] + (wiz["kConfirmPlanRows"] - 1) * wiz["kConfirmPlanPitch"]
+    tier2_last_y = wiz["kConfirmWorldY"] + (wiz["kConfirmWorldRows"] - 1) * wiz["kConfirmWorldPitch"]
+    footer_y = SCREEN_H - 80
+    stack = [
+        ("the sentence band clears the state line",
+         ink_top(wiz["kConfirmSentenceY"], ROW_SCALE),
+         ink_bottom(wiz["kConfirmStateY"], CONFIRM_SCALE)),
+        ("tier 1 clears the sentence band",
+         ink_top(wiz["kConfirmPlanY"], CONFIRM_SCALE),
+         ink_bottom(band_last_y, ROW_SCALE)),
+        ("the tier rule clears tier 1",
+         wiz["kConfirmTierRuleY"],
+         ink_bottom(tier1_last_y, CONFIRM_SCALE)),
+        ("tier 2 clears the tier rule",
+         ink_top(wiz["kConfirmWorldY"], ROW_SCALE),
+         wiz["kConfirmTierRuleY"] + wiz["kRuleThickness"]),
+        ("the footer clears tier 2",
+         ink_top(footer_y, ROW_SCALE),
+         ink_bottom(tier2_last_y, ROW_SCALE)),
+    ]
+    for label, top, bottom in stack:
+        cases.append(("U2: %s (%d px)" % (label, top - bottom), top > bottom))
 
-    # Confirm's two footer lines, which now say ACTIVATE rather than COMMIT and
-    # drop the OPTIONS half entirely when there is nothing to activate.
-    for key in ("kConfirmFooterHint", "kConfirmFooterGo", "kConfirmFooterBack"):
+    # Every block's own pitch has to clear its scale's line box, or a block
+    # overlaps itself however well it clears its neighbours.
+    for label, pitch, scale in (("the sentence band", wiz["kConfirmSentencePitch"], ROW_SCALE),
+                                ("tier 1", wiz["kConfirmPlanPitch"], CONFIRM_SCALE),
+                                ("tier 2", wiz["kConfirmWorldPitch"], ROW_SCALE)):
+        box = INK[scale][1] - INK[scale][0]
+        cases.append(("U2: %s does not overlap itself (pitch %d, line box %d)"
+                      % (label, pitch, box), pitch >= box))
+
+    # Confirm's ONE footer line, which says ACTIVATE rather than COMMIT and drops
+    # the OPTIONS half entirely when there is nothing to activate. U2 removed the
+    # UP DOWN SCROLL line above it along with the list it described.
+    for key in ("kConfirmFooterGo", "kConfirmFooterBack"):
         cases.append(("5: %s fits the screen at the footer scale (%d px)"
                       % (key, width(editor_strings[key], ROW_SCALE)),
                       width(editor_strings[key], ROW_SCALE) <= SCREEN_W))
@@ -1548,17 +1669,20 @@ def main():
                   % (worlds["kLoadBlockX"], block_w, worlds["kLoadBlockX"], SCREEN_W),
                   worlds["kLoadBlockX"] * 2 + block_w == SCREEN_W))
 
-    # B3: FIVE EQUAL steps. The gaps come out of the block first, and what is
-    # left has to divide by five exactly and equal five coded cell widths.
-    cells = worlds["kLoadStageCount"]
-    inner = block_w - (cells - 1) * worlds["kLoadCellGap"]
-    cases.append(("6: the bar is %d equal cells of %d px filling the block exactly"
-                  % (cells, worlds["kLoadCellW"]),
-                  cells == 5 and inner % cells == 0 and
-                  inner == cells * worlds["kLoadCellW"]))
-    if inner % cells or inner != cells * worlds["kLoadCellW"]:
-        detail.append("   loading bar: %d px of cells over %d cells, coded %d"
-                      % (inner, cells, worlds["kLoadCellW"]))
+    # B3: FIVE EQUAL steps, now as one continuous fill rather than five cells.
+    # kLoadCellW / kLoadCellGap are gone, so what used to be an "the cells divide
+    # the block exactly" check is an "every step lands on a whole pixel and the
+    # last one fills the block" check. A denominator that did not divide 1000
+    # would leave the finished bar short of its own right edge.
+    stages = worlds["kLoadStageCount"]
+    steps = [block_w * n // stages for n in range(stages + 1)]
+    cases.append(("6: the loading bar's %d steps divide the %d px block exactly "
+                  "(%s)" % (stages, block_w, steps),
+                  stages == 5 and block_w % stages == 0 and
+                  steps[-1] == block_w and steps[0] == 0))
+    cases.append(("6: the loading bar and the activation bar are both one fill",
+                  "kLoadCellW" not in worlds and "kLoadCellGap" not in worlds and
+                  "kLoadBarMinFillW" in worlds and "kActBarMinFillW" in wiz))
 
     load_stack = [
         ("wordmark", ink_top(worlds["kLoadWordmarkY"], title_scale),
