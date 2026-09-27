@@ -266,13 +266,70 @@ with row 17 if the two are built near each other.
 
 ---
 
-## 4. Items and shop (2 remaining)
+## 4. Items and shop (3 remaining)
 
 | # | Feature | Reference flag | What it does | Status | Cost |
 |---|---|---|---|---|---|
 | 11 | Randomize Shop Items | `shopBool` | Shuffles shop **armour** (`equipType 1`) and **consumables** (`equipType 3`). Note it does *not* touch weapons — that is setting 5 | **TODO** | **Low.** Same `ShopLineupParam`, same `equipId` field, same loop we already run for weapons — two more type buckets |
 | 12 | Key Overworld Items (With Logic) | `keyItemRandomizeBool` | Nothing. The flag is assigned from the checkbox and **never read anywhere**; `keyitemRand` is constructed and never used. Key items are only ever *excluded* from the treasure pool | **DEAD** in the reference | Building it for real is net-new design, not a port — see §9 |
+| 37 | Start with a trick weapon | *none* | **NEW, no reference equivalent.** Grants a weapon at character creation, so a new game starts in the clinic already holding one. A **pool picker**, not a single choice: none ticked grants nothing, one ticked always grants that weapon, several ticked draws one at random per run — the same none/one/many semantics `ENEMIES INCLUDED` already has | **TODO — NEEDS A PROBE FIRST**, see below | Small **if** the field behaves; unknown if it does |
 | 34 | Start with hunter tools | *none* | **NEW, no reference equivalent.** Grants both workshop key items — Blood Gem Workshop Tool (goods `4103`) and Rune Workshop Tool (goods `4104`) — at character creation, by writing them into the free `item_*` slots of every player-origin row in `CharaInitParam`. The randomizer hands out gems and runes from the first area but vanilla gates fitting either one behind two mid-early-game chests, so without this they are dead weight | **BUILT** — shipped as `START WITH HUNTER TOOLS`; spec and plan deliberately skipped at the user's request. **NOT yet hardware-tested**, and it rests on an unverified assumption — see `docs/features/034-start-with-hunter-tools/implementation-report.md` | **Low.** One new engine file plus the usual settings chain |
+
+### Row 37 — start with a trick weapon
+
+**The field exists and is free.** Measured against `data/vanilla/dvdroot_ps4`
+rather than assumed:
+
+| Offset | Field | Type | Vanilla value on all 22 player-origin rows |
+|---|---|---|---|
+| 16 | `equip_Wep_Right` | s32 | `-1` |
+| 20 | `equip_Subwep_Right` | s32 | `-1` |
+| 24 | `equip_Wep_Left` | s32 | `-1` |
+| 28 | `equip_Subwep_Left` | s32 | `-1` |
+
+Those are the **same rows** row 34 already writes — `CHARACTER_INIT_PARAM`,
+300-byte rows, the origin list in `HunterTools.cpp`. Row 34 writes `item_*` at
+offset 124; this writes a weapon id at offset 16. One more 4-byte poke into a
+file the pass already has open.
+
+**The requirement nerf already exists.** `StartingWeapons.cpp`'s
+`ApplyStatProfile()` rewrites the four u8 requirements — `properStrength`,
+`properAgility`, `properMagic`, `properFaith` at offsets 237–240 — across all
+eleven upgrade tiers (`kUpgradeStride` 100, `kUpgradeTiers` 10). Without it a
+level-4 character cannot wield most of the list. It is reusable; what it needs
+is one starting-weapon profile rather than the five per-slot ones it carries.
+
+**The list is 37 rows.** `EquipParamWeapon` has 1090 rows, but that is families
+× the Lost/Uncanny variants × eleven upgrade tiers. Distinct families:
+**37**, which sits between the boss picker's 17 and the enemy picker's 82. The
+Hunter's Dream's own five are `7000000` Saw Cleaver, `5000000` Hunter Axe,
+`22000000` Threaded Cane, `14000000` Hunter Pistol, `6000000` Blunderbuss.
+
+**THE PROBE, and why this row is not ready to plan.** Everything above is
+byte-level fact. What none of it establishes is the only thing that matters:
+**whether the game grants the weapon.** In other FromSoftware titles these
+fields grant and equip at character creation; whether Bloodborne's clinic spawn
+honours them is unobserved, and this project has a scar exactly here — see
+`docs/plans/mergo-darkness.md` §2.7, where the byte analysis was right and the
+conclusion about game behaviour was backwards.
+
+One probe settles it: write `7000000` into `equip_Wep_Right` on the 22 origin
+rows, start a new game, and see whether the character is holding a Saw Cleaver.
+If it works the feature is small. If it does not, the reason is the feature, and
+the scope is a different question entirely.
+
+**Four decisions the spec has to make, none of them blocked by the probe:**
+
+- **Names.** There is no weapon-name source in the repo — `tools/data/Characters.json`
+  is enemies only. 37 names is a hand-authored table.
+- **Which hand.** Trick weapons are right-hand, firearms left. `EQUIP_PARAM_WEAPON_ST`
+  has no category field that was findable, so the same hand-authored table
+  carries the classification.
+- **Which variant.** Base (`7000000`), Lost (`7010000`) or Uncanny (`7020000`).
+- **Precedence against row 5.** `RANDOMIZE STARTING WEAPONS` already rewrites
+  stat requirements on `EquipParamWeapon`. With both settings on, the two
+  passes write the same rows, and which wins should be decided rather than
+  discovered.
 
 ---
 
@@ -414,13 +471,13 @@ belongs at the end, not the front, and it needs its own spec.
 |---|---|
 | Ready (code exists, needs a row) | 0 |
 | Enemy / boss pickers and placement protection (new) | 2 |
-| Items and shop | 1 real + 1 dead |
+| Items and shop | 2 real + 1 dead |
 | Enemy and boss pool | 4 |
 | Difficulty helpers | 4 |
 | Scaling | 2 |
 | Combat and cosmetic params | 8 |
 | Modes (new) | 1 idea |
-| **Total actionable** | **21 + 1 idea** |
+| **Total actionable** | **22 + 1 idea** |
 | Out of scope (chalice) | 3 |
 
 Of those, **19 are unimplemented reference settings** — §4 through §8, every
@@ -458,3 +515,7 @@ Two later additions, both ours rather than the reference's:
 - **Row 36 (boss rush)** is sequenced by nothing on this list. It needs a
   hardware probe before it can be specified, and that probe can happen at any
   time because it shares no machinery with anything here.
+- **Row 37 (start with a trick weapon)** belongs beside row 5, whose
+  `ApplyStatProfile` it reuses and whose stat writes it has to agree with. Like
+  row 36 it wants a hardware probe first, but unlike row 36 the probe is one
+  four-byte write and the rest of the feature is already built machinery.
