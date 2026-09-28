@@ -90,6 +90,7 @@
 #include "HunterTools.h"
 #include "DropRandomizer.h"
 #include "StartingWeapons.h"
+#include "TrickWeaponGrant.h"
 #include "FileIo.h"
 #include "ModelSizeTable.h"
 #include "PermaDarkness.h"
@@ -1028,6 +1029,12 @@ void EnemyRandomizerJob::State::StepItemData() {
             result.dropPoolSize = drops.poolSize;
         }
 
+        // Shared by the starting-weapon pass and the trick-weapon grant, and
+        // created HERE rather than inside either of them: it is what makes the
+        // grant's requirement profile win over a coffin slot's whichever of the
+        // two runs first (spec 037 D4). See WeaponRequirements.h.
+        WeaponRequirementWriter reqWriter;
+
         StartingWeaponOptions weaponOpts;
         weaponOpts.randomizeStartingWeapons = options.randomizeStartingWeapons;
         weaponOpts.randomizeStartingGuns = options.randomizeStartingGuns;
@@ -1043,7 +1050,7 @@ void EnemyRandomizerJob::State::StepItemData() {
             }
             StartingWeaponsResult weapons;
             if (!RandomizeStartingWeapons(itemDataPlain, *shop, *weapon, weaponOpts, rng,
-                                          weapons, &err)) {
+                                          reqWriter, weapons, &err)) {
                 Fail("starting weapon randomization failed: " + err);
                 return;
             }
@@ -1052,10 +1059,10 @@ void EnemyRandomizerJob::State::StepItemData() {
             result.shopWeaponsChanged = weapons.shopRowsChanged;
         }
 
-        // Last of the param features, and the only one that isn't a
-        // randomizer - it writes the same two item ids every run. Order
-        // doesn't matter here: it touches CharaInitParam, which nothing else
-        // in this phase reads or writes.
+        // The only param feature that isn't a randomizer - it writes the same
+        // two item ids every run. Order doesn't matter for it: it touches
+        // CharaInitParam, which only the trick-weapon grant below also writes,
+        // and the two find their own free slots rather than fixed ones.
         if (options.startWithHunterTools) {
             const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
             if (chara == nullptr) {
@@ -1069,6 +1076,32 @@ void EnemyRandomizerJob::State::StepItemData() {
             }
             result.hunterToolRowsChanged = tools.rowsChanged;
             result.hunterToolSlotsWritten = tools.slotsWritten;
+        }
+
+        // LAST, and that is a requirement rather than a tidy ordering: this is
+        // the only pass in the run that draws randomness at this point, so
+        // putting it at the very end means turning the setting on cannot move
+        // any earlier roll. A seed compared with and without a ticked weapon
+        // gives the same world either way (spec 037 §7, determinism).
+        //
+        // It shares reqWriter with the starting-weapon pass above, so the
+        // precedence rule holds no matter which of the two actually ran.
+        if (options.trickWeapons.CountEnabled() > 0) {
+            const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
+            const ParamMember* weapon = FindParamMember(members, "EquipParamWeapon.param");
+            if (chara == nullptr || weapon == nullptr) {
+                Fail("CharaInitParam.param or EquipParamWeapon.param missing from "
+                     "gameparam.parambnd.dcx");
+                return;
+            }
+            TrickWeaponGrantResult grant;
+            if (!GrantTrickWeapon(itemDataPlain, *chara, *weapon, options.trickWeapons,
+                                  rng, reqWriter, grant, &err)) {
+                Fail("granting a trick weapon failed: " + err);
+                return;
+            }
+            result.trickWeaponGranted = grant.weaponGranted;
+            result.trickWeaponRowsChanged = grant.rowsChanged;
         }
 
         itemDataStep = 2;

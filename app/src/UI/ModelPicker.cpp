@@ -80,7 +80,14 @@ const int kPickerBarHeight  = 48;
 // not a styling pass. The rows get the band and the separators; the panel
 // belongs to a later item that is allowed to move the furniture.
 
-std::string RowLabel(const ModelPoolEntry& m) {
+std::string RowLabel(const ModelPoolEntry& m, bool showRowId) {
+    // Without the id column the label IS the display name - no leading space
+    // and no uppercasing pass, because there is nothing there to uppercase.
+    // The trick-weapon list is the one that asks for this: its ids are
+    // nine-digit param ids and all 78 of its names are distinct, so the column
+    // would cost width and tell the player nothing (feature 037).
+    if (!showRowId) return std::string(m.displayName);
+
     std::string label = std::string(m.model) + " " + m.displayName;
     // Uppercase the model id so it matches the name beside it; the table
     // stores it lowercase because that is how the game data spells it.
@@ -204,7 +211,9 @@ void ModelPicker::Draw(Renderer& renderer, const PickerStrings& strings,
                               kPickerBarHeight);
         }
 
-        DrawLabelLeft(renderer, kRowX, y, RowLabel(table[index]).c_str(), kItemScale, color);
+        DrawLabelLeft(renderer, kRowX, y,
+                      RowLabel(table[index], strings.showRowId).c_str(),
+                      kItemScale, color);
         DrawLabelRight(renderer, kRowFlagRight, y,
                        enabled[index] ? strings.flagOn : strings.flagOff, kItemScale, color);
     }

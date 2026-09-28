@@ -778,6 +778,7 @@ void WorldActivationJob::Step() {
             options.enemiesIncluded = run.enemiesIncluded;
             options.bossesIncluded = run.bossesIncluded;
             options.enemiesSkipped = run.enemiesSkipped;
+            options.trickWeapons = run.trickWeapons;
 
             // The Enable wizard's run decision, kept verbatim, and reported
             // here rather than used to skip the run: a world with nothing
@@ -791,7 +792,11 @@ void WorldActivationJob::Step() {
                 run.randomizeEnemyDrops || run.randomizeStartingWeapons ||
                 run.randomizeStartingGuns || run.randomizeShopWeapons ||
                 run.enableMergoDarkness || run.startWithHunterTools ||
-                run.easyShadows || run.easyRom || run.easyFailures || run.easyEmissary;
+                run.easyShadows || run.easyRom || run.easyFailures || run.easyEmissary ||
+                // A picker-only setting still gates a run: ticking one weapon
+                // and nothing else is a complete request, so it must not report
+                // "no randomizer settings are on" (spec 037 §7).
+                run.trickWeapons.CountEnabled() > 0;
             if (!anythingOn) {
                 s.Say("NO RANDOMIZER SETTINGS ARE ON - THE TREE IS A PLAIN MIRROR");
             }

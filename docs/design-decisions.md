@@ -75,6 +75,26 @@ it means passing the skip selection into `BossRandomizer` and applying it at
 its pool build — a contained change, but a change to what the feature *does*,
 so it needs a spec decision first.
 
+## Turnkey setup is a product goal, not a nicety
+
+The Windows reference tool works well and is fun, but using it means remembering
+where the files go and how to drive it, and it is not well documented. *Install
+it, run it, it works* is what this port is for.
+
+So a feature that adds a step the user has to remember is paying a real cost,
+and should be weighed as such rather than waved through. The one outstanding
+violation is the manual FTP of a vanilla `dvdroot_ps4` into
+`/data/bbrandomizer/VanillaSource/`, which every install still needs.
+
+**Decided 2026-09-27:** that goes away by bundling the vanilla data inside the
+app's own package, read from `/app0`. It is **deferred to the public release
+build** — ~78 MB on every build and install is not worth paying during
+development, when the tree is already in place on the developer's console. See
+`docs/ui-backlog.md` U5, which also records the two rejected alternatives: a
+companion data PKG (still a procedure, so still not turnkey) and reading the
+installed game's files (impossible without privilege escalation, probed on
+hardware).
+
 ## Chalice dungeons
 
 Chalice dungeons are intentionally out of scope.

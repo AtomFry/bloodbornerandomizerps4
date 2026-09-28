@@ -1,6 +1,7 @@
-// ModelPicker.h - the shared drill-in creature list. Drives the enemy picker
-// (82 rows), the boss picker (17) and ENEMIES SKIPPED (85), which behave
-// identically; the host supplies the table, the count and the flags.
+// ModelPicker.h - the shared drill-in list. Drives the enemy picker (82 rows),
+// the boss picker (17), ENEMIES SKIPPED (85) and START WITH A TRICK WEAPON
+// (78), which behave identically; the host supplies the table, the count and
+// the flags.
 //
 // The first two are INCLUSION lists - ticking a row lets that creature be
 // used as a replacement. The third is the opposite: ticking a row leaves the
@@ -57,6 +58,17 @@ struct PickerStrings {
     // is not here because it is the same word on all three.
     const char* allVerb;      // what SQUARE does - "ALL", "SKIP ALL"
     const char* noneVerb;     // what TRIANGLE does - "NONE", "SKIP NONE"
+    // Whether the row draws the table's `model` field before the name. The
+    // three creature lists need it: "C1130" beside OEDON CHAPEL DWELLER is how
+    // a reader tells two rows with the same community name apart, and two of
+    // them genuinely share one. The trick-weapon list does not - all 78 names
+    // are distinct, and the id there is a nine-digit param id that means
+    // nothing to a player.
+    //
+    // THIS STRUCT IS AGGREGATE-INITIALISED, so a site that forgets this field
+    // gets `false` silently and drops its id column. Every site sets it
+    // explicitly, and pool_verify.py counts them.
+    bool showRowId;
 };
 
 // The three lists' vocabulary, defined once because both hosting screens draw
@@ -78,6 +90,7 @@ inline constexpr PickerStrings kEnemiesIncludedStrings = {
     "YES", "NO",
     "ENABLE ALL", "DISABLE ALL",
     "ALL", "NONE",
+    true,
 };
 
 inline constexpr PickerStrings kBossesIncludedStrings = {
@@ -86,6 +99,7 @@ inline constexpr PickerStrings kBossesIncludedStrings = {
     "YES", "NO",
     "ENABLE ALL", "DISABLE ALL",
     "ALL", "NONE",
+    true,
 };
 
 // YES/NO under a heading reading ENEMIES SKIPPED is genuinely ambiguous -
@@ -97,6 +111,22 @@ inline constexpr PickerStrings kEnemiesSkippedStrings = {
     "SKIPPED", "-",
     "SKIP ALL", "SKIP NONE",
     "SKIP ALL", "SKIP NONE",
+    true,
+};
+
+// The fourth list, and the only one that is not creatures: the 78 right-hand
+// trick weapon versions a new character can be granted (feature 037). YES/NO is
+// unambiguous here - YES means "this weapon may be the one you start with" -
+// and the instruction line carries the none/one/many rule, which is the part no
+// heading can say. The instruction line also puts the list on the 11-row
+// layout, so 78 rows is 8 pages.
+inline constexpr PickerStrings kTrickWeaponsStrings = {
+    "START WITH A TRICK WEAPON",
+    "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
 };
 
 class ModelPicker {

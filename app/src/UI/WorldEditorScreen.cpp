@@ -9,6 +9,7 @@
 #include "../Platform/Log.h"
 #include "../Randomizer/EnemyRandomizer.h"
 #include "../Randomizer/RandomizerDefaultsStore.h"
+#include "../Randomizer/TrickWeaponGrant.h"
 
 #include <cstring>
 #include <ctime>
@@ -1297,6 +1298,18 @@ void WorldEditorScreen::FinishCommit() {
             if (run_.startWithHunterTools) {
                 AddProgressLine("STARTING WITH BOTH HUNTER WORKSHOP TOOLS");
             }
+            // Only when something was actually granted, and it names the
+            // weapon: with several ticked the player's whole question is which
+            // one the run drew, and the count of ticked rows does not answer it.
+            // The name comes from the engine (TrickWeaponGrant.h), so no screen
+            // file learns how a weapon id is spelled.
+            if (result.trickWeaponGranted != 0) {
+                const char* granted = TrickWeaponName(result.trickWeaponGranted);
+                std::string what = granted != nullptr
+                                       ? std::string(granted)
+                                       : std::to_string(result.trickWeaponGranted);
+                AddProgressLine("STARTING WITH " + what);
+            }
             // One line per ENABLED easy setting, each carrying its count
             // (plan 018 P2). No SKIPPING counterparts, for the same reason
             // the two features above have none. The counts are fixed - 2 /
@@ -1343,7 +1356,8 @@ void WorldEditorScreen::FinishCommit() {
             // features ran, so report it once rather than per feature.
             if (run_.randomizeEnemyDrops || run_.randomizeStartingWeapons ||
                 run_.randomizeStartingGuns || run_.randomizeShopWeapons ||
-                run_.startWithHunterTools) {
+                run_.startWithHunterTools ||
+                run_.trickWeapons.CountEnabled() > 0) {
                 AddProgressLine("ITEM DATA " + std::to_string(result.itemDataMembers) +
                                 " ENTRIES, WROTE " +
                                 std::to_string(result.itemDataWrittenBytes / 1048576) + " MB");

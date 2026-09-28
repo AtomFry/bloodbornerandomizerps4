@@ -272,6 +272,15 @@ SCREENS = [
     # count line at 185 but the instruction at y=235. 85 rows is 8 pages at
     # 11 and at 12 alike.
     ("Skipped picker",  332, 52, 900, 3, 52, 85, 235, 3, SCREEN_H - 130, 2),
+    # START WITH A TRICK WEAPON (feature 037): the same component a fourth
+    # time, and the same instruction-line geometry as the skipped picker to
+    # the pixel - the list is 78 weapon versions rather than creatures, which
+    # is not something any constant here can see. 78 rows at 11 visible is 8
+    # pages. Listed separately rather than trusted to be covered by the entry
+    # above for the reason every other duplicate set of numbers here is
+    # listed: a band nothing checks twice is a band one of its screens can
+    # walk away from.
+    ("Weapon picker",   332, 52, 900, 3, 52, 78, 235, 3, SCREEN_H - 130, 2),
 ]
 
 failures = []

@@ -26,7 +26,13 @@ Invariants (docs/plans/starting-weapons.md):
 Usage:
     python starting_weapons_verify.py pool     <vanilla_dvdroot>
     python starting_weapons_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
+                                               [--granted <weapon id>]
     python starting_weapons_verify.py selftest <vanilla_dvdroot>
+
+--granted <id> says the run also had feature 037's START WITH A TRICK WEAPON on
+and that it granted that weapon. Without the flag a correct combined run reports
+FAILED on three invariants that are working exactly as intended - see
+GRANT_PROFILE.
 """
 
 import os
@@ -69,6 +75,23 @@ STAT_PROFILES = {
 
 UPGRADE_TIERS = 10
 UPGRADE_STRIDE = 100
+
+# Feature 037's START WITH A TRICK WEAPON also lowers requirements, and spec 037
+# D4 says the GRANT wins where the two features land on the same weapon. When
+# --granted <id> is passed, three invariants relax by exactly that much and no
+# more: CharaInitParam.param may differ (SW-I1), the granted weapon and its ten
+# tiers may be restatted (SW-I6), and if the granted weapon is ALSO a coffin
+# pick then this profile is what that slot's weapon must carry (SW-I7).
+#
+# Without the flag nothing changes, which is the point: a run with feature 037
+# off is still held to the invariants exactly as it was before.
+#
+# GRANT_PROFILE is retyped here on purpose, the same way STAT_PROFILES is: it is
+# the thing being checked, so parsing it out of the C++ would let both move
+# together. That it is the real origin minimum is trick_weapons_verify.py T8's
+# job, measured from CharaInitParam.
+CHARA_MEMBER = "CharaInitParam.param"
+GRANT_PROFILE = (9, 9, 5, 6)
 
 CS_REL = os.path.join("reference", "Randomizer", "MainWindowComponents",
                       "RandomizeFunctions.cs")
@@ -170,9 +193,12 @@ def cmd_pool(vanilla_root):
     return 0
 
 
-def compare(van_plain, van_members, out_plain, out_members):
+def compare(van_plain, van_members, out_plain, out_members, granted=None):
     failures = []
     notes = []
+    tolerated = {SHOP_MEMBER, WEAPON_MEMBER}
+    if granted is not None:
+        tolerated.add(CHARA_MEMBER)
 
     # SW-I9 / SW-I1
     if sorted(van_members) != sorted(out_members):
@@ -184,7 +210,7 @@ def compare(van_plain, van_members, out_plain, out_members):
         if vsize != osize:
             failures.append("SW-I9 member %s size changed %d -> %d" % (name, vsize, osize))
             continue
-        if name in (SHOP_MEMBER, WEAPON_MEMBER):
+        if name in tolerated:
             continue
         if van_plain[voff:voff + vsize] != out_plain[ooff:ooff + osize]:
             failures.append("SW-I1 member %s modified (only shop/weapon params may change)"
@@ -266,6 +292,9 @@ def compare(van_plain, van_members, out_plain, out_members):
     for rid, weapon in assigned.items():
         for tier in range(UPGRADE_TIERS + 1):
             allowed.add(weapon + tier * UPGRADE_STRIDE)
+    if granted is not None:
+        for tier in range(UPGRADE_TIERS + 1):
+            allowed.add(granted + tier * UPGRADE_STRIDE)
 
     stat_rows = 0
     for wid, vat in van_weapons.items():
@@ -284,9 +313,11 @@ def compare(van_plain, van_members, out_plain, out_members):
                             "assigned weapon or one of its upgrade tiers" % wid)
         stat_rows += 1
 
-    # SW-I7: the profile actually landed, on every tier that exists.
+    # SW-I7: the profile actually landed, on every tier that exists. A weapon
+    # that is both a coffin pick and the grant carries the GRANT's profile - D4,
+    # and it holds whichever of the two passes ran first.
     for rid, weapon in assigned.items():
-        want = STAT_PROFILES[rid]
+        want = GRANT_PROFILE if weapon == granted else STAT_PROFILES[rid]
         for tier in range(UPGRADE_TIERS + 1):
             wid = weapon + tier * UPGRADE_STRIDE
             if wid not in out_weapons:
@@ -297,6 +328,20 @@ def compare(van_plain, van_members, out_plain, out_members):
                 failures.append("SW-I7 slot %d weapon %d tier %d has stats %s, expected %s"
                                 % (rid, weapon, tier, got, want))
 
+    if granted is not None:
+        wrong_rows = []
+        for tier in range(UPGRADE_TIERS + 1):
+            wid = granted + tier * UPGRADE_STRIDE
+            if wid not in out_weapons:
+                continue
+            at = out_weapons[wid]
+            if tuple(out_plain[at + o] for o in STAT_OFFSETS) != GRANT_PROFILE:
+                wrong_rows.append(wid)
+        if wrong_rows:
+            failures.append("SW-I7 granted weapon %d does not carry %s on rows %s"
+                            % (granted, GRANT_PROFILE, wrong_rows[:6]))
+        notes.append("tolerating feature 037's grant of weapon %d" % granted)
+
     if assigned:
         notes.append("slot assignments: " +
                      ", ".join("%d->%d" % (r, w) for r, w in sorted(assigned.items())))
@@ -305,7 +350,7 @@ def compare(van_plain, van_members, out_plain, out_members):
     return failures, notes, counts
 
 
-def cmd_verify(vanilla_root, output_root):
+def cmd_verify(vanilla_root, output_root, granted=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when every param toggle was off")
@@ -314,7 +359,8 @@ def cmd_verify(vanilla_root, output_root):
     out_plain, out_members = load_archive(output_root)
 
     print("vanilla decompressed=%d  output decompressed=%d" % (len(van_plain), len(out_plain)))
-    failures, notes, counts = compare(van_plain, van_members, out_plain, out_members)
+    failures, notes, counts = compare(van_plain, van_members, out_plain, out_members,
+                                      granted=granted)
     if counts:
         print("starting slots changed: %d   other shop weapon rows changed: %d   "
               "weapon rows restatted: %d"
@@ -413,9 +459,70 @@ def cmd_selftest(vanilla_root):
     run("another param modified",
         lambda b: b.__setitem__(slice(ooff, ooff + 4), b"\xDE\xAD\xBE\xEF"), "SW-I1")
 
+    # --- feature 037's --granted tolerance -----------------------------------
+    #
+    # Every case above ran WITHOUT the flag and still holds, which is one half of
+    # "passes with and without it". These are the other half: with the flag a
+    # combined run passes, without it the same bytes are rejected, and the flag
+    # is not a blanket amnesty.
+    chara_off, _ = van_members[CHARA_MEMBER]
+    grant_weapon = next(w for w in sorted(weapons)
+                        if all(w < pk or w > pk + UPGRADE_TIERS * UPGRADE_STRIDE
+                               for pk in picks.values()))
+
+    def apply_grant(buf, weapon):
+        for tier in range(UPGRADE_TIERS + 1):
+            wid = weapon + tier * UPGRADE_STRIDE
+            if wid not in weapons:
+                continue
+            for off, val in zip(STAT_OFFSETS, GRANT_PROFILE):
+                buf[weapons[wid] + off] = val
+
+    combined = bytearray(good)
+    apply_grant(combined, grant_weapon)
+    # Stands in for the grant's writes into CharaInitParam. This tool models
+    # those no further than "that member is allowed to differ";
+    # trick_weapons_verify.py owns the other half.
+    combined[chara_off + 0x100] ^= 0xFF
+
+    fc, _, _ = compare(van_plain, van_members, combined, van_members,
+                       granted=grant_weapon)
+    results.append(("037: a combined run passes WITH --granted", not fc, fc))
+
+    fn, _, _ = compare(van_plain, van_members, combined, van_members)
+    results.append(("037: the same bytes are REJECTED without --granted",
+                    any("SW-I1" in x for x in fn) and any("SW-I6" in x for x in fn), []))
+
+    wrong = bytearray(combined)
+    other_weapon = next(w for w in sorted(weapons)
+                        if all(w < pk or w > pk + UPGRADE_TIERS * UPGRADE_STRIDE
+                               for pk in list(picks.values()) + [grant_weapon]))
+    wrong[weapons[other_weapon] + PROPER_STRENGTH] = 99
+    fw, _, _ = compare(van_plain, van_members, wrong, van_members, granted=grant_weapon)
+    results.append(("037: --granted still rejects an unrelated restatted weapon",
+                    any("SW-I6" in x for x in fw), []))
+
+    # Where the grant and a coffin slot share a weapon, SW-I7 wants the GRANT's
+    # profile - D4 stated as a test rather than as a comment.
+    shared = bytearray(van_plain)
+    for rid, w in picks.items():
+        assign(shared, rid, w)
+    apply_grant(shared, picks[2000])
+    fs, _, _ = compare(van_plain, van_members, shared, van_members, granted=picks[2000])
+    results.append(("037: D4 - a shared weapon carrying the GRANT profile passes",
+                    not fs, fs))
+
+    slot_wins = bytearray(van_plain)
+    for rid, w in picks.items():
+        assign(slot_wins, rid, w)
+    fsl, _, _ = compare(van_plain, van_members, slot_wins, van_members,
+                        granted=picks[2000])
+    results.append(("037: D4 - the coffin profile winning instead is REJECTED",
+                    any("SW-I7" in x for x in fsl), []))
+
     passed = 0
     for label, ok, detail in results:
-        print("  %-38s %s" % (label, "OK" if ok else "MISSED"))
+        print("  %-58s %s" % (label, "OK" if ok else "MISSED"))
         if not ok:
             print("     failures were: %s" % (detail[:3] or "none at all"))
         else:
@@ -425,12 +532,18 @@ def cmd_selftest(vanilla_root):
 
 
 def main():
-    if len(sys.argv) >= 3 and sys.argv[1] == "pool":
-        return cmd_pool(sys.argv[2])
-    if len(sys.argv) >= 4 and sys.argv[1] == "verify":
-        return cmd_verify(sys.argv[2], sys.argv[3])
-    if len(sys.argv) >= 3 and sys.argv[1] == "selftest":
-        return cmd_selftest(sys.argv[2])
+    args = list(sys.argv[1:])
+    granted = None
+    if "--granted" in args:
+        i = args.index("--granted")
+        granted = int(args[i + 1])
+        del args[i:i + 2]
+    if len(args) >= 2 and args[0] == "pool":
+        return cmd_pool(args[1])
+    if len(args) >= 3 and args[0] == "verify":
+        return cmd_verify(args[1], args[2], granted=granted)
+    if len(args) >= 2 and args[0] == "selftest":
+        return cmd_selftest(args[1])
     print(__doc__)
     return 2
 

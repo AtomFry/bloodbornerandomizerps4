@@ -138,6 +138,22 @@ struct RandomizerDefaults {
     // key existed reads as off and nothing about the run changes.
     bool startWithHunterTools = false;
 
+    // START WITH A TRICK WEAPON - which of the 78 right-hand trick weapon
+    // versions may be granted to a new character. See
+    // Randomizer/TrickWeaponGrant.h.
+    //
+    // There is deliberately NO accompanying boolean: the setting's whole state
+    // is this pool. Nothing ticked is off, one ticked always grants that one,
+    // several ticked draws one for the run - the same none/one/many semantics
+    // ENEMIES INCLUDED has, so a separate toggle would be a second way to say
+    // the same thing and a second thing to disagree with itself.
+    //
+    // Nothing ticked is the type's own default (see TrickWeaponSelection's
+    // false), so a defaults.cfg written before this key existed, or one
+    // carrying a stale-length line, reads as nothing granted and produces the
+    // run it produced before, roll for roll.
+    TrickWeaponSelection trickWeapons;
+
     // EASY SHADOWS, EASY ROM, EASY FAILURES, EASY EMISSARY - four
     // independent settings, one per multi-body boss arena, each replacing
     // that fight's duplicate bodies with the tiny Iosefka's Clinic larva so

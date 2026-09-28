@@ -318,7 +318,7 @@ go; the seed line, the randomizer steps and the completion lines are untouched.
 | **Enemies** | Randomize Enemies · Enemies Included · Enemies Skipped · Protect Caged Dogs | Randomize NPCs · No Team Type · Melee/Gun Movesets |
 | **Bosses** | Randomize Bosses · Bosses Included | Per-Zone Toggles · Include Lesser Bosses · Bosses Can Replace Enemies |
 | **Items & Treasure** | Randomize Treasure · Randomize Workshop Tools · Randomize Enemy Drops | Non-Key Overworld · Key Overworld (Logic) · Shop Items · Gems + Runes |
-| **Weapons & Starting Gear** | Randomize Starting Weapons · Randomize Starting Guns · Randomize Shop Weapons · Start With Hunter Tools | — |
+| **Weapons & Starting Gear** | Randomize Starting Weapons · Randomize Starting Guns · Randomize Shop Weapons · Start With Hunter Tools · Start With A Trick Weapon | — |
 | **Difficulty** | Easy Shadows · Easy Rom · Easy Failures · Easy Emissary | No Scaling · Custom Scaling |
 | **World** | Enable Mergo Darkness | Blood Decals · Face Data · Talk Data · VFX / AI Sound |
 

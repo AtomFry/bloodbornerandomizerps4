@@ -243,7 +243,84 @@ growing two.
 
 ---
 
-## 5. Related
+## 5. Open — packaging and distribution (1)
+
+| # | Item | What it does | Status | Cost |
+|---|---|---|---|---|
+| U5 | **Bundle the vanilla data in the PKG** | Ships the vanilla source tree inside the randomizer's own package, so installing the app is the whole setup and the manual FTP step disappears. **Deliberately held until the public release build** — it adds ~78 MB to every build and install, which is not worth paying on every feature | **DEFERRED — decided 2026-09-27**, do at release | Low-to-medium, and almost all of it is build plumbing |
+
+**The decision, and why it is a deferral rather than an idea.** The shape is
+settled: the data goes in the app's own package and the app reads it from
+`/app0` directly. What is deferred is only *when* — shipping it now would put
+78 MB into every rebuild-install cycle during development for no gain, since the
+developer already has the tree in place. Pick it up when a public release build
+is being prepared, and treat it as part of that work rather than as an
+independent feature.
+
+**Why it matters more than its size suggests.** The reason this port exists is
+that the Windows reference tool works well and is genuinely fun, but you have to
+remember where the files go and how to drive it, and it is not well documented.
+*Install it, run it, it works* is the product. A setup that ends with "now FTP
+78 MB into this exact path" is the one place the port still fails that, so
+turnkey install is the goal U5 serves — not package hygiene.
+
+**What it needs.** The app has never read `/app0` at all: the font atlas, the
+glyphs and every table are baked into the binary, so there is no existing read
+path to extend. `/app0` is our own package mount, readable by our own process
+(`docs/ps4-homebrew-findings.md` §1), so nothing about it is unproven in
+principle — but reading a large bundled tree from it has not been done here.
+
+**Only three subtrees are actually read** (`EnemyRandomizer.cpp`):
+`map/mapstudio/*.msb.dcx`, `event/common.emevd.dcx` and
+`param/gameparam/gameparam.parambnd.dcx`. Bundling only those may cut the 78 MB
+substantially, and the tree that ships should be that set rather than a whole
+`dvdroot_ps4` copy.
+
+**Open questions for the release work:**
+
+- Whether the randomizer reads `/app0` as the vanilla source directly, or keeps
+  `/data/bbrandomizer/VanillaSource/` as an override that wins when present. The
+  override is worth keeping for development — it is how a modified tree gets
+  tested without a rebuild — and it is also the escape hatch if a regional SKU
+  ever needs different data.
+- What the refusal text becomes. `THE VANILLA SOURCE IS MISSING - COPY
+  DVDROOT_PS4 IN OVER FTP` should become unreachable in a release build; decide
+  whether it stays as a development-only path or goes.
+- Whether the release PKG is built from a `data/` tree that is gitignored and
+  absent on a clean checkout — the build must still succeed without it, or
+  every ordinary build breaks.
+- Distribution: the release PKG would contain game files. That is the
+  developer's own dump and the packaging step is local; publishing is a separate
+  question and this row takes no position on it.
+
+### Rejected: a companion data PKG
+
+The first shape considered was a second PKG carrying the data, installed once,
+so app updates stayed small. **Rejected on 2026-09-27** because it is not
+turnkey: an installed PKG's payload lands in its own encrypted container, which
+only that title can read, so the companion would have to be an app the user
+launches once to copy its tree into `/data` — install, launch, wait, optionally
+uninstall. That is fewer steps than FTP but it is still a documented procedure,
+and the whole point is to have none.
+
+### Closed: reading the vanilla files from the installed game
+
+Not possible from this app, and already probed on hardware —
+`docs/ps4-homebrew-findings.md` §1: Bloodborne's files sit in an encrypted PFS
+image mounted only inside its own sandbox, and nine candidate content roots plus
+a `dvdroot_ps4` hunt found nothing with the game stopped and suspended.
+
+Game dumpers get at them one of two ways, and neither is available here: by
+reading the game's sandbox mount while the game itself is running — the PS4 runs
+one title at a time, so this app is not up when that mount exists — or by
+mounting and decrypting the PFS image with a kernel payload. Both are privilege
+escalation, which `CLAUDE.md` §1 puts outside this project. GoldHEN's own AFR
+plugin does not read the installed files either; it hooks the game's file opens
+at runtime. **Do not re-open this.**
+
+---
+
+## 6. Related
 
 - `randomization-feature-spec.md` — the randomization settings backlog; rows 35
   and 36 are the two new randomization ideas captured alongside U1–U3

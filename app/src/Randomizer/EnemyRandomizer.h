@@ -65,6 +65,14 @@ struct EnemyRandomizerResult {
     int hunterToolRowsChanged = 0;
     int hunterToolSlotsWritten = 0;
 
+    // START WITH A TRICK WEAPON. The weapon id the run drew, 0 when nothing was
+    // ticked and nothing was granted, and how many origin rows received it.
+    // The id rather than a bool because the UI names the weapon on the progress
+    // line, and because "granted something" and "granted THIS" are different
+    // claims when the picker holds three versions of the same weapon.
+    int32_t trickWeaponGranted = 0;
+    int trickWeaponRowsChanged = 0;
+
     // EASY SHADOWS / ROM / FAILURES / EMISSARY. How many placements each of
     // the four settings replaced with the larva - 2 / 60 / 3 / 14 when the
     // setting is on and every map file is present, 0 when it is off. The UI
@@ -115,10 +123,20 @@ struct EnemyRandomizerOptions {
     // same world with it on or off, exactly like enableMergoDarkness.
     bool startWithHunterTools = false;
 
+    // START WITH A TRICK WEAPON - grants one of the 78 right-hand trick weapon
+    // versions at character creation. See TrickWeaponGrant.h, including the
+    // unverified question of whether Bloodborne reads the field at all.
+    //
+    // A pool and no boolean: nothing ticked is off. It is a randomizer in only
+    // one respect - it draws once, to pick which ticked weapon - and the pass
+    // runs LAST so that draw cannot move any other roll.
+    TrickWeaponSelection trickWeapons;
+
     bool AnyParamFeature() const {
         return randomizeEnemyDrops || randomizeStartingWeapons ||
                randomizeStartingGuns || randomizeShopWeapons ||
-               startWithHunterTools;
+               startWithHunterTools ||
+               trickWeapons.CountEnabled() > 0;
     }
 
     // The reference's "Randomize Workshop Tools" setting: when false, the two

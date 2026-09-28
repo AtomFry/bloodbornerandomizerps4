@@ -1398,12 +1398,17 @@ def source_cases():
         ("enemiesIncluded", "enemiesIncluded"),
         ("bossesIncluded", "bossesIncluded"),
         ("enemiesSkipped", "enemiesSkipped"),
+        ("trickWeapons", "trickWeapons"),
     ]
     WIZARD_RUN_DECISION = [
         "randomizeEnemies", "randomizeBosses", "randomizeTreasure",
         "randomizeEnemyDrops", "randomizeStartingWeapons", "randomizeStartingGuns",
         "randomizeShopWeapons", "enableMergoDarkness", "startWithHunterTools",
         "easyShadows", "easyRom", "easyFailures", "easyEmissary",
+        # A picker-only setting still gates a run: ticking one weapon and
+        # nothing else is a complete request (spec 037 section 7). It is LAST
+        # in the chain because it is the only term that is not a bool field.
+        "trickWeapons",
     ]
 
     editor = code_of(read(os.path.join(SRC, "UI", "WorldEditorScreen.cpp")))

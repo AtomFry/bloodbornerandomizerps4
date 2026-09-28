@@ -707,7 +707,8 @@ def cmd_selftest(root):
                       len("start_fresh_save=1") + 1 +
                       len("bosses_included=") + 17 + 1 +
                       len("enemies_included=") + 82 + 1 +
-                      len("enemies_skipped=") + 85 + 1)
+                      len("enemies_skipped=") + 85 + 1 +
+                      len("trick_weapons_included=") + 78 + 1)
     worst = (len("bloodborne_title_id=CUSA00000") + 1 +
              settings_block +
              len("last_seed=4294967295") + 1)
@@ -717,11 +718,16 @@ def cmd_selftest(root):
     # 669; 616 once the randomizer-settings-ui spec §4.8 removed
     # backup_existing_save (23 with its newline) and
     # replace_save_default_is_new (30); 635 once the worlds feature added
-    # start_fresh_save (19). This is an exact equality on purpose: it fails the
+    # start_fresh_save (19); 737 once feature 037 added
+    # trick_weapons_included, which is 102 bytes - the 23-character key, a
+    # 78-character selection line and its newline. The settings block went 584
+    # -> 686 with it, leaving 338 bytes of char buf[1024] spare. That 102 is why
+    # the key name cannot be renamed without redoing this arithmetic.
+    # This is an exact equality on purpose: it fails the
     # moment a key is added or removed without the buffer being thought about.
-    cases.append(("worst-case defaults.cfg is 635 bytes", worst == 635))
-    cases.append(("the 584-byte settings block fits char buf[1024]",
-                  settings_block == 584 and bufs and settings_block < max(bufs)))
+    cases.append(("worst-case defaults.cfg is 737 bytes", worst == 737))
+    cases.append(("the 686-byte settings block fits char buf[1024]",
+                  settings_block == 686 and bufs and settings_block < max(bufs)))
     # The save-data removal, checked the way the two cases below check a key
     # that must be PRESENT: on the quoted key literal in the load chain, the
     # "key=%d" fragment of the save format string, and the struct field the
@@ -751,6 +757,39 @@ def cmd_selftest(root):
     cases.append(("033: do_not_randomize_caged_dogs is in both load and save",
                   store.count('"do_not_randomize_caged_dogs"') == 1 and
                   "do_not_randomize_caged_dogs=%d" in store))
+    # Same trap, one shape different: a selection key is written as %s from
+    # Encode(), so the save side is checked on the format fragment AND on the
+    # Encode() call, not on a "=%d".
+    cases.append(("037: trick_weapons_included is in both load and save",
+                  store.count('"trick_weapons_included"') == 1 and
+                  "trick_weapons_included=%s" in store and
+                  "defaults.trickWeapons.Encode().c_str()" in store))
+
+    # --- 037: PickerStrings::showRowId, set explicitly at every site ---------
+    #
+    # PickerStrings is AGGREGATE-INITIALISED, so a site that omits the trailing
+    # field gets `false` silently and loses its id column - the three shipped
+    # pickers would stop drawing "C4520" beside the name and nothing would fail
+    # to compile. Counting the initialisers is the only check that catches it.
+    picker_defs = re.findall(
+        r"inline constexpr PickerStrings (\w+) = \{(.*?)\};", picker_src, re.S)
+    cases.append(("037: four PickerStrings are declared",
+                  len(picker_defs) == 4))
+    row_ids = {name: re.findall(r"\b(true|false)\b", body)
+               for name, body in picker_defs}
+    cases.append(("037: every PickerStrings sets showRowId explicitly",
+                  all(len(v) == 1 for v in row_ids.values())))
+    cases.append(("037: the three creature pickers keep their id column, the "
+                  "weapon picker has none",
+                  row_ids.get("kEnemiesIncludedStrings") == ["true"] and
+                  row_ids.get("kBossesIncludedStrings") == ["true"] and
+                  row_ids.get("kEnemiesSkippedStrings") == ["true"] and
+                  row_ids.get("kTrickWeaponsStrings") == ["false"]))
+    picker_cpp = open(os.path.join(UI_SRC, "ModelPicker.cpp"), encoding="utf-8").read()
+    cases.append(("037: RowLabel honours showRowId and is called with it",
+                  "RowLabel(const ModelPoolEntry& m, bool showRowId)" in picker_cpp and
+                  "if (!showRowId) return std::string(m.displayName);" in picker_cpp and
+                  "RowLabel(table[index], strings.showRowId)" in picker_cpp))
 
     failures = 0
     for name, ok in cases:

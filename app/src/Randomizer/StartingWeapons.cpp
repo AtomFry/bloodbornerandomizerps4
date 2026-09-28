@@ -5,6 +5,7 @@
 #include "StartingWeapons.h"
 
 #include "StartingWeaponLists.h"
+#include "WeaponRequirements.h"
 
 #include "../Msb/BinUtil.h"
 #include "../Platform/Log.h"
@@ -18,13 +19,6 @@ const size_t kShopEquipId   = 0;   // ShopLineupParam.equipId,   s32, 32-byte ro
 const size_t kShopEquipType = 23;  // ShopLineupParam.equipType, u8
 const uint8_t kEquipTypeWeapon = 0;
 
-// EquipParamWeapon stat requirements are u8 - single bytes, NOT int32 like the
-// drop field. Writing four bytes here would silently corrupt neighbours.
-const size_t kProperStrength = 237;
-const size_t kProperAgility  = 238;
-const size_t kProperMagic    = 239;
-const size_t kProperFaith    = 240;
-
 // The reference skips any shop row selling one of these regardless of type
 // (RandomizeFunctions.cs:635-638). Reproduced for fidelity; on real data none
 // of them are weapon rows, so it changes nothing today.
@@ -37,22 +31,23 @@ const int32_t kGunSlotRows[]   = { 2010, 2011 };
 // Stat profile applied to whatever lands in each slot, so a randomized
 // starting weapon stays wieldable at level 4. Values are the reference's
 // (:1106-1176), keyed by slot rather than by the vanilla weapon that was there.
+//
+// The four values and the +100n tier loop live in WeaponRequirements.h now,
+// because feature 037 writes the same bytes for a different reason and spec 037
+// D4 says the GRANT wins where the two land on one weapon. These five go
+// through the shared writer as ReqOwner::CoffinSlot, which is what makes that
+// rule a property of the writer rather than of the order of two calls.
 struct StatProfile {
     int32_t row;
-    uint8_t strength, agility, magic, faith;
+    WeaponRequirements req;
 };
 const StatProfile kStatProfiles[] = {
-    { 2000, 8, 7, 0, 0 },
-    { 2001, 9, 8, 0, 0 },
-    { 2002, 7, 9, 0, 0 },
-    { 2010, 7, 9, 5, 0 },
-    { 2011, 7, 9, 5, 0 },
+    { 2000, { 8, 7, 0, 0 } },
+    { 2001, { 9, 8, 0, 0 } },
+    { 2002, { 7, 9, 0, 0 } },
+    { 2010, { 7, 9, 5, 0 } },
+    { 2011, { 7, 9, 5, 0 } },
 };
-
-// A weapon's ten upgrade variants are its id + 100n. Verified against the real
-// EquipParamWeapon for all five vanilla starters: every tier exists.
-const int kUpgradeTiers = 10;
-const int32_t kUpgradeStride = 100;
 
 bool IsNeverTouched(int32_t equipId) {
     for (int32_t v : kNeverTouchEquipIds) {
@@ -95,23 +90,6 @@ const StatProfile* ProfileForRow(int32_t rowId) {
     return nullptr;
 }
 
-// Rewrites the four stat requirements on a weapon and each of its upgrade
-// tiers. Missing tiers are skipped rather than treated as an error.
-int ApplyStatProfile(std::vector<uint8_t>& plain, const std::vector<ParamRow>& weaponRows,
-                     int32_t weaponId, const StatProfile& p) {
-    int written = 0;
-    for (int tier = 0; tier <= kUpgradeTiers; tier++) {
-        const ParamRow* row = FindRow(weaponRows, weaponId + tier * kUpgradeStride);
-        if (row == nullptr) continue;
-        plain[row->dataOffset + kProperStrength] = p.strength;
-        plain[row->dataOffset + kProperAgility]  = p.agility;
-        plain[row->dataOffset + kProperMagic]    = p.magic;
-        plain[row->dataOffset + kProperFaith]    = p.faith;
-        written++;
-    }
-    return written;
-}
-
 } // namespace
 
 bool RandomizeStartingWeapons(std::vector<uint8_t>& plain,
@@ -119,6 +97,7 @@ bool RandomizeStartingWeapons(std::vector<uint8_t>& plain,
                               const ParamMember& weaponParam,
                               const StartingWeaponOptions& options,
                               std::mt19937& rng,
+                              WeaponRequirementWriter& reqWriter,
                               StartingWeaponsResult& result,
                               std::string* error) {
     if (!options.Any()) return true;
@@ -176,11 +155,15 @@ bool RandomizeStartingWeapons(std::vector<uint8_t>& plain,
         }
     }
 
-    // Whatever landed in a starting slot has to be usable at level 4.
+    // Whatever landed in a starting slot has to be usable at level 4. Refused
+    // for a weapon START WITH A TRICK WEAPON has already granted - see
+    // WeaponRequirements.h - in which case statRowsRewritten does not count it,
+    // which is honest: this pass did not write those bytes.
     for (const Assignment& a : assigned) {
         const StatProfile* p = ProfileForRow(a.row);
         if (p == nullptr) continue;
-        result.statRowsRewritten += ApplyStatProfile(plain, weaponRows, a.weapon, *p);
+        result.statRowsRewritten += reqWriter.Apply(plain, weaponRows, a.weapon, p->req,
+                                                    ReqOwner::CoffinSlot);
         Log(("starting weapons: row " + std::to_string(a.row) + " -> weapon " +
              std::to_string(a.weapon)).c_str());
     }

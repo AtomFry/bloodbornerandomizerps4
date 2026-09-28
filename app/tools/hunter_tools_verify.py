@@ -28,10 +28,16 @@ test can settle it - see HunterTools.h.
 Usage:
     python hunter_tools_verify.py rows     <vanilla_dvdroot>
     python hunter_tools_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
+                                           [--granted <weapon id>]
     python hunter_tools_verify.py selftest <vanilla_dvdroot>
+
+--granted <id> says the run also had feature 037's START WITH A TRICK WEAPON on
+and that it granted that weapon. Without the flag a correct combined run reports
+FAILED on H-I1 and H-I3, which are working exactly as intended.
 """
 
 import os
+import re
 import struct
 import sys
 
@@ -68,6 +74,24 @@ LOT_CATEGORY_GOODS = 4
 
 # The vanilla starting item every origin row carries, 1x.
 VANILLA_START_ITEM = 100
+
+WEAPON_MEMBER = "EquipParamWeapon.param"
+
+# Feature 037's START WITH A TRICK WEAPON writes the SAME 22 origin rows, plus
+# the requirement bytes of one weapon. A combined run therefore breaks two of
+# the invariants below for entirely correct reasons, and without a way to say so
+# a working run reads as a regression during hardware testing.
+#
+# --granted <id> relaxes exactly two things and no more:
+#   H-I1  EquipParamWeapon.param may also differ
+#   H-I3  equip_Wep_Right may hold that weapon id in an origin row
+#
+# Everything else still holds, and that is the part worth keeping: both workshop
+# tools must still be present exactly once each at count 1, the vanilla Hunter's
+# Mark must still be in slot 0, no non-origin row may change, and no other
+# member may. Feature 037 writes into a FREE slot found by search rather than a
+# fixed index precisely so those keep holding.
+EQUIP_WEP_RIGHT = 16  # CHARACTER_INIT_PARAM.equip_Wep_Right, s32, -1 in vanilla
 
 # Every row HunterTools.cpp targets. Both ten-row blocks plus 3500/3501,
 # because the data cannot say which block the game reads - see the comment on
@@ -172,8 +196,12 @@ def check_vanilla(plain, members):
 
 # --- output comparison ------------------------------------------------------
 
-def compare(van, van_m, out, out_m):
+def compare(van, van_m, out, out_m, granted=None):
     failures, notes = [], []
+    tolerated = {CHARA_MEMBER}
+    if granted is not None:
+        tolerated.add(WEAPON_MEMBER)
+        notes.append("tolerating feature 037's grant of weapon %d" % granted)
 
     # H-I6 / H-I1
     if set(van_m) != set(out_m):
@@ -184,7 +212,7 @@ def compare(van, van_m, out, out_m):
         if vs != osz:
             failures.append("H-I6 member %s changed size %d -> %d" % (name, vs, osz))
             continue
-        if name == CHARA_MEMBER:
+        if name in tolerated:
             continue
         if van[vo:vo + vs] != out[oo:oo + osz]:
             failures.append("H-I1 member %s differs but should not" % name)
@@ -217,6 +245,13 @@ def compare(van, van_m, out, out_m):
         for s in range(ITEM_SLOTS):
             set_i32(patched, ITEM_ID_BASE + s * 4, i32(out, oa + ITEM_ID_BASE + s * 4))
             patched[ITEM_NUM_BASE + s] = out[oa + ITEM_NUM_BASE + s]
+        if granted is not None:
+            # Only this one field, and only holding this one id. A different
+            # value there is still a failure, so the flag cannot hide a wrong
+            # weapon or a stray write into a neighbouring field.
+            got = i32(out, oa + EQUIP_WEP_RIGHT)
+            if got == granted:
+                set_i32(patched, EQUIP_WEP_RIGHT, got)
         if patched != out[oa:oa + ROW_BYTES]:
             failures.append("H-I3 row %d changed outside item_* / itemNum_*" % rid)
 
@@ -281,7 +316,7 @@ def cmd_rows(vanilla_root):
     return 0
 
 
-def cmd_verify(vanilla_root, output_root):
+def cmd_verify(vanilla_root, output_root, granted=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when no param feature was on")
@@ -290,7 +325,7 @@ def cmd_verify(vanilla_root, output_root):
     out, out_m = load_archive(output_root)
 
     print("vanilla decompressed=%d  output decompressed=%d" % (len(van), len(out)))
-    failures, notes, changed = compare(van, van_m, out, out_m)
+    failures, notes, changed = compare(van, van_m, out, out_m, granted=granted)
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -322,10 +357,10 @@ def cmd_selftest(vanilla_root):
                 set_i32(buf, at + ITEM_ID_BASE + k * 4, t)
                 buf[at + ITEM_NUM_BASE + k] = 1
 
-    def run(mutate):
+    def run(mutate, granted=None):
         out = bytearray(van)
         mutate(out)
-        f, _, _ = compare(van, van_m, out, van_m)
+        f, _, _ = compare(van, van_m, out, van_m, granted=granted)
         return f
 
     # The identification and the vanilla preconditions, against real data.
@@ -395,22 +430,73 @@ def cmd_selftest(vanilla_root):
     results.append(("changing another param member is REJECTED",
                     bool(run(touch_other_member)), []))
 
+    # --- feature 037's --granted tolerance -----------------------------------
+    #
+    # Every case above ran WITHOUT the flag and still holds. These are the other
+    # half of "passes with and without it".
+    grant_weapon = 7000000  # plain Saw Cleaver, the probe weapon of plan 037 section 6
+
+    def apply_combined(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_WEP_RIGHT, grant_weapon)
+        # Stands in for the requirement rewrite, which this tool models no
+        # further than "that member is allowed to differ".
+        woff, _ = van_m[WEAPON_MEMBER]
+        buf[woff + 0x80] ^= 0xFF
+
+    results.append(("037: a combined run passes WITH --granted",
+                    not run(apply_combined, granted=grant_weapon),
+                    run(apply_combined, granted=grant_weapon)))
+    results.append(("037: the same bytes are REJECTED without --granted",
+                    bool(run(apply_combined)), []))
+
+    def wrong_weapon(buf):
+        apply_combined(buf)
+        set_i32(buf, rows[ORIGIN_ROWS[0]] + EQUIP_WEP_RIGHT, grant_weapon + 10000)
+    results.append(("037: --granted still rejects a DIFFERENT weapon in a row",
+                    bool(run(wrong_weapon, granted=grant_weapon)), []))
+
+    def stray_with_flag(buf):
+        apply_combined(buf)
+        set_i32(buf, rows[ORIGIN_ROWS[0]] + 12, 9999)
+    results.append(("037: --granted still rejects a stray write elsewhere in the row",
+                    bool(run(stray_with_flag, granted=grant_weapon)), []))
+
     # The C++ constants must agree with the paramdef, or every offset above is
     # checking the wrong bytes in both implementations at once.
-    src = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "..", "src", "Randomizer", "HunterTools.cpp")
-    cpp = open(src, encoding="utf-8").read()
-    agreed = ("kItemIdBase  = %d" % ITEM_ID_BASE in cpp and
-              "kItemNumBase = %d" % ITEM_NUM_BASE in cpp and
-              "kItemSlots   = %d" % ITEM_SLOTS in cpp and
-              "kRowBytes    = %d" % ROW_BYTES in cpp and
+    #
+    # Feature 037 moved the row shape and the origin-row list out of
+    # HunterTools.cpp into CharaInitRows.h, so two features can write these
+    # rows without two copies of the list. The move changed no value, which is
+    # what these cases check: the constants are still exactly these numbers,
+    # they are read from the new header, and HunterTools.cpp no longer declares
+    # any of them itself. That last part is the one worth a case of its own - a
+    # leftover local definition would shadow the shared one and the two could
+    # then drift apart silently.
+    rnd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "Randomizer")
+    cpp = open(os.path.join(rnd, "HunterTools.cpp"), encoding="utf-8").read()
+    hdr = open(os.path.join(rnd, "CharaInitRows.h"), encoding="utf-8").read()
+    agreed = ("kItemIdBase  = %d" % ITEM_ID_BASE in hdr and
+              "kItemNumBase = %d" % ITEM_NUM_BASE in hdr and
+              "kItemSlots   = %d" % ITEM_SLOTS in hdr and
+              "kRowBytes    = %d" % ROW_BYTES in hdr and
               "kBloodGemWorkshopTool = %d" % BLOOD_GEM_TOOL in cpp and
               "kRuneWorkshopTool     = %d" % RUNE_TOOL in cpp)
-    results.append(("HunterTools.cpp offsets match this tool", agreed, []))
+    results.append(("CharaInitRows.h offsets match this tool", agreed, []))
 
-    cpp_rows = all(str(r) in cpp for r in ORIGIN_ROWS)
-    results.append(("HunterTools.cpp targets all %d origin rows" % len(ORIGIN_ROWS),
+    cpp_rows = all(str(r) in hdr for r in ORIGIN_ROWS)
+    results.append(("CharaInitRows.h targets all %d origin rows" % len(ORIGIN_ROWS),
                     cpp_rows, []))
+
+    moved = ("kItemIdBase", "kItemNumBase", "kItemSlots", "kRowBytes", "kEmptySlot",
+             "kOriginRows", "FindRow", "RowHasItem", "FirstEmptySlot")
+    redeclared = [n for n in moved
+                  if re.search(r"^(const|inline|int|bool).*%s" % n, cpp, re.M)]
+    results.append(("HunterTools.cpp declares none of the moved names itself",
+                    not redeclared, redeclared))
+    results.append(("HunterTools.cpp includes the shared header",
+                    '#include "CharaInitRows.h"' in cpp, []))
 
     passed = 0
     for label, ok, detail in results:
@@ -425,12 +511,18 @@ def cmd_selftest(vanilla_root):
 
 
 def main():
-    if len(sys.argv) >= 3 and sys.argv[1] == "rows":
-        return cmd_rows(sys.argv[2])
-    if len(sys.argv) >= 4 and sys.argv[1] == "verify":
-        return cmd_verify(sys.argv[2], sys.argv[3])
-    if len(sys.argv) >= 3 and sys.argv[1] == "selftest":
-        return cmd_selftest(sys.argv[2])
+    args = list(sys.argv[1:])
+    granted = None
+    if "--granted" in args:
+        i = args.index("--granted")
+        granted = int(args[i + 1])
+        del args[i:i + 2]
+    if len(args) >= 2 and args[0] == "rows":
+        return cmd_rows(args[1])
+    if len(args) >= 3 and args[0] == "verify":
+        return cmd_verify(args[1], args[2], granted=granted)
+    if len(args) >= 2 and args[0] == "selftest":
+        return cmd_selftest(args[1])
     print(__doc__)
     return 2
 

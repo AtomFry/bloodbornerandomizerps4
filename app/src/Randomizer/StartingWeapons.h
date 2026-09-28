@@ -27,6 +27,8 @@
 #include <string>
 #include <vector>
 
+#include "WeaponRequirements.h"
+
 #include "../Param/ParamBnd.h"
 
 namespace bbr {
@@ -52,11 +54,18 @@ struct StartingWeaponsResult {
 // (the decompressed archive). Returns false only on a structural problem, with
 // `error` set; partial edits are possible in that case, so the caller should
 // treat a failure as fatal to the run rather than continuing.
+//
+// `reqWriter` is the run's shared requirement writer, not this pass's own: the
+// five coffin profiles go through it as ReqOwner::CoffinSlot so that a weapon
+// START WITH A TRICK WEAPON granted keeps the grant's profile whichever of the
+// two passes runs first (spec 037 D4). With that feature off the writer never
+// refuses anything and this pass writes exactly the bytes it always did.
 bool RandomizeStartingWeapons(std::vector<uint8_t>& plain,
                               const ParamMember& shopParam,
                               const ParamMember& weaponParam,
                               const StartingWeaponOptions& options,
                               std::mt19937& rng,
+                              WeaponRequirementWriter& reqWriter,
                               StartingWeaponsResult& result,
                               std::string* error);
 

@@ -63,7 +63,15 @@ enum class SettingCategory {
 // NOT counted by ToggleCount()/EnabledToggleCount(), because "9 OF 15
 // SETTINGS ENABLED" is a statement about what the run randomizes and a save
 // policy is not one of those.
-enum class SettingKind { Toggle, SaveChoice, EnemyPool, EnemySkip, BossPool };
+// TrickWeaponPool is a fourth pool kind and the first that is not creatures:
+// it is the 78 trick weapon versions START WITH A TRICK WEAPON may grant
+// (feature 037). It is a pool and NOT a toggle-plus-pool, so the setting's
+// entire state is the selection - which also means it is in neither
+// ToggleCount() nor EnabledToggleCount(), exactly as SaveChoice is not (spec
+// 037 D2: a world whose only setting is a ticked weapon still reads 0 OF 15
+// ON, and the picker's own row carries the number instead).
+enum class SettingKind { Toggle, SaveChoice, EnemyPool, EnemySkip, BossPool,
+                         TrickWeaponPool };
 
 // A stable name per setting. NEVER reordered and never reused: a screen asks
 // for a setting by identity, and nothing outside this file may assume an id's
@@ -82,6 +90,7 @@ enum class SettingId {
     RandomizeStartingGuns,
     RandomizeShopWeapons,
     StartWithHunterTools,
+    StartWithTrickWeapon,
     EasyShadows,
     EasyRom,
     EasyFailures,
@@ -111,7 +120,7 @@ int               CategorySize(SettingCategory category);
 const SettingDef& SettingInCategory(SettingCategory category, int index);
 
 // "YES"/"NO" for a toggle, "KEEP EXISTING"/"START FRESH" for SaveChoice,
-// "N OF M" for the three pool kinds.
+// "N OF M" for the four pool kinds.
 std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& values);
 
 // THE ONLY WRITER of a setting. Flips a toggle or a SaveChoice whichever way
@@ -121,11 +130,14 @@ std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& va
 // 9.2).
 void AdjustSetting(const SettingDef& def, RandomizerDefaults& values, int direction);
 
-// True for the three settings X opens a picker for.
+// True for the four settings X opens a picker for.
 bool IsDrillIn(const SettingDef& def);
 
 // The picker's four host-supplied pieces, so a host does not repeat the
 // switch on kind. SelectionFlags returns nullptr for a toggle.
+//
+// Both hosting screens reach a picker entirely through IsDrillIn and these
+// four, so neither needed a line changed when the fourth kind arrived.
 bool*                 SelectionFlags(const SettingDef& def, RandomizerDefaults& values);
 const ModelPoolEntry* SelectionTable(const SettingDef& def);
 int                   SelectionCount(const SettingDef& def);
