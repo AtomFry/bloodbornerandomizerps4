@@ -73,6 +73,12 @@ struct EnemyRandomizerResult {
     int32_t trickWeaponGranted = 0;
     int trickWeaponRowsChanged = 0;
 
+    // START WITH A LEFT-HAND WEAPON, feature 038 - the same two figures for the
+    // other hand. Separate counters rather than one pair reused, because both
+    // features can be on in one run and each grants its own weapon.
+    int32_t leftHandWeaponGranted = 0;
+    int leftHandWeaponRowsChanged = 0;
+
     // EASY SHADOWS / ROM / FAILURES / EMISSARY. How many placements each of
     // the four settings replaced with the larva - 2 / 60 / 3 / 14 when the
     // setting is on and every map file is present, 0 when it is off. The UI
@@ -132,11 +138,21 @@ struct EnemyRandomizerOptions {
     // runs LAST so that draw cannot move any other roll.
     TrickWeaponSelection trickWeapons;
 
+    // START WITH A LEFT-HAND WEAPON - grants one of the 14 left-hand weapons at
+    // character creation. See LeftHandWeaponGrant.h, including which part of it
+    // feature 037's hardware test already settled and which part it did not.
+    //
+    // The same shape as trickWeapons above and independent of it: a pool and no
+    // boolean, one draw, and the pass runs after the right-hand grant so the two
+    // are the last two rolls of the run and neither moves an earlier one.
+    LeftHandWeaponSelection leftHandWeapons;
+
     bool AnyParamFeature() const {
         return randomizeEnemyDrops || randomizeStartingWeapons ||
                randomizeStartingGuns || randomizeShopWeapons ||
                startWithHunterTools ||
-               trickWeapons.CountEnabled() > 0;
+               trickWeapons.CountEnabled() > 0 ||
+               leftHandWeapons.CountEnabled() > 0;
     }
 
     // The reference's "Randomize Workshop Tools" setting: when false, the two

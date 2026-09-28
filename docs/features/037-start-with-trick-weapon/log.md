@@ -245,3 +245,14 @@ states. Spec §8's list is outstanding, and three of its checks fail silently:
 that a Lost/Uncanny row grants *that version*, that `LOGARIUS' WHEEL` and
 `KOS PARASITE` are usable without levelling, and that the granted weapon can
 actually be swung and transformed.
+
+---
+
+## 2026-09-27 — hardware test passed. Row 37 is DONE.
+
+The developer reports the feature tested and working on the console, beyond the
+probe and the Amygdalan Arm swing already recorded above. The backlog row is
+**DONE** — `CLAUDE.md` §3's bar, implemented and confirmed on hardware.
+
+Nothing in the code changed for this entry; it records the status transition and
+the fact that the console, not a verifier, is what moved it.

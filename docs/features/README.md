@@ -17,6 +17,7 @@ spec, the plan, the reviews, and the append-only `log.md`.
 | 32 | Bypassed Enemies (`ENEMIES SKIPPED`; supersedes row 16) | **APPROVED** | [032-bypassed-enemies/](032-bypassed-enemies/) | [spec.md](032-bypassed-enemies/spec.md) — refined 2026-09-18, [log.md](032-bypassed-enemies/log.md) | [plan.md](032-bypassed-enemies/plan.md) — **both milestones implemented, hardware-tested and closed 2026-09-19** | [plan-review.md](032-bypassed-enemies/plan-review.md) — CHANGES REQUESTED, answered by the 2026-09-19 refinement |
 | 33 | Protect Caged Dogs (`DO NOT RANDOMIZE CAGED DOGS`) — Central Yharnam **and the Forbidden Woods** | **APPROVED** | [033-protect-caged-dogs/](033-protect-caged-dogs/) | [spec.md](033-protect-caged-dogs/spec.md) — refined 2026-09-19, widened to the Forbidden Woods cages; D1–D8 unchanged, D9–D10 added. **D10 needs amending — see plan §9 P11** | [plan.md](033-protect-caged-dogs/plan.md) — questions answered, awaiting approval; [plan-evidence.md](033-protect-caged-dogs/plan-evidence.md) | — |
 | 34 | Start With Hunter Tools (`START WITH HUNTER TOOLS`) | **n/a — skipped** | [034-start-with-hunter-tools/](034-start-with-hunter-tools/) | — | — | — |
+| 38 | Start With A Left Weapon (14 rows; `equip_Wep_Left`) | **n/a — skipped** | [038-start-with-left-hand-weapon/](038-start-with-left-hand-weapon/) | — | — | **DONE** — hardware-tested 2026-09-27; [implementation-report.md](038-start-with-left-hand-weapon/implementation-report.md), [log.md](038-start-with-left-hand-weapon/log.md) |
 | 37 | Start With A Trick Weapon (a 78-row version-level picker; grants at character creation) | **APPROVED** | [037-start-with-trick-weapon/](037-start-with-trick-weapon/) | [spec.md](037-start-with-trick-weapon/spec.md) — **APPROVED** 2026-09-27; six decisions recorded, two taken against the spec's own recommendation (D2, D6) | [plan.md](037-start-with-trick-weapon/plan.md) — **APPROVED** 2026-09-27; **all four milestones built** the same day, the M3 gate answered on hardware (route A); [plan-evidence.md](037-start-with-trick-weapon/plan-evidence.md), [log.md](037-start-with-trick-weapon/log.md) | **skipped** at the developer's request — [implementation-report.md](037-start-with-trick-weapon/implementation-report.md), **awaiting the rest of spec §8's hardware list** |
 | — | Font atlas (replaces the 8×8 bitmap font with EB Garamond) | **n/a — skipped** | [font-atlas/](font-atlas/) | — | — | — |
 | — | Worlds (named playthroughs with their own save data; retires the Enable/Disable wizards) | **DONE** | [worlds/](worlds/) | [spec.md](worlds/spec.md) — re-approved 2026-09-22 with D20–D25 from milestone 0; D13 superseded, amended with D17–D19; evidence in [technical-findings.md](worlds/technical-findings.md) | [plan.md](worlds/plan.md) — **DONE**, approved 2026-09-22, six milestones built 2026-09-22..24; [plan-evidence.md](worlds/plan-evidence.md), [log.md](worlds/log.md) | Hardware test **passed in full 2026-09-25** — [hardware-test-plan.md](worlds/hardware-test-plan.md) |
@@ -55,8 +56,8 @@ spec or a plan. Such a folder holds an `implementation-report.md` written after
 the fact and nothing else. The report says so at the top, because a folder that
 merely looks thin is indistinguishable from one where the stages were forgotten.
 
-Four items are marked this way: row 34, `font-atlas/`, `U1-activation-screens/`
-and `U2-confirm-screen/`. U1 and U2 are the first folders to use the `U<n>-`
+Five items are marked this way: row 34, row 38, `font-atlas/`,
+`U1-activation-screens/` and `U2-confirm-screen/`. U1 and U2 are the first folders to use the `U<n>-`
 prefix from `docs/ui-backlog.md`.
 
 `font-atlas/`, `randomizer-settings-ui/`, `worlds/` and `startup-screen/` are the

@@ -26,13 +26,16 @@ Invariants (docs/plans/starting-weapons.md):
 Usage:
     python starting_weapons_verify.py pool     <vanilla_dvdroot>
     python starting_weapons_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
-                                               [--granted <weapon id>]
+                                               [--granted <weapon id>]...
     python starting_weapons_verify.py selftest <vanilla_dvdroot>
 
---granted <id> says the run also had feature 037's START WITH A TRICK WEAPON on
-and that it granted that weapon. Without the flag a correct combined run reports
-FAILED on three invariants that are working exactly as intended - see
-GRANT_PROFILE.
+--granted <id> says the run also had a character-creation grant on and that it
+granted that weapon. It may be given MORE THAN ONCE: feature 037's START WITH A
+TRICK WEAPON and feature 038's START WITH A LEFT WEAPON can both be on in one
+run, and this tool does not care which hand a granted weapon went into - only
+which weapons were allowed to be restatted. Without the flag a correct combined
+run reports FAILED on three invariants that are working exactly as intended -
+see GRANT_PROFILE.
 """
 
 import os
@@ -77,14 +80,21 @@ UPGRADE_TIERS = 10
 UPGRADE_STRIDE = 100
 
 # Feature 037's START WITH A TRICK WEAPON also lowers requirements, and spec 037
-# D4 says the GRANT wins where the two features land on the same weapon. When
-# --granted <id> is passed, three invariants relax by exactly that much and no
-# more: CharaInitParam.param may differ (SW-I1), the granted weapon and its ten
-# tiers may be restatted (SW-I6), and if the granted weapon is ALSO a coffin
+# D4 says the GRANT wins where the two features land on the same weapon. Feature
+# 038's START WITH A LEFT WEAPON does the same thing with the same profile for
+# the other hand, and inherits the same rule. When --granted <id> is passed -
+# once per grant the run made - three invariants relax by exactly that much and
+# no more: CharaInitParam.param may differ (SW-I1), each granted weapon and its
+# ten tiers may be restatted (SW-I6), and if a granted weapon is ALSO a coffin
 # pick then this profile is what that slot's weapon must carry (SW-I7).
 #
-# Without the flag nothing changes, which is the point: a run with feature 037
-# off is still held to the invariants exactly as it was before.
+# Without the flag nothing changes, which is the point: a run with neither grant
+# on is still held to the invariants exactly as it was before.
+#
+# The flag is not per-hand, because to this tool the hand is invisible: it reads
+# EquipParamWeapon, where a weapon is a weapon. Which field of CharaInitParam
+# each grant wrote is trick_weapons_verify.py's and
+# left_hand_weapons_verify.py's to police.
 #
 # GRANT_PROFILE is retyped here on purpose, the same way STAT_PROFILES is: it is
 # the thing being checked, so parsing it out of the C++ would let both move
@@ -196,8 +206,16 @@ def cmd_pool(vanilla_root):
 def compare(van_plain, van_members, out_plain, out_members, granted=None):
     failures = []
     notes = []
+    # `granted` is one id, several ids, or None. Normalised once here so every
+    # use below reads the same whether the run had one grant or two.
+    if granted is None:
+        grants = ()
+    elif isinstance(granted, int):
+        grants = (granted,)
+    else:
+        grants = tuple(granted)
     tolerated = {SHOP_MEMBER, WEAPON_MEMBER}
-    if granted is not None:
+    if grants:
         tolerated.add(CHARA_MEMBER)
 
     # SW-I9 / SW-I1
@@ -292,9 +310,9 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
     for rid, weapon in assigned.items():
         for tier in range(UPGRADE_TIERS + 1):
             allowed.add(weapon + tier * UPGRADE_STRIDE)
-    if granted is not None:
+    for g in grants:
         for tier in range(UPGRADE_TIERS + 1):
-            allowed.add(granted + tier * UPGRADE_STRIDE)
+            allowed.add(g + tier * UPGRADE_STRIDE)
 
     stat_rows = 0
     for wid, vat in van_weapons.items():
@@ -317,7 +335,7 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
     # that is both a coffin pick and the grant carries the GRANT's profile - D4,
     # and it holds whichever of the two passes ran first.
     for rid, weapon in assigned.items():
-        want = GRANT_PROFILE if weapon == granted else STAT_PROFILES[rid]
+        want = GRANT_PROFILE if weapon in grants else STAT_PROFILES[rid]
         for tier in range(UPGRADE_TIERS + 1):
             wid = weapon + tier * UPGRADE_STRIDE
             if wid not in out_weapons:
@@ -328,10 +346,10 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
                 failures.append("SW-I7 slot %d weapon %d tier %d has stats %s, expected %s"
                                 % (rid, weapon, tier, got, want))
 
-    if granted is not None:
+    for g in grants:
         wrong_rows = []
         for tier in range(UPGRADE_TIERS + 1):
-            wid = granted + tier * UPGRADE_STRIDE
+            wid = g + tier * UPGRADE_STRIDE
             if wid not in out_weapons:
                 continue
             at = out_weapons[wid]
@@ -339,8 +357,8 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
                 wrong_rows.append(wid)
         if wrong_rows:
             failures.append("SW-I7 granted weapon %d does not carry %s on rows %s"
-                            % (granted, GRANT_PROFILE, wrong_rows[:6]))
-        notes.append("tolerating feature 037's grant of weapon %d" % granted)
+                            % (g, GRANT_PROFILE, wrong_rows[:6]))
+        notes.append("tolerating a character-creation grant of weapon %d" % g)
 
     if assigned:
         notes.append("slot assignments: " +
@@ -520,6 +538,49 @@ def cmd_selftest(vanilla_root):
     results.append(("037: D4 - the coffin profile winning instead is REJECTED",
                     any("SW-I7" in x for x in fsl), []))
 
+    # --- feature 038: two grants in one run ----------------------------------
+    #
+    # Both character-creation grants can be on at once, so --granted has to be
+    # repeatable. These four say that it is, and that repeating it is not a
+    # blanket amnesty either.
+    left_weapon = next(w for w in sorted(weapons)
+                       if all(w < pk or w > pk + UPGRADE_TIERS * UPGRADE_STRIDE
+                              for pk in list(picks.values()) + [grant_weapon]))
+    two = bytearray(good)
+    apply_grant(two, grant_weapon)
+    apply_grant(two, left_weapon)
+    two[chara_off + 0x100] ^= 0xFF
+
+    f2, _, _ = compare(van_plain, van_members, two, van_members,
+                       granted=[grant_weapon, left_weapon])
+    results.append(("038: two grants in one run pass with --granted given twice",
+                    not f2, f2))
+
+    f2one, _, _ = compare(van_plain, van_members, two, van_members,
+                          granted=[grant_weapon])
+    results.append(("038: the same bytes are REJECTED with only one id named",
+                    any("SW-I6" in x for x in f2one), []))
+
+    # A single int must keep behaving exactly as it did before the flag became
+    # repeatable - that is what makes every case above still meaningful.
+    f1, _, _ = compare(van_plain, van_members, combined, van_members,
+                       granted=grant_weapon)
+    f1list, _, _ = compare(van_plain, van_members, combined, van_members,
+                           granted=[grant_weapon])
+    results.append(("038: one id as an int and as a list are the same check",
+                    f1 == f1list and not f1, (f1, f1list)))
+
+    wrong2 = bytearray(two)
+    unrelated2 = next(w for w in sorted(weapons)
+                      if all(w < pk or w > pk + UPGRADE_TIERS * UPGRADE_STRIDE
+                             for pk in list(picks.values()) + [grant_weapon,
+                                                              left_weapon]))
+    wrong2[weapons[unrelated2] + PROPER_STRENGTH] = 99
+    fw2, _, _ = compare(van_plain, van_members, wrong2, van_members,
+                        granted=[grant_weapon, left_weapon])
+    results.append(("038: two ids still reject a THIRD restatted weapon",
+                    any("SW-I6" in x for x in fw2), []))
+
     passed = 0
     for label, ok, detail in results:
         print("  %-58s %s" % (label, "OK" if ok else "MISSED"))
@@ -533,10 +594,12 @@ def cmd_selftest(vanilla_root):
 
 def main():
     args = list(sys.argv[1:])
-    granted = None
-    if "--granted" in args:
+    # Repeatable: one occurrence per grant the run made. A single occurrence
+    # still behaves exactly as it did before feature 038 existed.
+    granted = []
+    while "--granted" in args:
         i = args.index("--granted")
-        granted = int(args[i + 1])
+        granted.append(int(args[i + 1]))
         del args[i:i + 2]
     if len(args) >= 2 and args[0] == "pool":
         return cmd_pool(args[1])

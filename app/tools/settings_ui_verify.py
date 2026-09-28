@@ -168,7 +168,8 @@ def parse_defaults():
     body = strip_comments(text)
     bools = re.findall(r"\bbool (\w+) = ", body)
     selections = dict(re.findall(r"\b(EnemyPoolSelection|BossPoolSelection|"
-                                 r"EnemySkipSelection|TrickWeaponSelection) (\w+);",
+                                 r"EnemySkipSelection|TrickWeaponSelection|"
+                                 r"LeftHandWeaponSelection) (\w+);",
                                  body))
     return bools, selections
 
@@ -196,6 +197,7 @@ PROSE_TO_LABEL = {
     "Randomize Shop Weapons": "RANDOMIZE SHOP WEAPONS",
     "Start With Hunter Tools": "START WITH HUNTER TOOLS",
     "Start With A Trick Weapon": "START WITH A TRICK WEAPON",
+    "Start With A Left Weapon": "START WITH A LEFT WEAPON",
     "Easy Shadows": "EASY SHADOWS",
     "Easy Rom": "EASY ROM",
     "Easy Failures": "EASY FAILURES",
@@ -428,7 +430,8 @@ POOL_COUNTS = {}
 for table, const in (("EnemyPoolTable.h", "kEnemyPoolModelCount"),
                      ("BossPoolTable.h", "kBossPoolModelCount"),
                      ("EnemySkipTable.h", "kEnemySkipModelCount"),
-                     ("TrickWeaponTable.h", "kTrickWeaponCount")):
+                     ("TrickWeaponTable.h", "kTrickWeaponCount"),
+                     ("LeftHandWeaponTable.h", "kLeftHandWeaponCount")):
     POOL_COUNTS[const] = int(re.search(r"const int %s = (\d+);" % const,
                                        read(os.path.join(RND, table))).group(1))
 
@@ -445,6 +448,8 @@ KIND_TO_COUNT = {
     # weapon versions - but its row draws "N OF M" exactly like the other three,
     # so it is measured exactly like them.
     "TrickWeaponPool": POOL_COUNTS["kTrickWeaponCount"],
+    # And the fifth, feature 038's 14 left-hand weapons. Same treatment again.
+    "LeftHandWeaponPool": POOL_COUNTS["kLeftHandWeaponCount"],
 }
 
 
@@ -870,14 +875,16 @@ def main():
     if missing or twice or unknown:
         detail.append("   missing=%s twice=%s unknown=%s" % (missing, twice, unknown))
     kinds = [e["kind"] for e in entries]
-    cases.append(("1: the four selection fields have exactly one entry each",
-                  len(selections) == 4 and
+    cases.append(("1: the five selection fields have exactly one entry each",
+                  len(selections) == 5 and
                   all(kinds.count(k) == 1 for k in ("EnemyPool", "EnemySkip",
-                                                    "BossPool", "TrickWeaponPool"))))
+                                                    "BossPool", "TrickWeaponPool",
+                                                    "LeftHandWeaponPool"))))
     # SaveChoice is the second bool-backed kind: it carries a flag exactly as a
     # Toggle does and differs only in how it is named and counted. The four
-    # pool kinds carry none - START WITH A TRICK WEAPON deliberately has no
-    # boolean beside its selection (spec 037, plan 4.2).
+    # pool kinds carry none - START WITH A TRICK WEAPON and START WITH A
+    # LEFT-HAND WEAPON deliberately have no boolean beside their selection
+    # (spec 037, plan 4.2; feature 038 inherits it).
     two_state = ("Toggle", "SaveChoice")
     cases.append(("1: every entry is a toggle or a save choice with a flag, or a "
                   "pool without one",
@@ -1896,6 +1903,12 @@ def main():
             # wrong length must leave the selection alone (checked in
             # trick_weapons_verify.py T14).
             values[key] = "0" * POOL_COUNTS["kTrickWeaponCount"]
+        elif key == "left_hand_weapons_included":
+            # The same fail-safe again, at 14 characters rather than 78. The two
+            # lines are DIFFERENT lengths on purpose: each is bound to one table,
+            # so a line pasted into the wrong key is rejected by the length guard
+            # instead of being remapped onto another feature's weapons.
+            values[key] = "0" * POOL_COUNTS["kLeftHandWeaponCount"]
         elif key == "last_seed":
             values[key] = "4294967295"
         else:

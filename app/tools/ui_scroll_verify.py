@@ -281,6 +281,12 @@ SCREENS = [
     # listed: a band nothing checks twice is a band one of its screens can
     # walk away from.
     ("Weapon picker",   332, 52, 900, 3, 52, 78, 235, 3, SCREEN_H - 130, 2),
+    # START WITH A LEFT WEAPON (feature 038): the same component a fifth time,
+    # the same instruction-line geometry again, and the SHORTEST list any of
+    # them draws - 14 rows at 11 visible is 2 pages, so the second page holds
+    # only three. That is the case worth pinning here: a partly filled last
+    # page is where a list band that assumes a full page shows it.
+    ("Left picker",     332, 52, 900, 3, 52, 14, 235, 3, SCREEN_H - 130, 2),
 ]
 
 failures = []

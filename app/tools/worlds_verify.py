@@ -1399,6 +1399,7 @@ def source_cases():
         ("bossesIncluded", "bossesIncluded"),
         ("enemiesSkipped", "enemiesSkipped"),
         ("trickWeapons", "trickWeapons"),
+        ("leftHandWeapons", "leftHandWeapons"),
     ]
     WIZARD_RUN_DECISION = [
         "randomizeEnemies", "randomizeBosses", "randomizeTreasure",
@@ -1409,6 +1410,9 @@ def source_cases():
         # nothing else is a complete request (spec 037 section 7). It is LAST
         # in the chain because it is the only term that is not a bool field.
         "trickWeapons",
+        # Feature 038, the same rule for the other hand: a world whose only
+        # setting is one ticked left-hand weapon is a complete request too.
+        "leftHandWeapons",
     ]
 
     editor = code_of(read(os.path.join(SRC, "UI", "WorldEditorScreen.cpp")))

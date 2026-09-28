@@ -45,7 +45,8 @@ std::string FormatSettings(const RandomizerDefaults& defaults) {
                         "bosses_included=%s\n"
                         "enemies_included=%s\n"
                         "enemies_skipped=%s\n"
-                        "trick_weapons_included=%s\n",
+                        "trick_weapons_included=%s\n"
+                        "left_hand_weapons_included=%s\n",
                         defaults.randomizeEnemies ? 1 : 0,
                         defaults.randomizeBosses ? 1 : 0,
                         defaults.randomizeTreasure ? 1 : 0,
@@ -65,7 +66,8 @@ std::string FormatSettings(const RandomizerDefaults& defaults) {
                         defaults.bossesIncluded.Encode().c_str(),
                         defaults.enemiesIncluded.Encode().c_str(),
                         defaults.enemiesSkipped.Encode().c_str(),
-                        defaults.trickWeapons.Encode().c_str());
+                        defaults.trickWeapons.Encode().c_str(),
+                        defaults.leftHandWeapons.Encode().c_str());
     // snprintf returns the length it WOULD have written, which can exceed
     // sizeof(buf) if the format ever outgrows it - clamp so a future setting
     // can't turn this into an out-of-bounds sceKernelWrite (see
@@ -115,6 +117,13 @@ bool ApplySettingKey(const char* key, const char* value, RandomizerDefaults& out
         // pool_verify.py pins the settings block at an exact byte
         // count - so renaming it means redoing that arithmetic.
         out.trickWeapons.Decode(value);
+    } else if (strcmp(key, "left_hand_weapons_included") == 0) {
+        // Feature 038, and the same guard and fail-safe again: a
+        // wrong-length or absent value leaves NOTHING ticked, which
+        // grants nothing. This key's LENGTH is load-bearing too -
+        // pool_verify.py pins the settings block at an exact byte
+        // count - so renaming it means redoing that arithmetic.
+        out.leftHandWeapons.Decode(value);
     } else if (strcmp(key, "enable_mergo_darkness") == 0) {
         out.enableMergoDarkness = (atoi(value) != 0);
     } else if (strcmp(key, "do_not_randomize_caged_dogs") == 0) {

@@ -84,6 +84,21 @@ const SettingDef kSettings[] = {
       "Start holding one of the trick weapons you tick here. Tick several and "
       "one is drawn for the run. Its requirements are lowered so you can use "
       "it at once." },
+    // Feature 038 - the same setting for the other hand, declared immediately
+    // after it because that is where the settings-UI spec 7.1 table puts it and
+    // because the two read as a pair. Also a pool and not a toggle.
+    //
+    // LEFT, not LEFT-HAND: "START WITH A LEFT-HAND WEAPON" measures 573 px and
+    // the row's label + gap + widest value budget is 700 px against a 118 px
+    // "10 OF 14", so the longer wording overflows the settings pane by 31 px
+    // (settings_ui_verify.py case 5). The help text below carries what "left"
+    // means. The picker's own heading is the same string for the same reason.
+    { SettingId::StartWithLeftHandWeapon, SettingCategory::WeaponsGear,
+      SettingKind::LeftHandWeaponPool,
+      "START WITH A LEFT WEAPON", nullptr,
+      "Start holding one of the firearms, shields or torches you tick here in "
+      "your left hand. Tick several and one is drawn for the run. Its "
+      "requirements are lowered so you can use it at once." },
 
     // --- Difficulty --------------------------------------------------------
     { SettingId::EasyShadows, SettingCategory::Difficulty, SettingKind::Toggle,
@@ -181,7 +196,7 @@ int CategorySize(SettingCategory category) {
     return n;
 }
 
-// Linear rather than an index built at startup: twenty entries scanned once per
+// Linear rather than an index built at startup: twenty-one entries scanned once per
 // draw is nothing beside the glyph blits the same frame costs, and a prebuilt
 // index would be a second structure to keep in step - the exact thing this
 // file exists to remove.
@@ -216,6 +231,9 @@ std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& va
         case SettingKind::TrickWeaponPool:
             return std::to_string(values.trickWeapons.CountEnabled()) + " OF " +
                    std::to_string(kTrickWeaponCount);
+        case SettingKind::LeftHandWeaponPool:
+            return std::to_string(values.leftHandWeapons.CountEnabled()) + " OF " +
+                   std::to_string(kLeftHandWeaponCount);
     }
     return "";
 }
@@ -232,23 +250,25 @@ void AdjustSetting(const SettingDef& def, RandomizerDefaults& values, int direct
     values.*(def.flag) = !(values.*(def.flag));
 }
 
-// The four picker kinds, and only those. SaveChoice is edited in place by
+// The five picker kinds, and only those. SaveChoice is edited in place by
 // Left/Right exactly as a toggle is, so X must do nothing on it either.
 bool IsDrillIn(const SettingDef& def) {
     return def.kind != SettingKind::Toggle && def.kind != SettingKind::SaveChoice;
 }
 
-// The four Selection* functions are the one place the four picker types are
+// The four Selection* functions are the one place the five picker types are
 // told apart. They need a switch rather than a pointer-to-member because
-// EnemyPoolSelection, EnemySkipSelection, BossPoolSelection and
-// TrickWeaponSelection are four distinct types, and the polarity of the skip
-// list and of the weapon list lives in each one's type.
+// EnemyPoolSelection, EnemySkipSelection, BossPoolSelection,
+// TrickWeaponSelection and LeftHandWeaponSelection are five distinct types, and
+// the polarity of the skip list and of the two weapon lists lives in each one's
+// type.
 bool* SelectionFlags(const SettingDef& def, RandomizerDefaults& values) {
     switch (def.kind) {
         case SettingKind::EnemyPool: return values.enemiesIncluded.enabled;
         case SettingKind::EnemySkip: return values.enemiesSkipped.enabled;
         case SettingKind::BossPool:  return values.bossesIncluded.enabled;
         case SettingKind::TrickWeaponPool: return values.trickWeapons.enabled;
+        case SettingKind::LeftHandWeaponPool: return values.leftHandWeapons.enabled;
         case SettingKind::Toggle:     break;
         case SettingKind::SaveChoice: break;
     }
@@ -261,6 +281,7 @@ const ModelPoolEntry* SelectionTable(const SettingDef& def) {
         case SettingKind::EnemySkip: return EnemySkipTable().data();
         case SettingKind::BossPool:  return BossPoolTable().data();
         case SettingKind::TrickWeaponPool: return TrickWeaponTable().data();
+        case SettingKind::LeftHandWeaponPool: return LeftHandWeaponTable().data();
         case SettingKind::Toggle:     break;
         case SettingKind::SaveChoice: break;
     }
@@ -273,6 +294,7 @@ int SelectionCount(const SettingDef& def) {
         case SettingKind::EnemySkip: return kEnemySkipModelCount;
         case SettingKind::BossPool:  return kBossPoolModelCount;
         case SettingKind::TrickWeaponPool: return kTrickWeaponCount;
+        case SettingKind::LeftHandWeaponPool: return kLeftHandWeaponCount;
         case SettingKind::Toggle:     break;
         case SettingKind::SaveChoice: break;
     }
@@ -284,6 +306,7 @@ const PickerStrings& SelectionStrings(const SettingDef& def) {
         case SettingKind::EnemySkip: return kEnemiesSkippedStrings;
         case SettingKind::BossPool:  return kBossesIncludedStrings;
         case SettingKind::TrickWeaponPool: return kTrickWeaponsStrings;
+        case SettingKind::LeftHandWeaponPool: return kLeftHandWeaponsStrings;
         case SettingKind::EnemyPool:  break;
         case SettingKind::Toggle:     break;
         case SettingKind::SaveChoice: break;

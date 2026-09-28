@@ -1,7 +1,7 @@
 // ModelPicker.h - the shared drill-in list. Drives the enemy picker (82 rows),
-// the boss picker (17), ENEMIES SKIPPED (85) and START WITH A TRICK WEAPON
-// (78), which behave identically; the host supplies the table, the count and
-// the flags.
+// the boss picker (17), ENEMIES SKIPPED (85), START WITH A TRICK WEAPON (78)
+// and START WITH A LEFT WEAPON (14), which behave identically; the host
+// supplies the table, the count and the flags.
 //
 // The first two are INCLUSION lists - ticking a row lets that creature be
 // used as a replacement. The third is the opposite: ticking a row leaves the
@@ -122,6 +122,21 @@ inline constexpr PickerStrings kEnemiesSkippedStrings = {
 // layout, so 78 rows is 8 pages.
 inline constexpr PickerStrings kTrickWeaponsStrings = {
     "START WITH A TRICK WEAPON",
+    "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
+};
+
+// The fifth list: the 14 left-hand weapons a new character can be granted
+// (feature 038) - 11 firearms plus the Loch Shield, the Hunter's Torch and the
+// Fist of Gratia. Word for word the strings above with its own heading, because
+// it is the same setting for the other hand and reading differently would
+// suggest it behaves differently. 14 rows on the 11-row instruction layout is
+// 2 pages.
+inline constexpr PickerStrings kLeftHandWeaponsStrings = {
+    "START WITH A LEFT WEAPON",
     "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
     "YES", "NO",
     "ENABLE ALL", "DISABLE ALL",

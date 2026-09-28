@@ -27,6 +27,14 @@ Usage:
     python trick_weapons_verify.py selftest <vanilla_dvdroot>
     python trick_weapons_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
                                             [--ticked <78-character line>]
+                                            [--granted-left <weapon id>]
+
+--granted-left <id> says the run also had feature 038's START WITH A LEFT WEAPON
+on and that it granted that weapon: equip_Wep_Left may then hold that id, and
+that weapon's requirement rows may carry the profile. Without the flag a correct
+combined run reports FAILED on G3 and G5, which are working exactly as intended.
+The tolerance is FIELD-SPECIFIC - a left-hand weapon in equip_Wep_Right, or a
+different id in equip_Wep_Left, is still a failure.
 """
 
 import os
@@ -221,7 +229,7 @@ def apply_hunter_tools(plain, members, offs):
 
 # --- G1-G6, over a real or simulated output tree ----------------------------
 
-def compare(van, van_m, out, out_m, offs, ticked=None):
+def compare(van, van_m, out, out_m, offs, ticked=None, granted_left=None):
     failures, notes = [], []
 
     # G6 / G1
@@ -256,6 +264,12 @@ def compare(van, van_m, out, out_m, offs, ticked=None):
     # G3 failure by this tool. That direction is hunter_tools_verify.py's job,
     # with its --granted flag; a grant-only tree is what `verify` here describes.
     allowed = [offs[EQUIP_WEP_RIGHT] + k for k in range(4)]
+    # Feature 038 writes equip_Wep_Left in the same rows. A combined run is
+    # correct and must be sayable, so --granted-left widens G3 by exactly that
+    # one field holding exactly that one id, and nothing else.
+    if granted_left is not None:
+        allowed += [offs["equip_Wep_Left"] + k for k in range(4)]
+        notes.append("tolerating feature 038's grant of weapon %d" % granted_left)
     granted_ids = set()
     rows_written = 0
 
@@ -279,6 +293,11 @@ def compare(van, van_m, out, out_m, offs, ticked=None):
                             "(offsets %s)" % (rid, outside[:8]))
 
         granted_ids.add(i32(out, oa + offs[EQUIP_WEP_RIGHT]))
+        if granted_left is not None:
+            got = i32(out, oa + offs["equip_Wep_Left"])
+            if got != granted_left:
+                failures.append("G3 origin row %d has %d in equip_Wep_Left, not the "
+                                "tolerated %d" % (rid, got, granted_left))
 
         # The starting Hunter's Mark and the four clothing entries survive.
         if (i32(out, oa + offs[ITEM_FIELDS[0]]) != VANILLA_START_ITEM or
@@ -311,8 +330,9 @@ def compare(van, van_m, out, out_m, offs, ticked=None):
         failures.append("G5 EquipParamWeapon row ids changed")
         return failures, notes
     expected = set()
-    if weapon is not None:
-        expected = {weapon + t * TIER_STRIDE for t in range(TIER_COUNT + 1)}
+    for base in (weapon, granted_left):
+        if base is not None:
+            expected |= {base + t * TIER_STRIDE for t in range(TIER_COUNT + 1)}
     for wid in sorted(van_w):
         va, oa = van_w[wid], out_w[wid]
         vrow = van[va:va + WEAPON_ROW_BYTES]
@@ -744,6 +764,41 @@ def cmd_selftest(root):
                   "ReqOwner::Grant" in cpp["_src"] and
                   "ReqOwner::Grant" not in sw_src, ""))
 
+    # --- 038: the --granted-left tolerance ---------------------------------
+    #
+    # Every case above ran WITHOUT the flag and still holds. These are the other
+    # half. The mirror of feature 038's write is three lines, so it is written
+    # here rather than imported - importing left_hand_weapons_verify.py from this
+    # file would make the two tools mutually dependent, and this one is the older.
+    left_weapon = 14100000  # Evelyn, from feature 038's own table
+
+    def with_left(buf, wid):
+        for rid in ORIGIN_ROWS:
+            at = member_row_map(buf, van_m, CHARA_MEMBER)[rid]
+            set_i32(buf, at + offs["equip_Wep_Left"], wid)
+        weapons_now = member_row_map(buf, van_m, WEAPON_PARAM)
+        for t in range(TIER_COUNT + 1):
+            tier_id = wid + t * TIER_STRIDE
+            if tier_id in weapons_now:
+                for off, val in zip(REQ_OFFSETS, GRANT_PROFILE):
+                    buf[weapons_now[tier_id] + off] = val
+
+    both_hands = bytearray(van)
+    apply_grant(both_hands, van_m, offs, saw_cleaver, GRANT_PROFILE)
+    with_left(both_hands, left_weapon)
+    f_bh, _ = compare(van, van_m, both_hands, van_m, offs, ticked={saw_cleaver},
+                      granted_left=left_weapon)
+    cases.append(("038: a both-hands run passes WITH --granted-left", not f_bh, f_bh))
+    f_no, _ = compare(van, van_m, both_hands, van_m, offs, ticked={saw_cleaver})
+    cases.append(("038: the same bytes are REJECTED without --granted-left",
+                  any("G3" in x for x in f_no) or any("G5" in x for x in f_no), ""))
+    wrong_left = bytearray(both_hands)
+    set_i32(wrong_left, chara[2000] + offs["equip_Wep_Left"], left_weapon + 100)
+    f_wl, _ = compare(van, van_m, wrong_left, van_m, offs, ticked={saw_cleaver},
+                      granted_left=left_weapon)
+    cases.append(("038: --granted-left still rejects a DIFFERENT left-hand weapon",
+                  any("G3" in x for x in f_wl), ""))
+
     # T14 - the config line.
     cases.append(("T14 a %d-character line round-trips" % EXPECTED_ROWS,
                   decode_selection("1" + "0" * (EXPECTED_ROWS - 1)) == [0], ""))
@@ -768,7 +823,7 @@ def decode_selection(line):
     return [i for i, c in enumerate(line) if c != "0"]
 
 
-def cmd_verify(vanilla_root, output_root, ticked=None):
+def cmd_verify(vanilla_root, output_root, ticked=None, granted_left=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when no param feature was on")
@@ -787,7 +842,8 @@ def cmd_verify(vanilla_root, output_root, ticked=None):
         rows = baked_table()
         picked = {rows[i][0] for i in idx}
 
-    failures, notes = compare(van, van_m, out, out_m, offs, ticked=picked)
+    failures, notes = compare(van, van_m, out, out_m, offs, ticked=picked,
+                              granted_left=granted_left)
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -833,16 +889,22 @@ def report(cases, notes=()):
 def main():
     args = list(sys.argv[1:])
     ticked = None
+    granted_left = None
     if "--ticked" in args:
         i = args.index("--ticked")
         ticked = args[i + 1]
+        del args[i:i + 2]
+    if "--granted-left" in args:
+        i = args.index("--granted-left")
+        granted_left = int(args[i + 1])
         del args[i:i + 2]
     if len(args) >= 2 and args[0] == "list":
         return cmd_list(args[1])
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     if len(args) >= 3 and args[0] == "verify":
-        return cmd_verify(args[1], args[2], ticked=ticked)
+        return cmd_verify(args[1], args[2], ticked=ticked,
+                          granted_left=granted_left)
     print(__doc__)
     return 2
 

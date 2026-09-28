@@ -141,11 +141,17 @@ def bit_position(defn, field_name):
 
 # --- the four tests --------------------------------------------------------
 
-def right_hand_tier0(root):
-    """Test 1 and test 2: every tier-0 row whose rightHandEquipable bit is set.
-    Returns a sorted list of ids - the candidate set, 85 rows as shipped."""
+def tier0_with_hand_bit(root, field_name):
+    """Test 1 and test 2, for whichever hand bit is asked for: every tier-0 row
+    whose `field_name` bit is set. Returns (sorted ids, (byte offset, shift)).
+
+    Parameterised on the field name only so feature 038's left-hand generator
+    can ask the same question of leftHandEquipable, the sibling bit in the same
+    byte, without a second copy of the filter. Nothing else about this feature's
+    derivation is shared: 038's two membership tests do NOT agree (see
+    gen_left_hand_table.py), so it must not go through derive() below."""
     defs = load_defs(root)
-    byte_off, shift = bit_position(defs["EQUIP_PARAM_WEAPON_ST"], "rightHandEquipable")
+    byte_off, shift = bit_position(defs["EQUIP_PARAM_WEAPON_ST"], field_name)
     p = load_param(root, WEAPON_PARAM)
     out = []
     for wid, off in param_rows(p):
@@ -154,6 +160,12 @@ def right_hand_tier0(root):
         if p[off + byte_off] & (1 << shift):
             out.append(wid)
     return sorted(out), (byte_off, shift)
+
+
+def right_hand_tier0(root):
+    """Test 1 and test 2: every tier-0 row whose rightHandEquipable bit is set.
+    Returns a sorted list of ids - the candidate set, 85 rows as shipped."""
+    return tier0_with_hand_bit(root, "rightHandEquipable")
 
 
 def named_ids(root, candidates):

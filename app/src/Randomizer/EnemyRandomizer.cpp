@@ -90,6 +90,7 @@
 #include "HunterTools.h"
 #include "DropRandomizer.h"
 #include "StartingWeapons.h"
+#include "LeftHandWeaponGrant.h"
 #include "TrickWeaponGrant.h"
 #include "FileIo.h"
 #include "ModelSizeTable.h"
@@ -1061,8 +1062,9 @@ void EnemyRandomizerJob::State::StepItemData() {
 
         // The only param feature that isn't a randomizer - it writes the same
         // two item ids every run. Order doesn't matter for it: it touches
-        // CharaInitParam, which only the trick-weapon grant below also writes,
-        // and the two find their own free slots rather than fixed ones.
+        // CharaInitParam, which only the two weapon grants below also write, and
+        // it uses the item slots while they use two equip fields, so no two of
+        // the three ever want the same bytes.
         if (options.startWithHunterTools) {
             const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
             if (chara == nullptr) {
@@ -1102,6 +1104,31 @@ void EnemyRandomizerJob::State::StepItemData() {
             }
             result.trickWeaponGranted = grant.weaponGranted;
             result.trickWeaponRowsChanged = grant.rowsChanged;
+        }
+
+        // And then the other hand, for the same reason and with the same
+        // property: these two are the last rolls of the run, so turning either
+        // on cannot move anything earlier. They draw independently - the
+        // left-hand weapon is not a function of the right-hand one - and the
+        // shared reqWriter keeps the precedence rule holding across all three
+        // passes that lower a requirement.
+        if (options.leftHandWeapons.CountEnabled() > 0) {
+            const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
+            const ParamMember* weapon = FindParamMember(members, "EquipParamWeapon.param");
+            if (chara == nullptr || weapon == nullptr) {
+                Fail("CharaInitParam.param or EquipParamWeapon.param missing from "
+                     "gameparam.parambnd.dcx");
+                return;
+            }
+            LeftHandWeaponGrantResult grant;
+            if (!GrantLeftHandWeapon(itemDataPlain, *chara, *weapon,
+                                     options.leftHandWeapons, rng, reqWriter, grant,
+                                     &err)) {
+                Fail("granting a left-hand weapon failed: " + err);
+                return;
+            }
+            result.leftHandWeaponGranted = grant.weaponGranted;
+            result.leftHandWeaponRowsChanged = grant.rowsChanged;
         }
 
         itemDataStep = 2;

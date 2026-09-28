@@ -708,7 +708,8 @@ def cmd_selftest(root):
                       len("bosses_included=") + 17 + 1 +
                       len("enemies_included=") + 82 + 1 +
                       len("enemies_skipped=") + 85 + 1 +
-                      len("trick_weapons_included=") + 78 + 1)
+                      len("trick_weapons_included=") + 78 + 1 +
+                      len("left_hand_weapons_included=") + 14 + 1)
     worst = (len("bloodborne_title_id=CUSA00000") + 1 +
              settings_block +
              len("last_seed=4294967295") + 1)
@@ -721,13 +722,16 @@ def cmd_selftest(root):
     # start_fresh_save (19); 737 once feature 037 added
     # trick_weapons_included, which is 102 bytes - the 23-character key, a
     # 78-character selection line and its newline. The settings block went 584
-    # -> 686 with it, leaving 338 bytes of char buf[1024] spare. That 102 is why
-    # the key name cannot be renamed without redoing this arithmetic.
+    # -> 686 with it. Then 779 once feature 038 added
+    # left_hand_weapons_included, which is 42 bytes - the 26-character key, a
+    # 14-character selection line and its newline - taking the settings block to
+    # 728 and leaving 296 bytes of char buf[1024] spare. Those 102 and 42 are why
+    # neither key name can be renamed without redoing this arithmetic.
     # This is an exact equality on purpose: it fails the
     # moment a key is added or removed without the buffer being thought about.
-    cases.append(("worst-case defaults.cfg is 737 bytes", worst == 737))
-    cases.append(("the 686-byte settings block fits char buf[1024]",
-                  settings_block == 686 and bufs and settings_block < max(bufs)))
+    cases.append(("worst-case defaults.cfg is 779 bytes", worst == 779))
+    cases.append(("the 728-byte settings block fits char buf[1024]",
+                  settings_block == 728 and bufs and settings_block < max(bufs)))
     # The save-data removal, checked the way the two cases below check a key
     # that must be PRESENT: on the quoted key literal in the load chain, the
     # "key=%d" fragment of the save format string, and the struct field the
@@ -764,6 +768,10 @@ def cmd_selftest(root):
                   store.count('"trick_weapons_included"') == 1 and
                   "trick_weapons_included=%s" in store and
                   "defaults.trickWeapons.Encode().c_str()" in store))
+    cases.append(("038: left_hand_weapons_included is in both load and save",
+                  store.count('"left_hand_weapons_included"') == 1 and
+                  "left_hand_weapons_included=%s" in store and
+                  "defaults.leftHandWeapons.Encode().c_str()" in store))
 
     # --- 037: PickerStrings::showRowId, set explicitly at every site ---------
     #
@@ -773,18 +781,19 @@ def cmd_selftest(root):
     # to compile. Counting the initialisers is the only check that catches it.
     picker_defs = re.findall(
         r"inline constexpr PickerStrings (\w+) = \{(.*?)\};", picker_src, re.S)
-    cases.append(("037: four PickerStrings are declared",
-                  len(picker_defs) == 4))
+    cases.append(("037: five PickerStrings are declared",
+                  len(picker_defs) == 5))
     row_ids = {name: re.findall(r"\b(true|false)\b", body)
                for name, body in picker_defs}
     cases.append(("037: every PickerStrings sets showRowId explicitly",
                   all(len(v) == 1 for v in row_ids.values())))
     cases.append(("037: the three creature pickers keep their id column, the "
-                  "weapon picker has none",
+                  "two weapon pickers have none",
                   row_ids.get("kEnemiesIncludedStrings") == ["true"] and
                   row_ids.get("kBossesIncludedStrings") == ["true"] and
                   row_ids.get("kEnemiesSkippedStrings") == ["true"] and
-                  row_ids.get("kTrickWeaponsStrings") == ["false"]))
+                  row_ids.get("kTrickWeaponsStrings") == ["false"] and
+                  row_ids.get("kLeftHandWeaponsStrings") == ["false"]))
     picker_cpp = open(os.path.join(UI_SRC, "ModelPicker.cpp"), encoding="utf-8").read()
     cases.append(("037: RowLabel honours showRowId and is called with it",
                   "RowLabel(const ModelPoolEntry& m, bool showRowId)" in picker_cpp and

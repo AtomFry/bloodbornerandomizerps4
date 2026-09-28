@@ -154,6 +154,20 @@ struct RandomizerDefaults {
     // run it produced before, roll for roll.
     TrickWeaponSelection trickWeapons;
 
+    // START WITH A LEFT-HAND WEAPON - which of the 14 left-hand weapons may be
+    // granted to a new character: 11 firearms plus the Loch Shield, the Hunter's
+    // Torch and the Fist of Gratia. See Randomizer/LeftHandWeaponGrant.h.
+    //
+    // Feature 038 is feature 037 for the other hand and shares its shape
+    // exactly: no accompanying boolean, the same none/one/many semantics, and
+    // nothing ticked as the type's own default, so a defaults.cfg written before
+    // this key existed - or one carrying a stale-length line - reads as nothing
+    // granted and produces the run it produced before, roll for roll.
+    //
+    // Independent of trickWeapons above. Both may be on and each draws its own
+    // weapon; a character can start with one in each hand.
+    LeftHandWeaponSelection leftHandWeapons;
+
     // EASY SHADOWS, EASY ROM, EASY FAILURES, EASY EMISSARY - four
     // independent settings, one per multi-body boss arena, each replacing
     // that fight's duplicate bodies with the tiny Iosefka's Clinic larva so

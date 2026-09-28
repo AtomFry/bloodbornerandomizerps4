@@ -70,8 +70,13 @@ enum class SettingCategory {
 // ToggleCount() nor EnabledToggleCount(), exactly as SaveChoice is not (spec
 // 037 D2: a world whose only setting is a ticked weapon still reads 0 OF 15
 // ON, and the picker's own row carries the number instead).
+// LeftHandWeaponPool is the same kind again for the other hand - the 14
+// left-hand weapons START WITH A LEFT-HAND WEAPON may grant (feature 038). A
+// separate kind and not a parameter on the previous one, because the two are
+// separate selections of different sizes on different tables and the switches
+// below are where those pairings are stated.
 enum class SettingKind { Toggle, SaveChoice, EnemyPool, EnemySkip, BossPool,
-                         TrickWeaponPool };
+                         TrickWeaponPool, LeftHandWeaponPool };
 
 // A stable name per setting. NEVER reordered and never reused: a screen asks
 // for a setting by identity, and nothing outside this file may assume an id's
@@ -91,6 +96,7 @@ enum class SettingId {
     RandomizeShopWeapons,
     StartWithHunterTools,
     StartWithTrickWeapon,
+    StartWithLeftHandWeapon,
     EasyShadows,
     EasyRom,
     EasyFailures,

@@ -23,11 +23,20 @@
 // in `model`. Its `false` is the same fail-safe as the skip list, pointing the
 // same way: nothing ticked grants nothing, so a fresh struct, an absent key and
 // a wrong-length value all mean "the run the app made before this existed".
+//
+// LeftHandWeaponSelection is the same thing for the other hand - the 14
+// left-hand weapons START WITH A LEFT-HAND WEAPON can grant (feature 038). Same
+// machinery, same fail-safe, a different table. The two are independent
+// selections and the two tables are DIFFERENT SIZES, which is exactly why each
+// type is bound to one table here: a 14-character line decoded against the
+// 78-row table, or the reverse, is rejected by the length guard rather than
+// silently remapped.
 #pragma once
 
 #include "BossPoolTable.h"
 #include "EnemyPoolTable.h"
 #include "EnemySkipTable.h"
+#include "LeftHandWeaponTable.h"
 #include "ModelPoolSelection.h"
 #include "TrickWeaponTable.h"
 
@@ -37,5 +46,6 @@ typedef ModelPoolSelection<kEnemyPoolModelCount> EnemyPoolSelection;
 typedef ModelPoolSelection<kBossPoolModelCount>  BossPoolSelection;
 typedef ModelPoolSelection<kEnemySkipModelCount, false> EnemySkipSelection;
 typedef ModelPoolSelection<kTrickWeaponCount, false> TrickWeaponSelection;
+typedef ModelPoolSelection<kLeftHandWeaponCount, false> LeftHandWeaponSelection;
 
 } // namespace bbr

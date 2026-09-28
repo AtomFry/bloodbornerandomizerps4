@@ -29,11 +29,14 @@ Usage:
     python hunter_tools_verify.py rows     <vanilla_dvdroot>
     python hunter_tools_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
                                            [--granted <weapon id>]
+                                           [--granted-left <weapon id>]
     python hunter_tools_verify.py selftest <vanilla_dvdroot>
 
 --granted <id> says the run also had feature 037's START WITH A TRICK WEAPON on
-and that it granted that weapon. Without the flag a correct combined run reports
-FAILED on H-I1 and H-I3, which are working exactly as intended.
+and that it granted that weapon. --granted-left <id> says the same of feature
+038's START WITH A LEFT WEAPON. Either flag may be given alone or both together.
+Without them a correct combined run reports FAILED on H-I1 and H-I3, which are
+working exactly as intended.
 """
 
 import os
@@ -86,12 +89,20 @@ WEAPON_MEMBER = "EquipParamWeapon.param"
 #   H-I1  EquipParamWeapon.param may also differ
 #   H-I3  equip_Wep_Right may hold that weapon id in an origin row
 #
+# Feature 038's START WITH A LEFT WEAPON is the same feature for the other hand
+# and needs the same tolerance, one field along: --granted-left <id> additionally
+# lets equip_Wep_Left hold that id. The two flags are separate and FIELD-SPECIFIC
+# rather than one set of tolerated ids, so a right-hand weapon appearing in the
+# left-hand field - which is the mistake the two features can actually make - is
+# still a failure.
+#
 # Everything else still holds, and that is the part worth keeping: both workshop
 # tools must still be present exactly once each at count 1, the vanilla Hunter's
 # Mark must still be in slot 0, no non-origin row may change, and no other
-# member may. Feature 037 writes into a FREE slot found by search rather than a
-# fixed index precisely so those keep holding.
+# member may. Neither grant takes an item slot at all, which is why those keep
+# holding.
 EQUIP_WEP_RIGHT = 16  # CHARACTER_INIT_PARAM.equip_Wep_Right, s32, -1 in vanilla
+EQUIP_WEP_LEFT = 24   # CHARACTER_INIT_PARAM.equip_Wep_Left,  s32, -1 in vanilla
 
 # Every row HunterTools.cpp targets. Both ten-row blocks plus 3500/3501,
 # because the data cannot say which block the game reads - see the comment on
@@ -196,12 +207,15 @@ def check_vanilla(plain, members):
 
 # --- output comparison ------------------------------------------------------
 
-def compare(van, van_m, out, out_m, granted=None):
+def compare(van, van_m, out, out_m, granted=None, granted_left=None):
     failures, notes = [], []
     tolerated = {CHARA_MEMBER}
     if granted is not None:
         tolerated.add(WEAPON_MEMBER)
         notes.append("tolerating feature 037's grant of weapon %d" % granted)
+    if granted_left is not None:
+        tolerated.add(WEAPON_MEMBER)
+        notes.append("tolerating feature 038's grant of weapon %d" % granted_left)
 
     # H-I6 / H-I1
     if set(van_m) != set(out_m):
@@ -252,6 +266,11 @@ def compare(van, van_m, out, out_m, granted=None):
             got = i32(out, oa + EQUIP_WEP_RIGHT)
             if got == granted:
                 set_i32(patched, EQUIP_WEP_RIGHT, got)
+        if granted_left is not None:
+            # The same, eight bytes along, for feature 038.
+            got = i32(out, oa + EQUIP_WEP_LEFT)
+            if got == granted_left:
+                set_i32(patched, EQUIP_WEP_LEFT, got)
         if patched != out[oa:oa + ROW_BYTES]:
             failures.append("H-I3 row %d changed outside item_* / itemNum_*" % rid)
 
@@ -316,7 +335,7 @@ def cmd_rows(vanilla_root):
     return 0
 
 
-def cmd_verify(vanilla_root, output_root, granted=None):
+def cmd_verify(vanilla_root, output_root, granted=None, granted_left=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when no param feature was on")
@@ -325,7 +344,8 @@ def cmd_verify(vanilla_root, output_root, granted=None):
     out, out_m = load_archive(output_root)
 
     print("vanilla decompressed=%d  output decompressed=%d" % (len(van), len(out)))
-    failures, notes, changed = compare(van, van_m, out, out_m, granted=granted)
+    failures, notes, changed = compare(van, van_m, out, out_m, granted=granted,
+                                       granted_left=granted_left)
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -357,10 +377,11 @@ def cmd_selftest(vanilla_root):
                 set_i32(buf, at + ITEM_ID_BASE + k * 4, t)
                 buf[at + ITEM_NUM_BASE + k] = 1
 
-    def run(mutate, granted=None):
+    def run(mutate, granted=None, granted_left=None):
         out = bytearray(van)
         mutate(out)
-        f, _, _ = compare(van, van_m, out, van_m, granted=granted)
+        f, _, _ = compare(van, van_m, out, van_m, granted=granted,
+                          granted_left=granted_left)
         return f
 
     # The identification and the vanilla preconditions, against real data.
@@ -463,6 +484,58 @@ def cmd_selftest(vanilla_root):
     results.append(("037: --granted still rejects a stray write elsewhere in the row",
                     bool(run(stray_with_flag, granted=grant_weapon)), []))
 
+    # --- feature 038's --granted-left tolerance ------------------------------
+    #
+    # The same four cases for the other hand, and then the three features
+    # together, which is the combination a hardware run will actually produce.
+    left_weapon = 14100000  # Evelyn, feature 038's own table
+
+    def apply_left(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_WEP_LEFT, left_weapon)
+        woff, _ = van_m[WEAPON_MEMBER]
+        buf[woff + 0x80] ^= 0xFF
+
+    results.append(("038: a combined run passes WITH --granted-left",
+                    not run(apply_left, granted_left=left_weapon),
+                    run(apply_left, granted_left=left_weapon)))
+    results.append(("038: the same bytes are REJECTED without --granted-left",
+                    bool(run(apply_left)), []))
+
+    def wrong_left(buf):
+        apply_left(buf)
+        set_i32(buf, rows[ORIGIN_ROWS[0]] + EQUIP_WEP_LEFT, left_weapon + 100)
+    results.append(("038: --granted-left still rejects a DIFFERENT weapon in a row",
+                    bool(run(wrong_left, granted_left=left_weapon)), []))
+
+    # The two flags are field-specific, which is the whole reason there are two:
+    # --granted-left must NOT tolerate a weapon appearing in the right-hand
+    # field, and vice versa. That crossed write is the mistake two features eight
+    # bytes apart can actually make.
+    def left_flag_right_field(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_WEP_RIGHT, left_weapon)
+    results.append(("038: --granted-left does NOT tolerate a write to the right "
+                    "field", bool(run(left_flag_right_field,
+                                      granted_left=left_weapon)), []))
+
+    def apply_all_three(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_WEP_RIGHT, grant_weapon)
+            set_i32(buf, rows[rid] + EQUIP_WEP_LEFT, left_weapon)
+        woff, _ = van_m[WEAPON_MEMBER]
+        buf[woff + 0x80] ^= 0xFF
+    results.append(("038: all three features on passes with BOTH flags",
+                    not run(apply_all_three, granted=grant_weapon,
+                            granted_left=left_weapon),
+                    run(apply_all_three, granted=grant_weapon,
+                        granted_left=left_weapon)))
+    results.append(("038: all three features on is REJECTED with only one flag",
+                    bool(run(apply_all_three, granted=grant_weapon)), []))
+
     # The C++ constants must agree with the paramdef, or every offset above is
     # checking the wrong bytes in both implementations at once.
     #
@@ -513,6 +586,11 @@ def cmd_selftest(vanilla_root):
 def main():
     args = list(sys.argv[1:])
     granted = None
+    granted_left = None
+    if "--granted-left" in args:
+        i = args.index("--granted-left")
+        granted_left = int(args[i + 1])
+        del args[i:i + 2]
     if "--granted" in args:
         i = args.index("--granted")
         granted = int(args[i + 1])
@@ -520,7 +598,8 @@ def main():
     if len(args) >= 2 and args[0] == "rows":
         return cmd_rows(args[1])
     if len(args) >= 3 and args[0] == "verify":
-        return cmd_verify(args[1], args[2], granted=granted)
+        return cmd_verify(args[1], args[2], granted=granted,
+                          granted_left=granted_left)
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     print(__doc__)
