@@ -89,6 +89,7 @@
 #include "../Param/ParamBnd.h"
 #include "HunterTools.h"
 #include "DropRandomizer.h"
+#include "RuneProbe.h"   // TEMPORARY - delete with the probe
 #include "StartingWeapons.h"
 #include "LeftHandWeaponGrant.h"
 #include "TrickWeaponGrant.h"
@@ -1078,6 +1079,21 @@ void EnemyRandomizerJob::State::StepItemData() {
             }
             result.hunterToolRowsChanged = tools.rowsChanged;
             result.hunterToolSlotsWritten = tools.slotsWritten;
+
+            // TEMPORARY HARDWARE PROBE - DELETE WITH RuneProbe.{h,cpp} once it
+            // has answered. It rides on this setting because reaching the
+            // Memory Altar to observe the result needs the Rune Workshop Tool,
+            // which this setting has just granted. See RuneProbe.h.
+            RuneProbeResult probe;
+            if (!RunRuneProbe(itemDataPlain, *chara, probe, &err)) {
+                Fail("rune probe failed: " + err);
+                return;
+            }
+            if (probe.rowsChanged != 22) {
+                Fail("rune probe wrote " + std::to_string(probe.rowsChanged) +
+                     " origin rows, expected 22");
+                return;
+            }
         }
 
         // LAST, and that is a requirement rather than a tidy ordering: this is

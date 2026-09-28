@@ -320,7 +320,45 @@ at runtime. **Do not re-open this.**
 
 ---
 
-## 6. Related
+## 6. Open — save data and game configuration (3)
+
+Three items that are neither a screen nor a randomization setting. They are here
+because `randomization-feature-spec.md` is the inventory of *what a run
+randomizes*, and none of these randomizes anything.
+
+| # | Item | What it does | Status | Cost |
+|---|---|---|---|---|
+| U6 | **New Game+ level** | Let a world specify the NG+ cycle it starts at. **Where this even lives is the first question** and is unanswered: it may be save data, it may be a `CharaInitParam`-adjacent field, it may be an event flag. `CharaInitParam` has no NG+ field — all 115 were read for row 37 | **TODO — needs investigation first** | Unknown until the mechanism is found |
+| U7 | **Save data management review** | An end-to-end review of the save workflow the `worlds` feature built: detection, backup, capture, restore, adopt, the seven-phase transaction, reconciliation after an interrupted activation, and every failure path. Not new behaviour — a review of whether what exists is right, and what is untested | **TODO** | Medium. The code exists and is hardware-proven; this is judgement, not construction |
+| U8 | **Save editor** | Controlled editing of supported save properties. **Scope is the whole risk**: this must not drift into a general-purpose Bloodborne save editor. Start by naming the two or three properties worth editing and why, and treat everything else as out of scope until asked for | **TODO — scope it before planning it** | Unknown, and unbounded if the scope is not fixed first |
+
+---
+
+## 7. Open — application and input (3)
+
+| # | Item | What it does | Status | Cost |
+|---|---|---|---|---|
+| U9 | **On-screen keyboard** | Text entry without a physical keyboard. Two fields need it today — the world **name** and the **title id** — and both currently use a character-cycling editor (up/down walks an alphabet, left/right moves the cursor). That works but is slow for a 16-character name | **TODO** | Medium. A new full-screen component plus two call sites; the existing editors show what it replaces |
+| U10 | **Title id lookup** | Replace typing `CUSA03173` with picking from a list of known Bloodborne releases. The app already **discovers the save title id** from `param.sfo` at runtime (`docs/ps4-homebrew-findings.md` §6), so some of the machinery exists — but the AFR title id is deliberately *not* inferred today (worlds plan P26 removed a check that tried), and that decision needs revisiting rather than ignoring | **TODO** | Low-to-medium. Mostly a table of known ids plus the existing picker |
+| U11 | **Activation and confirmation review** | An end-to-end pass over the activation flow now that U1 and U2 have changed both of its screens: the warnings, the defaults, the destructive-action safeguards, and whether the two screens still agree with each other and with what the transaction does | **TODO** | Low. A review, and both screens are freshly built |
+
+---
+
+## 8. Open — optional mods and patches (1)
+
+| # | Item | What it does | Status | Cost |
+|---|---|---|---|---|
+| U12 | **Optional mod support** | Ship selectable non-randomizer modifications — skip intro, 60 FPS, and other known-compatible patches. **The first question is the mechanism, and it decides everything else:** the randomizer's AFR overlay replaces *game data files*, which covers anything a mod does by swapping `dvdroot_ps4` content. A 60 FPS patch is usually an **executable** patch, which AFR does not do and which is a different capability with different risk. Two of the named mods are probably in different categories | **TODO — investigate the mechanism split first** | Unknown until the split is known |
+
+**A worked example already sits in the tree.** `app/tools/data/mods/` holds three
+downloaded mods, and one of them — `Start with any Weapon 1.3` — was taken apart
+on 2026-09-27 to answer the rune question. It ships `param/`, `event/` and
+`script/talk/` files and nothing else, so it is purely a data mod and would work
+through AFR unchanged. That is the shape to check each candidate against.
+
+---
+
+## 9. Related
 
 - `randomization-feature-spec.md` — the randomization settings backlog; rows 35
   and 36 are the two new randomization ideas captured alongside U1–U3

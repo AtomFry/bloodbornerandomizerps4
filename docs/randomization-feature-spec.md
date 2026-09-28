@@ -266,12 +266,13 @@ with row 17 if the two are built near each other.
 
 ---
 
-## 4. Items and shop (5 remaining)
+## 4. Items and shop (6 remaining)
 
 | # | Feature | Reference flag | What it does | Status | Cost |
 |---|---|---|---|---|---|
 | 11 | Randomize Shop Items | `shopBool` | Shuffles shop **armour** (`equipType 1`) and **consumables** (`equipType 3`). Note it does *not* touch weapons — that is setting 5 | **TODO** | **Low.** Same `ShopLineupParam`, same `equipId` field, same loop we already run for weapons — two more type buckets |
 | 12 | Key Overworld Items (With Logic) | `keyItemRandomizeBool` | Nothing. The flag is assigned from the checkbox and **never read anywhere**; `keyitemRand` is constructed and never used. Key items are only ever *excluded* from the treasure pool | **DEAD** in the reference | Building it for real is net-new design, not a port — see §9 |
+| 40 | Starting gear selection | *none* | **NEW.** The gap rows 37/38 leave: they grant a *weapon*, and row 5 randomizes what the Dream's coffins sell, but nothing lets the player choose **armour, or the starting consumables and bullets**, and nothing lets them fix the Dream's five coffin picks rather than randomizing them. `CharaInitParam` has the slots already — `equip_Helm/Armer/Gaunt/Leg` at offsets 32-44, set on 1557 rows so plainly read, and `item_01..10` which rows 34/37 already write | **TODO** | Medium. The fields are known and the picker machinery exists; the work is scope, not mechanism |
 | 38 | Start with a left-hand weapon | *none* | **NEW.** Row 37 for the other hand: `equip_Wep_Left`, s32 at **offset 24** of the same `CharaInitParam` origin rows row 37 writes at offset 16. 16 candidates — 12 firearms, 2 shields, 2 torches — selected by the `leftHandEquipable` bit, the sibling of the bit row 37 already filters on. Same picker, same config shape, same requirement writer. Shipped as **14 rows** - the obtainability rule cuts 18 to 14 - and flat, because firearms have no Uncanny/Lost versions | **DONE** - shipped as `START WITH A LEFT WEAPON`; spec and plan deliberately skipped at the developer's request. Hardware-tested 2026-09-27. See `docs/features/038-start-with-left-hand-weapon/` | **Low.** Row 37's mechanism is hardware-proven; this is its other half |
 | 39 | Start with a Caryll rune | *none* | **NEW.** `equip_Accessory01..05`, s32 at offsets 64-80 of the same rows. Precedent: `CharaInitParam` row 9001 sets `equip_Accessory01 = 100`, a real `EquipParamAccessory` row — evidence row 37's field never had. **Blocked on identification, not mechanism** — see below | **TODO — BLOCKED** | Unknown |
 | 37 | Start with a trick weapon | *none* | **NEW, no reference equivalent.** Grants a weapon at character creation, so a new game starts in the clinic already holding one. A **pool picker**, not a single choice: none ticked grants nothing, one ticked always grants that weapon, several ticked draws one at random per run — the same none/one/many semantics `ENEMIES INCLUDED` already has | **DONE** - shipped as `START WITH A TRICK WEAPON`, 78 rows. The probe ran 2026-09-27 and **route A won**: `equip_Wep_Right` is read at character creation. Hardware-tested. See `docs/features/037-start-with-trick-weapon/` | Small - the field behaved |
@@ -393,10 +394,11 @@ or a rune's identity, so there is no behaviour to match.
 
 ---
 
-## 5. Enemy and boss pool (4 remaining)
+## 5. Enemy and boss pool (5 remaining)
 
 | # | Feature | Reference flag | What it does | Status | Cost |
 |---|---|---|---|---|---|
+| 41 | Cut content pool | *none* | **NEW.** Include cut/unused entities and items in the pools where they are safe. Row 37's derivation already met the shape of this problem: of 84 right-hand tier-0 weapon rows, six are unnamed and appear in no shop and no item lot — cut content, excluded by an obtainability rule rather than a hand list. The same question applies to enemies (`EnemyPoolTable` excludes `c1130`, `c2121`, `c2561` today) and to the four unnamed weapon families. **What "safe" means is the whole feature**: an entity with no `ThinkParamID` does not fight, and one with no name reads as a bug | **TODO** | Medium, and mostly investigation. Every inclusion needs its own evidence |
 | 13 | Bosses Can Replace Enemies | `insertBossesBool` | Lets boss identities into the ordinary enemy pool, so bosses appear as world mobs | **TODO** | Medium. Tangled with `excludeBossesBool` and the oops-all lists; needs a fairness decision |
 | 14 | Include Lesser Bosses in Boss Pool | `lesserBossesBool` | Adds sub-boss / mini-boss placements (e.g. `c5070`, `c4030_0000`) to the boss pool | **TODO** | Low. Three call sites in the boss eligibility checks |
 | 15 | Randomize NPCs | `includeNPCs` | Treats hostile human NPCs (`c0000` models with a real think ID) as randomizable placements | **TODO** | Medium. Own MSB pass, keyed off `UnkT07` against a hostile-NPC list |
@@ -430,7 +432,7 @@ boss randomizers already perform, so all four are one small table-driven pass.
 
 ---
 
-## 8. Combat and cosmetic params (8 remaining)
+## 8. Combat and cosmetic params (9 remaining)
 
 | # | Feature | Reference flag | What it does | Status | Cost |
 |---|---|---|---|---|---|
@@ -441,6 +443,7 @@ boss randomizers already perform, so all four are one small table-driven pass.
 | 28 | Blood Decals | `bloodBool` | Randomizes blood decal appearance | **TODO** | Low, cosmetic |
 | 29 | Face Data | `faceBool` | Randomizes `FaceGenParam` / `FaceParam` | **TODO** | Low, cosmetic |
 | 30 | Talk Data | `talkBool` | Randomizes dialogue data | **TODO** | Unknown — least traced of the set |
+| 42 | Contextual boss scream | *none* | **NEW.** When `RANDOMIZE BOSSES` puts a different boss in an arena, the arena's scripted scream and intro still belong to the vanilla occupant — the Cleric Beast's roar plays for whatever is actually there. Replace it with the incoming boss's own. Lives in `event/*.emevd`, which **this port has never edited** — `ENABLE MERGO DARKNESS` reads one event and pokes it, and that is the extent of our emevd work | **TODO** | High, and the emevd dependency is the reason. Investigate before costing |
 | 31 | VFX / AI Sound | `vfxBool` | Calls `AiSoundParamRandomizer`; the other VFX calls beside it are commented out in the reference | **TODO** | Low, but the reference's own version is mostly disabled |
 
 ---
@@ -531,13 +534,14 @@ belongs at the end, not the front, and it needs its own spec.
 |---|---|
 | Ready (code exists, needs a row) | 0 |
 | Enemy / boss pickers and placement protection (new) | 2 |
-| Items and shop | 2 real + 1 dead |
+| Enemy and boss pool - cut content (new) | 1 |
+| Items and shop | 3 real + 1 dead |
 | Enemy and boss pool | 4 |
 | Difficulty helpers | 4 |
 | Scaling | 2 |
-| Combat and cosmetic params | 8 |
+| Combat and cosmetic params | 9 |
 | Modes (new) | 1 idea |
-| **Total actionable** | **22 + 1 idea** |
+| **Total actionable** | **25 + 1 idea** |
 | Out of scope (chalice) | 3 |
 
 Of those, **19 are unimplemented reference settings** — §4 through §8, every
@@ -546,8 +550,34 @@ standing goal in its own right and needs no separate row: the rows below *are*
 the list, and the order in §11 is how to work through them. Rows 35 and 36 are
 ours and sit outside it.
 
-UI and platform work is tracked separately in `ui-backlog.md`, which is where
-the two screen-simplification items live.
+UI and platform work is tracked separately in `ui-backlog.md`.
+
+### The 2026-09-28 feature list, and where each item went
+
+The developer proposed sixteen items across five headings. **Four were already
+on this list** and were not duplicated — that is the main thing this note
+exists to record:
+
+| Proposed | Already tracked as |
+| --- | --- |
+| Shop item randomization | **row 11**, `shopBool` — armour and consumables; note it does *not* cover weapons, which is row 5 |
+| Rune/gem effect randomization, 3 or 6 effects | **row 26**, `gemBool` + `threeGemBool` / `sixGemBool` — the sub-flags are exactly the 3/6 request |
+| Talk data randomizer | **row 30**, `talkBool` |
+| Sound effect randomizer | **row 31**, `vfxBool` — `AiSoundParamRandomizer`. Partial: the reference's other VFX calls are commented out in its own source |
+
+**Three became new rows here:** 40 starting gear selection, 41 cut content pool,
+42 contextual boss scream.
+
+**Seven went to `ui-backlog.md`** as U6-U12, because they change the app or the
+save rather than what a run randomizes: NG+ level, the save-data review, the
+save editor, the on-screen keyboard, title id lookup, the activation review, and
+optional mod support.
+
+**One was not filed at all.** "Review the remaining unimplemented randomization
+options and validate each against the current architecture" *is this document* —
+§4 through §8 are that list, §11 is the order, and every row already carries its
+cost against the port's architecture. Filing it as a row would have been filing
+the backlog inside itself.
 
 ## 11. Suggested order
 
