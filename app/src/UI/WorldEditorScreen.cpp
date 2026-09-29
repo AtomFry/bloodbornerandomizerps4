@@ -1291,6 +1291,16 @@ void WorldEditorScreen::FinishCommit() {
             if (run_.enableMergoDarkness) {
                 AddProgressLine("MERGO DARKNESS ENABLED - THE WORLD WILL BE DARK");
             }
+            // Feature 027. A COUNT rather than a state, and the opposite
+            // choice to the hunter-tools line below on purpose: this number
+            // is fixed at 31398, so a 0 or a wrong figure means the row walk
+            // is wrong - the same reasoning the four easy-mode lines use. No
+            // SKIPPING counterpart, like the line above: NO means the app
+            // left the file alone.
+            if (run_.noTeamType) {
+                AddProgressLine("SET " + std::to_string(result.teamTypeRowsWritten) +
+                                " CREATURE RECORDS TO ONE ALLEGIANCE");
+            }
             // Reported as a state rather than a count, deliberately: the
             // honest count covers both blocks of origin rows (HunterTools.cpp)
             // and a player who picks one origin would read 22 as a defect. No
@@ -1368,7 +1378,7 @@ void WorldEditorScreen::FinishCommit() {
             // features ran, so report it once rather than per feature.
             if (run_.randomizeEnemyDrops || run_.randomizeStartingWeapons ||
                 run_.randomizeStartingGuns || run_.randomizeShopWeapons ||
-                run_.startWithHunterTools ||
+                run_.startWithHunterTools || run_.noTeamType ||
                 run_.trickWeapons.CountEnabled() > 0 ||
                 run_.leftHandWeapons.CountEnabled() > 0) {
                 AddProgressLine("ITEM DATA " + std::to_string(result.itemDataMembers) +

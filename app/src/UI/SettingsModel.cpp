@@ -121,6 +121,13 @@ const SettingDef kSettings[] = {
       "ENABLE MERGO DARKNESS", &RandomizerDefaults::enableMergoDarkness,
       "Turns the Wet Nurse's arena darkness on for the whole game, from your "
       "first spawn." },
+    { SettingId::NoTeamType, SettingCategory::World, SettingKind::Toggle,
+      "ENEMIES ON SAME TEAM", &RandomizerDefaults::noTeamType,
+      "Puts every creature in the game onto one shared team - enemies, bosses "
+      "and the Hunter's Dream residents alike. Off, each keeps the team the "
+      "game shipped, and shuffling can stand rival teams side by side, so "
+      "enemies sometimes fight each other. On, that infighting tends to "
+      "stop." },
 
     // --- Save --------------------------------------------------------------
     //

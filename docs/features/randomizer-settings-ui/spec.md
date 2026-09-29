@@ -315,12 +315,12 @@ go; the seed line, the randomizer steps and the completion lines are untouched.
 
 | Category | Settings (current) | Settings (backlog, when built) |
 |---|---|---|
-| **Enemies** | Randomize Enemies · Enemies Included · Enemies Skipped · Protect Caged Dogs | Randomize NPCs · No Team Type · Melee/Gun Movesets |
+| **Enemies** | Randomize Enemies · Enemies Included · Enemies Skipped · Protect Caged Dogs | Randomize NPCs · Melee/Gun Movesets |
 | **Bosses** | Randomize Bosses · Bosses Included | Per-Zone Toggles · Include Lesser Bosses · Bosses Can Replace Enemies |
 | **Items & Treasure** | Randomize Treasure · Randomize Workshop Tools · Randomize Enemy Drops | Non-Key Overworld · Key Overworld (Logic) · Shop Items · Gems + Runes |
 | **Weapons & Starting Gear** | Randomize Starting Weapons · Randomize Starting Guns · Randomize Shop Weapons · Start With Hunter Tools · Start With A Trick Weapon · Start With A Left Weapon | — |
 | **Difficulty** | Easy Shadows · Easy Rom · Easy Failures · Easy Emissary | No Scaling · Custom Scaling |
-| **World** | Enable Mergo Darkness | Blood Decals · Face Data · Talk Data · VFX / AI Sound |
+| **World** | Enable Mergo Darkness · No Team Type | Blood Decals · Face Data · Talk Data · VFX / AI Sound |
 
 Two placements are deliberate and must not be "corrected" during implementation:
 
@@ -528,6 +528,7 @@ Every default below is `Off` unless stated, matching the struct's own defaults.
 | Setting | Help text |
 |---|---|
 | **Enable Mergo Darkness** | Cuts the scripted darkness in Mergo's Loft. Not a randomizer — it is a single fixed edit, and it applies whether or not anything else is on. Off leaves the area exactly as the game shipped it. *Default: Off.* |
+| **No Team Type** | Puts every creature in the game onto one shared team - enemies, bosses and the Hunter's Dream residents alike. Off, each keeps the team the game shipped, and shuffling can stand rival teams side by side, so enemies sometimes fight each other. On, that infighting tends to stop. Shipped under the label `ENEMIES ON SAME TEAM`; the prose name here is the backlog row's, as with Protect Caged Dogs. Not a randomizer — it writes one fixed byte per creature record and draws no randomness. *Default: Off.* |
 
 ### Rail action
 

@@ -700,6 +700,7 @@ def cmd_selftest(root):
                       len("randomize_workshop_tools=1") + 1 + len("randomize_enemy_drops=1") + 1 +
                       len("randomize_starting_weapons=1") + 1 + len("randomize_starting_guns=1") + 1 +
                       len("randomize_shop_weapons=1") + 1 + len("enable_mergo_darkness=1") + 1 +
+                      len("no_team_type=1") + 1 +
                       len("do_not_randomize_caged_dogs=1") + 1 +
                       len("start_with_hunter_tools=1") + 1 +
                       len("easy_shadows=1") + 1 + len("easy_rom=1") + 1 +
@@ -726,12 +727,15 @@ def cmd_selftest(root):
     # left_hand_weapons_included, which is 42 bytes - the 26-character key, a
     # 14-character selection line and its newline - taking the settings block to
     # 728 and leaving 296 bytes of char buf[1024] spare. Those 102 and 42 are why
-    # neither key name can be renamed without redoing this arithmetic.
+    # neither key name can be renamed without redoing this arithmetic. Then 794
+    # once feature 027 added no_team_type, which is 15 bytes - the 12-character
+    # key, its "=1" and its newline - taking the settings block to 743 and
+    # leaving 281 bytes of char buf[1024] spare.
     # This is an exact equality on purpose: it fails the
     # moment a key is added or removed without the buffer being thought about.
-    cases.append(("worst-case defaults.cfg is 779 bytes", worst == 779))
-    cases.append(("the 728-byte settings block fits char buf[1024]",
-                  settings_block == 728 and bufs and settings_block < max(bufs)))
+    cases.append(("worst-case defaults.cfg is 794 bytes", worst == 794))
+    cases.append(("the 743-byte settings block fits char buf[1024]",
+                  settings_block == 743 and bufs and settings_block < max(bufs)))
     # The save-data removal, checked the way the two cases below check a key
     # that must be PRESENT: on the quoted key literal in the load chain, the
     # "key=%d" fragment of the save format string, and the struct field the
@@ -761,6 +765,12 @@ def cmd_selftest(root):
     cases.append(("033: do_not_randomize_caged_dogs is in both load and save",
                   store.count('"do_not_randomize_caged_dogs"') == 1 and
                   "do_not_randomize_caged_dogs=%d" in store))
+    # Feature 027. Same trap, same shape: written but never read loads as off
+    # forever, read but never written is forgotten on save.
+    cases.append(("027: no_team_type is in both load and save",
+                  store.count('"no_team_type"') == 1 and
+                  "no_team_type=%d" in store and
+                  "defaults.noTeamType ? 1 : 0" in store))
     # Same trap, one shape different: a selection key is written as %s from
     # Encode(), so the save side is checked on the format fragment AND on the
     # Encode() call, not on a "=%d".

@@ -1389,6 +1389,7 @@ def source_cases():
         ("randomizeStartingGuns", "randomizeStartingGuns"),
         ("randomizeShopWeapons", "randomizeShopWeapons"),
         ("enableMergoDarkness", "enableMergoDarkness"),
+        ("noTeamType", "noTeamType"),
         ("doNotRandomizeCagedDogs", "doNotRandomizeCagedDogs"),
         ("startWithHunterTools", "startWithHunterTools"),
         ("easyModes.shadows", "easyShadows"),
@@ -1404,7 +1405,10 @@ def source_cases():
     WIZARD_RUN_DECISION = [
         "randomizeEnemies", "randomizeBosses", "randomizeTreasure",
         "randomizeEnemyDrops", "randomizeStartingWeapons", "randomizeStartingGuns",
-        "randomizeShopWeapons", "enableMergoDarkness", "startWithHunterTools",
+        "randomizeShopWeapons", "enableMergoDarkness",
+        # Feature 027, NO TEAM TYPE - a world whose only setting is this one
+        # is a complete request, and it does rewrite the item-data archive.
+        "noTeamType", "startWithHunterTools",
         "easyShadows", "easyRom", "easyFailures", "easyEmissary",
         # A picker-only setting still gates a run: ticking one weapon and
         # nothing else is a complete request (spec 037 section 7). It is LAST

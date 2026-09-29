@@ -79,6 +79,12 @@ struct EnemyRandomizerResult {
     int32_t leftHandWeaponGranted = 0;
     int leftHandWeaponRowsChanged = 0;
 
+    // NO TEAM TYPE. How many NpcParam rows were put onto the one team type -
+    // 31398 when the setting is on, 0 when it is off. The figure is FIXED, so
+    // a 0 or a wrong number means the row walk is wrong, which is why the UI
+    // reports the count rather than reporting the feature as on.
+    int teamTypeRowsWritten = 0;
+
     // EASY SHADOWS / ROM / FAILURES / EMISSARY. How many placements each of
     // the four settings replaced with the larva - 2 / 60 / 3 / 14 when the
     // setting is on and every map file is present, 0 when it is off. The UI
@@ -151,6 +157,7 @@ struct EnemyRandomizerOptions {
         return randomizeEnemyDrops || randomizeStartingWeapons ||
                randomizeStartingGuns || randomizeShopWeapons ||
                startWithHunterTools ||
+               noTeamType ||
                trickWeapons.CountEnabled() > 0 ||
                leftHandWeapons.CountEnabled() > 0;
     }
@@ -214,6 +221,23 @@ struct EnemyRandomizerOptions {
     // reference tool's checkbox, which is named for the resulting state
     // rather than the action.
     bool enableMergoDarkness = false;
+
+    // NO TEAM TYPE, shipped as ENEMIES ON SAME TEAM - puts every
+    // NpcParam row onto the one team type (25), with no exclusion of any kind.
+    // See TeamType.h, including the unverified question of what the game does
+    // with the value, which is the whole point of the feature.
+    //
+    // Not a randomizer, exactly like enableMergoDarkness: the pass draws NO
+    // randomness on any path, so the same seed produces the same world with it
+    // on or off - and unlike the randomizing param features, turning it on
+    // moves no later roll either.
+    //
+    // Independent of every other setting, including randomizeEnemyDrops, which
+    // is the only other writer of this param: that one writes bytes 44 and 48
+    // of a row, this one writes byte 303, so the two are disjoint and neither
+    // ordering constrains the other. false leaves the archive untouched by this
+    // feature.
+    bool noTeamType = false;
 
     // EASY SHADOWS / EASY ROM / EASY FAILURES / EASY EMISSARY - four
     // independent settings, all off by default, each turning one multi-body

@@ -112,6 +112,24 @@ struct RandomizerDefaults {
     // cut the darkness unconditionally (D3 in the plan).
     bool enableMergoDarkness = false;
 
+    // NO TEAM TYPE, shipped as ENEMIES ON SAME TEAM (feature 027).
+    // Puts every NpcParam row onto the one team type (25), exactly as the
+    // reference tool's TeamTypeRando() does. See TeamType.h.
+    //
+    // Like enableMergoDarkness above this is not a randomizer: it draws no
+    // randomness and writes the same fixed byte every run, so the same seed
+    // produces the same world with it on or off. false is the state in which
+    // this feature leaves the item-data archive untouched, which is what makes
+    // the absent-key rule safe here too - a defaults.cfg written before this
+    // key existed reads as off and the pass never runs.
+    //
+    // The LABEL asserts an effect this project has never observed: what
+    // Bloodborne does with team type 25 is unknown, and the hardware test of
+    // feature 027 is what settles whether the label is true. The field and the
+    // config key are therefore named for the mechanism and the backlog row
+    // rather than for the label, so revising the label costs no saved file.
+    bool noTeamType = false;
+
     // DO NOT RANDOMIZE CAGED DOGS - a modifier on randomizeEnemies that pins
     // the ten caged-dog spots of the Central Yharnam kennel yard and the
     // Forbidden Woods cluster, so whatever else the run does those cages keep

@@ -102,6 +102,7 @@ enum class SettingId {
     EasyFailures,
     EasyEmissary,
     EnableMergoDarkness,
+    NoTeamType,
     SaveData,
 };
 

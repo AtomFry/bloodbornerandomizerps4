@@ -203,6 +203,7 @@ PROSE_TO_LABEL = {
     "Easy Failures": "EASY FAILURES",
     "Easy Emissary": "EASY EMISSARY",
     "Enable Mergo Darkness": "ENABLE MERGO DARKNESS",
+    "No Team Type": "ENEMIES ON SAME TEAM",
 }
 
 SPEC_CATEGORY_TO_ENUM = {

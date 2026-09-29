@@ -769,6 +769,7 @@ void WorldActivationJob::Step() {
             options.randomizeStartingGuns = run.randomizeStartingGuns;
             options.randomizeShopWeapons = run.randomizeShopWeapons;
             options.enableMergoDarkness = run.enableMergoDarkness;
+            options.noTeamType = run.noTeamType;
             options.doNotRandomizeCagedDogs = run.doNotRandomizeCagedDogs;
             options.startWithHunterTools = run.startWithHunterTools;
             options.easyModes.shadows = run.easyShadows;
@@ -792,7 +793,8 @@ void WorldActivationJob::Step() {
                 run.randomizeEnemies || run.randomizeBosses || run.randomizeTreasure ||
                 run.randomizeEnemyDrops || run.randomizeStartingWeapons ||
                 run.randomizeStartingGuns || run.randomizeShopWeapons ||
-                run.enableMergoDarkness || run.startWithHunterTools ||
+                run.enableMergoDarkness || run.noTeamType ||
+                run.startWithHunterTools ||
                 run.easyShadows || run.easyRom || run.easyFailures || run.easyEmissary ||
                 // A picker-only setting still gates a run: ticking one weapon
                 // and nothing else is a complete request, so it must not report

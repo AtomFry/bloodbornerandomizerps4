@@ -91,6 +91,7 @@
 #include "DropRandomizer.h"
 #include "RuneProbe.h"   // TEMPORARY - delete with the probe
 #include "StartingWeapons.h"
+#include "TeamType.h"
 #include "LeftHandWeaponGrant.h"
 #include "TrickWeaponGrant.h"
 #include "FileIo.h"
@@ -1059,6 +1060,31 @@ void EnemyRandomizerJob::State::StepItemData() {
             result.startingMeleeChanged = weapons.meleeSlotsChanged;
             result.startingGunsChanged = weapons.gunSlotsChanged;
             result.shopWeaponsChanged = weapons.shopRowsChanged;
+        }
+
+        // NO TEAM TYPE - puts every NpcParam row onto the one team type. Runs
+        // here, after the starting-weapon / shop block and before hunter tools,
+        // because that is the reference's own relative position among the
+        // passes this port shares with it (StartFunctions.cs runs
+        // TeamTypeRando() at 1557, after enemy drops at 1536 and shop items at
+        // 1541). That is reference fidelity and readability only, NOT a
+        // behavioural constraint: the pass draws nothing and writes a byte no
+        // other pass reads or writes, so it commutes with every pass in the
+        // run - including the drop pass above, which writes bytes 44 and 48 of
+        // the same rows this writes byte 303 of.
+        if (options.noTeamType) {
+            const ParamMember* npc = FindParamMember(members, "NpcParam.param");
+            if (npc == nullptr) {
+                Fail("NpcParam.param not present in gameparam.parambnd.dcx "
+                     "(needed by NO TEAM TYPE)");
+                return;
+            }
+            TeamTypeResult teams;
+            if (!ApplyOneTeamType(itemDataPlain, *npc, teams, &err)) {
+                Fail("setting one team type failed: " + err);
+                return;
+            }
+            result.teamTypeRowsWritten = teams.rowsWritten;
         }
 
         // The only param feature that isn't a randomizer - it writes the same

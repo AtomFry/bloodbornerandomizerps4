@@ -37,6 +37,7 @@ std::string FormatSettings(const RandomizerDefaults& defaults) {
                         "randomize_enemy_drops=%d\n"
                         "randomize_starting_weapons=%d\nrandomize_starting_guns=%d\n"
                         "randomize_shop_weapons=%d\nenable_mergo_darkness=%d\n"
+                        "no_team_type=%d\n"
                         "do_not_randomize_caged_dogs=%d\n"
                         "start_with_hunter_tools=%d\n"
                         "easy_shadows=%d\neasy_rom=%d\n"
@@ -56,6 +57,7 @@ std::string FormatSettings(const RandomizerDefaults& defaults) {
                         defaults.randomizeStartingGuns ? 1 : 0,
                         defaults.randomizeShopWeapons ? 1 : 0,
                         defaults.enableMergoDarkness ? 1 : 0,
+                        defaults.noTeamType ? 1 : 0,
                         defaults.doNotRandomizeCagedDogs ? 1 : 0,
                         defaults.startWithHunterTools ? 1 : 0,
                         defaults.easyShadows ? 1 : 0,
@@ -126,6 +128,14 @@ bool ApplySettingKey(const char* key, const char* value, RandomizerDefaults& out
         out.leftHandWeapons.Decode(value);
     } else if (strcmp(key, "enable_mergo_darkness") == 0) {
         out.enableMergoDarkness = (atoi(value) != 0);
+    } else if (strcmp(key, "no_team_type") == 0) {
+        // Feature 027, NO TEAM TYPE. Absent -> the struct's own false,
+        // which is the run the app made before this key existed: the pass
+        // never runs and the item-data archive is untouched by it. This
+        // key's LENGTH is load-bearing - pool_verify.py pins the settings
+        // block at an exact byte count - so renaming it means redoing that
+        // arithmetic.
+        out.noTeamType = (atoi(value) != 0);
     } else if (strcmp(key, "do_not_randomize_caged_dogs") == 0) {
         // Absent -> the struct's own false, which is the run the app
         // made before this key existed (spec 033 D2).
