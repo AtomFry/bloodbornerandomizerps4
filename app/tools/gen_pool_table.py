@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate the baked model tables: EnemyPoolTable.h, BossPoolTable.h,
-EnemySkipTable.h.
+EnemySkipTable.h, InsertedBossTable.h, InsertAreaTable.h.
 
 The PS4 app must not parse Characters.json or rebuild a pool just to draw a
 menu, so each list is baked exactly like ModelSizeTable.h and NpcScalingTable.h.
@@ -13,9 +13,17 @@ catch a changed order. If the order ever has to change, change the config key
 name at the same time.
 
 Usage:
-    python gen_pool_table.py enemy|boss|skip|both <vanilla_dvdroot> [--check]
+    python gen_pool_table.py enemy|boss|skip|insertboss|area|both
+                             <vanilla_dvdroot> [--check]
 
 `both` stays enemy+boss, so every existing invocation means what it did.
+
+`insertboss` and `area` are feature 013's two tables. The first is NOT
+BossPoolTable.h with different rows - it is a different list, harvested by
+different rules (boss_verify.insertion_list), and it gets its own config key
+for that reason. The second is not creatures at all: its `model` column holds a
+map-name PREFIX, following CagedDogList.h's precedent, and its display name
+comes from MapNames.json rather than Characters.json.
 
 --check exits non-zero if the file on disk differs from what would be
 generated, without writing anything - for the *_pool_verify.py table checks.
@@ -27,15 +35,19 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from enemy_lookup import (engine_pool, engine_pool_models,  # noqa: E402
                           overwritable_models, overwritable_counts)
-from boss_verify import build_pool, load_maps, boss_pool_models  # noqa: E402
+from boss_verify import (build_pool, load_maps, boss_pool_models,  # noqa: E402
+                         insertion_list, insertion_models, insertion_areas)
 from names import model_name  # noqa: E402
 
 SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "Randomizer")
 
-# Font8x8.cpp renders A-Z, 0-9, space and - since the enemy picker - ' ( ) -.
-# Anything else comes out as a blank gap, so a name containing one is a bug to
-# catch here rather than a mystery on the TV.
-RENDERABLE = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '()-,")
+# Font8x8.cpp renders A-Z, 0-9, space and - since the enemy picker - ' ( ) - ,
+# and, since feature 040's armour names, / as well. Anything else comes out as a
+# blank gap, so a name containing one is a bug to catch here rather than a
+# mystery on the TV. This set mirrors Font8x8.cpp's kGlyphs and must be grown
+# with it, never instead of it: adding a character here without the glyph turns
+# the check green and leaves the hole on the TV.
+RENDERABLE = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '()-,/")
 
 
 # Names this project owns, consulted BEFORE Characters.json. Each entry needs
@@ -70,7 +82,11 @@ def display_name(model):
 
 
 class Kind(object):
-    def __init__(self, key, header, func, count_const, models_fn, weights_fn, blurb):
+    # name_fn turns a `model` column value into its display name. It is a
+    # parameter rather than always display_name() because the area table's
+    # column holds a map-name prefix, which Characters.json knows nothing about.
+    def __init__(self, key, header, func, count_const, models_fn, weights_fn, blurb,
+                 name_fn=None, weight_blurb=None):
         self.key = key
         self.header = header
         self.func = func
@@ -78,6 +94,8 @@ class Kind(object):
         self.models_fn = models_fn
         self.weights_fn = weights_fn
         self.blurb = blurb
+        self.name_fn = name_fn or display_name
+        self.weight_blurb = weight_blurb
 
 
 def enemy_weights(root):
@@ -94,6 +112,40 @@ def boss_weights(root):
         if mdl:
             w[mdl] = w.get(mdl, 0) + 1
     return w
+
+
+def insertboss_weights(root):
+    """How many distinct identities that model contributes to the insertion
+    list - a real draw weight here, because the insertion pool is drained BY
+    IDENTITY and refilled from the full list (plan 013 B17)."""
+    w = {}
+    for _npc, _think, mdl in insertion_list(root):
+        if mdl:
+            w[mdl] = w.get(mdl, 0) + 1
+    return w
+
+
+def area_models(root):
+    return [prefix for prefix, _lf, _name, _n in insertion_areas(root)]
+
+
+def area_weights(root):
+    return {prefix: n for prefix, _lf, _name, n in insertion_areas(root)}
+
+
+# prefix -> display name, filled by build() before it asks for any row, because
+# the name comes from the area's live map file and not from the prefix itself.
+_AREA_NAMES = {}
+
+
+def area_display_name(prefix):
+    name = _AREA_NAMES[prefix]
+    bad = sorted({c for c in name if c not in RENDERABLE})
+    if bad:
+        raise SystemExit(
+            "%s: name %r contains characters the 8x8 font cannot render: %r"
+            % (prefix, name, bad))
+    return name
 
 
 def skip_weights(root):
@@ -137,14 +189,59 @@ KINDS = {
          "//",
          "// `poolEntries` therefore counts PLACEMENTS PROTECTED, not draw weight:",
          "// nothing draws from this table. The column sums to 2269."]),
+    "insertboss": Kind(
+        "insertboss", "InsertedBossTable.h", "InsertedBossTable",
+        "kInsertedBossModelCount", insertion_models, insertboss_weights,
+        ["// Every boss model INSERTED BOSSES can write over an ordinary enemy",
+         "// placement (feature 013). This is NOT BossPoolTable.h: the reference",
+         "// harvests insertBossesEnemy at RandomizeFunctions.cs:1657, which is",
+         "// BEFORE three of the de-eligibility tests the boss pool applies, and it",
+         "// applies neither the 15-pattern insert-reject list nor the per-map npc",
+         "// dedupe. Measured: 32 identities across these 22 models, against the",
+         "// boss pool's 18 across 17. Moon Presence (c5400) is removed, as the",
+         "// reference removes it.",
+         "//",
+         "// Its own table and its own config key on purpose (plan 013 D-B):",
+         "// BOSSES INCLUDED and this are separate questions about separate",
+         "// passes, and sharing either would tie them together forever."]),
+    "area": Kind(
+        "area", "InsertAreaTable.h", "InsertAreaTable", "kInsertAreaCount",
+        area_models, area_weights,
+        ["// The fourteen explorable areas AREAS INCLUDED can tick for feature",
+         "// 013's boss-insertion pass - the fourteen if (boss<Area>) blocks of",
+         "// StartFunctions.cs:1038-1101, which gate that pass and nothing else.",
+         "//",
+         "// `model` IS A MAP-NAME PREFIX, not a creature, following",
+         "// CagedDogList.h's precedent. Each prefix covers every file of its area,",
+         "// one to three of them, because the pass visits the unused variants too,",
+         "// exactly as the reference does; keying on a live file name alone would",
+         "// silently drop 8 of the 22 files. The fourteen prefixes are mutually",
+         "// exclusive, cover all 22 area files, and match neither m21 file - so",
+         "// the Hunter's Dream and the Abandoned Old Workshop can never be an",
+         "// insertion area.",
+         "//",
+         "// Names are from tools/data/MapNames.json, taken from each area's LIVE",
+         "// map file."],
+        name_fn=area_display_name,
+        weight_blurb=[
+            "// `poolEntries` is how many eligible insertion targets that area's LIVE",
+            "// map file holds - the placements a boss could be written over, which",
+            "// is what caps a map file's insertion count. Not a draw weight; nothing",
+            "// draws from this table. The column sums to 1381."]),
 }
 
 
 def build(kind, root):
     models = kind.models_fn(root)
     weights = kind.weights_fn(root)
-    rows = [(m, display_name(m), weights.get(m, 0)) for m in models]
+    if kind.key == "area":
+        _AREA_NAMES.clear()
+        _AREA_NAMES.update({p: n for p, _lf, n, _w in insertion_areas(root)})
+    rows = [(m, kind.name_fn(m), weights.get(m, 0)) for m in models]
     width = max(len(n) for _m, n, _w in rows)
+    # The model column is padded too, for the area table's uneven prefixes. All
+    # three creature tables have 5-character ids, so their rows are unchanged.
+    mwidth = max(len(m) for m, _n, _w in rows) + 3
 
     L = []
     L.append("// %s - GENERATED by tools/gen_pool_table.py %s." % (kind.header, kind.key))
@@ -155,11 +252,15 @@ def build(kind, root):
     L.append("// ORDER IS LOAD-BEARING: RandomizerDefaults stores the picker's selection")
     L.append("// as one character per row, positionally. Sorted by display name, then by")
     L.append("// model id to break ties - see the generator's header comment.")
-    L.append("//")
-    L.append("// Names are from tools/data/Characters.json (Smithbox, MIT) and are the")
-    L.append("// community's labels, not From Software's - treated the same way every")
-    L.append("// other name in this project is: useful, not authoritative.")
-    if kind.key != "skip":
+    if kind.key != "area":
+        L.append("//")
+        L.append("// Names are from tools/data/Characters.json (Smithbox, MIT) and are the")
+        L.append("// community's labels, not From Software's - treated the same way every")
+        L.append("// other name in this project is: useful, not authoritative.")
+    if kind.weight_blurb:
+        L.append("//")
+        L.extend(kind.weight_blurb)
+    elif kind.key != "skip":
         L.append("//")
         L.append("// `poolEntries` is how many distinct stat/AI variants that model")
         L.append("// contributes, i.e. its relative draw weight. Unused by the app today;")
@@ -177,7 +278,8 @@ def build(kind, root):
     L.append("inline const std::array<ModelPoolEntry, %d>& %s() {" % (len(rows), kind.func))
     L.append("    static const std::array<ModelPoolEntry, %d> kTable = {{" % len(rows))
     for mdl, name, w in rows:
-        row = '        { "%s", %-*s %3d },' % (mdl, width + 3, '"%s",' % name, w)
+        row = '        { %-*s %-*s %3d },' % (mwidth, '"%s",' % mdl,
+                                              width + 3, '"%s",' % name, w)
         if mdl in NAME_OVERRIDES:
             row += "  // name is OURS, not Characters.json: %s" % NAME_OVERRIDES[mdl][1]
         L.append(row)
@@ -208,14 +310,15 @@ def run(kind, root, check):
         return 0
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
-    print("wrote %s (%d models)" % (kind.header, text.count('        { "c')))
+    print("wrote %s (%d rows)" % (kind.header, text.count('\n        { "')))
     return 0
 
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     check = "--check" in sys.argv[1:]
-    if len(args) < 2 or args[0] not in ("enemy", "boss", "skip", "both"):
+    if len(args) < 2 or args[0] not in ("enemy", "boss", "skip", "insertboss",
+                                       "area", "both"):
         print(__doc__)
         return 2
     # `both` stays enemy+boss on purpose: it is what every existing script and

@@ -31,11 +31,37 @@
 // type is bound to one table here: a 14-character line decoded against the
 // 78-row table, or the reverse, is rejected by the length guard rather than
 // silently remapped.
+//
+// InsertedBossSelection and InsertAreaSelection are feature 013's two, and both
+// are all-ticked by default - the polarity of the two pickers above rather than
+// of the skip list - because all-ticked is what the run does when the master
+// toggle BOSSES CAN REPLACE ENEMIES is off, which is nothing at all. So a
+// defaults.cfg written before either key existed reads as every area and every
+// boss enabled with the pass switched off, and that is today's run exactly.
+//
+// InsertedBossSelection is NOT BossPoolSelection with a different size. The two
+// tables are harvested by different rules over different reject lists and are
+// 22 and 17 rows; a 22-character line decoded against the 17-row table is
+// rejected by the length guard, which is the same reason every other type here
+// names exactly one table.
+//
+// The four armour selections are feature 040's, and they are FOUR rather than
+// one because a player wears four pieces and each slot is drawn independently.
+// Same machinery again, same fail-safe as the two weapon lists - nothing ticked
+// grants nothing, so a fresh struct, an absent key and a wrong-length value all
+// leave that slot's vanilla garment alone - and four different sizes, 33 / 34 /
+// 26 / 31. The sizes differing is the same protection it is everywhere else
+// here: a line pasted into the wrong key is rejected by the length guard rather
+// than remapped onto another slot's pieces. Only the gloves and legwear counts
+// are close enough for that to be a real risk, and 26 against 31 still differ.
 #pragma once
 
+#include "ArmourTables.h"
 #include "BossPoolTable.h"
 #include "EnemyPoolTable.h"
 #include "EnemySkipTable.h"
+#include "InsertAreaTable.h"
+#include "InsertedBossTable.h"
 #include "LeftHandWeaponTable.h"
 #include "ModelPoolSelection.h"
 #include "TrickWeaponTable.h"
@@ -47,5 +73,11 @@ typedef ModelPoolSelection<kBossPoolModelCount>  BossPoolSelection;
 typedef ModelPoolSelection<kEnemySkipModelCount, false> EnemySkipSelection;
 typedef ModelPoolSelection<kTrickWeaponCount, false> TrickWeaponSelection;
 typedef ModelPoolSelection<kLeftHandWeaponCount, false> LeftHandWeaponSelection;
+typedef ModelPoolSelection<kInsertedBossModelCount> InsertedBossSelection;
+typedef ModelPoolSelection<kInsertAreaCount>       InsertAreaSelection;
+typedef ModelPoolSelection<kHeadwearCount, false>   HeadwearSelection;
+typedef ModelPoolSelection<kBodyArmourCount, false> BodyArmourSelection;
+typedef ModelPoolSelection<kGlovesCount, false>     GlovesSelection;
+typedef ModelPoolSelection<kLegwearCount, false>    LegwearSelection;
 
 } // namespace bbr

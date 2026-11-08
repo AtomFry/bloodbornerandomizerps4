@@ -102,6 +102,25 @@ std::string GetName(const std::vector<uint8_t>& blob);
 // with EntityID == -1, and nothing needs to write it.
 int32_t GetEntityID(const std::vector<uint8_t>& blob);
 
+// Where the placement stands, for any Part subtype. The three float32 at
+// entry+0x28, in the Part's COMMON header, so the same fixed offset every
+// other accessor here uses - PartsParam.cs's Part(BinaryReaderEx) reads
+// descOffset i64 @0x00, nameOffset i64 @0x08, ModelLocalID @0x10, Type @0x14,
+// ID @0x18, modelIndex @0x1C, placeholderOffset i64 @0x20, then
+// Position = ReadVector3() at 0x28, Rotation at 0x34 and Scale at 0x40. The
+// Type and modelIndex accessors above bracket it below and baseDataOffset
+// (0xB0) above, with every byte between accounted for.
+//
+// READ-ONLY, AND DELIBERATELY SO. Feature 013's boss insertion needs to know
+// how far apart two placements are; nothing in this project moves anything,
+// and no Set counterpart belongs here until something does.
+struct Position {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+Position GetPosition(const std::vector<uint8_t>& blob);
+
 // Valid only when GetType(blob) == PartsType::kEnemy.
 int32_t GetEnemyThinkParamID(const std::vector<uint8_t>& blob);
 int32_t GetEnemyNPCParamID(const std::vector<uint8_t>& blob);

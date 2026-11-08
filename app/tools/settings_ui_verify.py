@@ -130,14 +130,36 @@ def parse_model():
         ident = re.match(r"(\w+)", raw)
         cat = re.search(r"SettingCategory::(\w+)", raw)
         kind = re.search(r"SettingKind::(\w+)", raw)
-        flag = re.search(r"&RandomizerDefaults::(\w+)", raw)
+        member = re.search(r"&RandomizerDefaults::(\w+)", raw)
         literals = STRING_LITERAL.findall(raw)
         if not (ident and cat and kind and literals):
             sys.exit("unparsable kSettings entry: %s" % raw[:60])
+        # A Number's pointer-to-member is an int one, and it is NOT a flag: the
+        # regex above matches both spellings, so without this a Number row would
+        # be read as a toggle carrying a bool field that does not exist. The
+        # bounds come from the two initialisers that follow it.
+        flag = member.group(1) if member else None
+        number, bounds = None, None
+        if kind.group(1) == "Number":
+            m = re.search(r"&RandomizerDefaults::(\w+),\s*(-?\d+),\s*(-?\d+)", raw)
+            if not m:
+                sys.exit("Number entry without min/max: %s" % raw[:60])
+            flag, number = None, m.group(1)
+            bounds = (int(m.group(2)), int(m.group(3)))
+        # A NamedChoice carries its two state words as the LAST two literals, so
+        # they must not be swept into the help paragraph.
+        choices = None
+        help_literals = literals[1:]
+        if kind.group(1) == "NamedChoice":
+            if len(literals) < 3:
+                sys.exit("NamedChoice entry without its two labels: %s" % raw[:60])
+            choices = literals[-2:]
+            help_literals = literals[1:-2]
         entries.append(dict(id=ident.group(1), category=cat.group(1),
                             kind=kind.group(1), label=literals[0],
-                            help="".join(literals[1:]),
-                            flag=flag.group(1) if flag else None))
+                            help="".join(help_literals),
+                            flag=flag, number=number, bounds=bounds,
+                            choices=choices))
 
     labels = re.search(r"const char\* const kCategoryLabels\[\] = \{(.*?)\n\};", src, re.S)
     category_labels = STRING_LITERAL.findall(labels.group(1)) if labels else []
@@ -167,11 +189,23 @@ def parse_defaults():
     text = read(os.path.join(RND, "RandomizerDefaults.h"))
     body = strip_comments(text)
     bools = re.findall(r"\bbool (\w+) = ", body)
+    # Feature 013 brought the first int setting. Parsed separately from the
+    # bools, because the case below asks a different question of each: every
+    # bool is a Toggle, a SaveChoice or a NamedChoice row, and every int is a
+    # Number row. lastSeed is a uint32_t and a remembered run artifact rather
+    # than a setting, so it is in neither list - the same reason it has no row.
+    ints = re.findall(r"\bint (\w+) = ", body)
+    # Named type by named type, deliberately, rather than a \w+Selection wildcard:
+    # a selection type added to the struct and wired to nothing is exactly the
+    # defect the case below exists to catch, and a wildcard would absorb it.
     selections = dict(re.findall(r"\b(EnemyPoolSelection|BossPoolSelection|"
                                  r"EnemySkipSelection|TrickWeaponSelection|"
-                                 r"LeftHandWeaponSelection) (\w+);",
+                                 r"LeftHandWeaponSelection|InsertedBossSelection|"
+                                 r"InsertAreaSelection|HeadwearSelection|"
+                                 r"BodyArmourSelection|GlovesSelection|"
+                                 r"LegwearSelection)\s+(\w+);",
                                  body))
-    return bools, selections
+    return bools, ints, selections
 
 
 # ---------------------------------------------------------------------------
@@ -189,15 +223,30 @@ PROSE_TO_LABEL = {
     "Protect Caged Dogs": "DO NOT RANDOMIZE CAGED DOGS",
     "Randomize Bosses": "RANDOMIZE BOSSES",
     "Bosses Included": "BOSSES INCLUDED",
+    "Bosses Can Replace Enemies": "BOSSES CAN REPLACE ENEMIES",
+    "Boss Replacements": "BOSS REPLACEMENTS",
+    "Boss Replacements Per Map": "BOSS REPLACEMENTS PER MAP",
+    "Replace All Enemies": "REPLACE ALL ENEMIES",
+    "Areas Included": "AREAS INCLUDED",
+    "Inserted Bosses": "INSERTED BOSSES",
+    "Spread Bosses Out": "SPREAD BOSSES OUT",
+    "Boss Behaviour": "BOSS BEHAVIOUR",
     "Randomize Treasure": "RANDOMIZE TREASURE",
     "Randomize Workshop Tools": "RANDOMIZE WORKSHOP TOOLS",
     "Randomize Enemy Drops": "RANDOMIZE ENEMY DROPS",
     "Randomize Starting Weapons": "RANDOMIZE STARTING WEAPONS",
     "Randomize Starting Guns": "RANDOMIZE STARTING GUNS",
     "Randomize Shop Weapons": "RANDOMIZE SHOP WEAPONS",
+    "Randomize Shop Armour": "RANDOMIZE SHOP ARMOUR",
+    "Randomize Shop Items": "RANDOMIZE SHOP ITEMS",
     "Start With Hunter Tools": "START WITH HUNTER TOOLS",
     "Start With A Trick Weapon": "START WITH A TRICK WEAPON",
     "Start With A Left Weapon": "START WITH A LEFT WEAPON",
+    "Start With Headwear": "START WITH HEADWEAR",
+    "Start With Body Armour": "START WITH BODY ARMOUR",
+    "Start With Gloves": "START WITH GLOVES",
+    "Start With Legwear": "START WITH LEGWEAR",
+    "Start With Supplies": "START WITH SUPPLIES",
     "Easy Shadows": "EASY SHADOWS",
     "Easy Rom": "EASY ROM",
     "Easy Failures": "EASY FAILURES",
@@ -432,7 +481,16 @@ for table, const in (("EnemyPoolTable.h", "kEnemyPoolModelCount"),
                      ("BossPoolTable.h", "kBossPoolModelCount"),
                      ("EnemySkipTable.h", "kEnemySkipModelCount"),
                      ("TrickWeaponTable.h", "kTrickWeaponCount"),
-                     ("LeftHandWeaponTable.h", "kLeftHandWeaponCount")):
+                     ("LeftHandWeaponTable.h", "kLeftHandWeaponCount"),
+                     ("InsertedBossTable.h", "kInsertedBossModelCount"),
+                     ("InsertAreaTable.h", "kInsertAreaCount"),
+                     # Feature 040's four all live in ONE header, unlike every
+                     # entry above - four tables, four counts, one generated
+                     # file - so the same file name appears four times here.
+                     ("ArmourTables.h", "kHeadwearCount"),
+                     ("ArmourTables.h", "kBodyArmourCount"),
+                     ("ArmourTables.h", "kGlovesCount"),
+                     ("ArmourTables.h", "kLegwearCount")):
     POOL_COUNTS[const] = int(re.search(r"const int %s = (\d+);" % const,
                                        read(os.path.join(RND, table))).group(1))
 
@@ -451,6 +509,18 @@ KIND_TO_COUNT = {
     "TrickWeaponPool": POOL_COUNTS["kTrickWeaponCount"],
     # And the fifth, feature 038's 14 left-hand weapons. Same treatment again.
     "LeftHandWeaponPool": POOL_COUNTS["kLeftHandWeaponCount"],
+    # Feature 013's two: 22 boss models that may arrive in the world, and the
+    # fourteen areas they may arrive in. The area rows are map-name prefixes and
+    # not creatures, but the SETTINGS row still draws "N OF 14", so it is
+    # measured like the rest.
+    "InsertedBossPool": POOL_COUNTS["kInsertedBossModelCount"],
+    "InsertAreaPool": POOL_COUNTS["kInsertAreaCount"],
+    # Feature 040's four armour slots. Same treatment again: each row draws
+    # "N OF M" and each M is its own slot's table size.
+    "HeadwearPool": POOL_COUNTS["kHeadwearCount"],
+    "BodyArmourPool": POOL_COUNTS["kBodyArmourCount"],
+    "GlovesPool": POOL_COUNTS["kGlovesCount"],
+    "LegwearPool": POOL_COUNTS["kLegwearCount"],
 }
 
 
@@ -460,6 +530,16 @@ def widest_value(entry):
         return max(("YES", "NO"), key=lambda s: width(s, ROW_SCALE))
     if entry["kind"] == "SaveChoice":
         return max(SAVE_CHOICE_VALUES, key=lambda s: width(s, ROW_SCALE))
+    # A NamedChoice's two words come from the row itself, which is the whole
+    # point of the kind - so this reads them rather than holding a second copy.
+    if entry["kind"] == "NamedChoice":
+        return max(entry["choices"], key=lambda s: width(s, ROW_SCALE))
+    # A Number draws its decimal value, so the widest is whichever value in
+    # [min, max] is widest - not necessarily the largest, in a proportional font.
+    if entry["kind"] == "Number":
+        lo, hi = entry["bounds"]
+        return max((str(n) for n in range(lo, hi + 1)),
+                   key=lambda s: width(s, ROW_SCALE))
     count = KIND_TO_COUNT[entry["kind"]]
     return max(("%d OF %d" % (n, count) for n in range(count + 1)),
                key=lambda s: width(s, ROW_SCALE))
@@ -862,7 +942,7 @@ def mirror_load(config, known):
 
 def main():
     entries, category_labels, rail_help, categories, declared_ids = parse_model()
-    bools, selections = parse_defaults()
+    bools, ints, selections = parse_defaults()
     cases = []
     detail = []
 
@@ -875,22 +955,54 @@ def main():
                   not missing and not twice and not unknown))
     if missing or twice or unknown:
         detail.append("   missing=%s twice=%s unknown=%s" % (missing, twice, unknown))
+    # Feature 013's count is the first int setting, and the same two failures
+    # apply to it as to a bool: a field with no row can never be changed, and a
+    # row with no field cannot compile.
+    numbered = [e["number"] for e in entries if e["number"]]
+    cases.append(("1: all %d int fields appear in exactly one entry" % len(ints),
+                  sorted(numbered) == sorted(ints)))
+    if sorted(numbered) != sorted(ints):
+        detail.append("   int fields=%s, Number rows=%s" % (ints, numbered))
     kinds = [e["kind"] for e in entries]
-    cases.append(("1: the five selection fields have exactly one entry each",
-                  len(selections) == 5 and
+    cases.append(("1: the eleven selection fields have exactly one entry each",
+                  len(selections) == 11 and
                   all(kinds.count(k) == 1 for k in ("EnemyPool", "EnemySkip",
                                                     "BossPool", "TrickWeaponPool",
-                                                    "LeftHandWeaponPool"))))
+                                                    "LeftHandWeaponPool",
+                                                    "InsertedBossPool",
+                                                    "InsertAreaPool",
+                                                    # Feature 040's four. Four
+                                                    # kinds and four fields, so
+                                                    # a slot wired to another
+                                                    # slot's selection shows up
+                                                    # here as a kind with two
+                                                    # entries or none.
+                                                    "HeadwearPool",
+                                                    "BodyArmourPool",
+                                                    "GlovesPool",
+                                                    "LegwearPool"))))
     # SaveChoice is the second bool-backed kind: it carries a flag exactly as a
     # Toggle does and differs only in how it is named and counted. The four
     # pool kinds carry none - START WITH A TRICK WEAPON and START WITH A
     # LEFT-HAND WEAPON deliberately have no boolean beside their selection
     # (spec 037, plan 4.2; feature 038 inherits it).
-    two_state = ("Toggle", "SaveChoice")
-    cases.append(("1: every entry is a toggle or a save choice with a flag, or a "
-                  "pool without one",
+    # NamedChoice is the third bool-backed kind (feature 013): it carries a flag
+    # exactly as the other two do and differs only in where its two words come
+    # from. Number carries an int pointer instead and no flag at all, which is
+    # the case this invariant has to keep separate - a Number row read as a
+    # toggle would be a bool member that does not exist.
+    two_state = ("Toggle", "SaveChoice", "NamedChoice")
+    cases.append(("1: every entry is a toggle, a save choice or a named choice "
+                  "with a flag, or a number or pool without one",
                   all((e["flag"] is not None) == (e["kind"] in two_state)
                       for e in entries)))
+    cases.append(("1: every NamedChoice declares both of its state words",
+                  all(e["choices"] and len(e["choices"]) == 2 and
+                      all(w.strip() for w in e["choices"])
+                      for e in entries if e["kind"] == "NamedChoice")))
+    cases.append(("1: every Number declares a min below its max",
+                  all(e["bounds"] and e["bounds"][0] < e["bounds"][1]
+                      for e in entries if e["kind"] == "Number")))
     cases.append(("1: exactly one SaveChoice entry, and it is SAVE DATA",
                   [e["label"] for e in entries if e["kind"] == "SaveChoice"] ==
                   ["SAVE DATA"]))
@@ -1904,6 +2016,16 @@ def main():
             # wrong length must leave the selection alone (checked in
             # trick_weapons_verify.py T14).
             values[key] = "0" * POOL_COUNTS["kTrickWeaponCount"]
+        elif key.startswith("armour_") and key.endswith("_included"):
+            # Feature 040's four, and the same fail-safe again at four more
+            # lengths - 33 / 34 / 26 / 31. Keyed off the count constant rather
+            # than written out, so adding a fifth slot cannot leave a key here
+            # loading as a literal "1".
+            const = {"armour_head_included": "kHeadwearCount",
+                     "armour_body_included": "kBodyArmourCount",
+                     "armour_gloves_included": "kGlovesCount",
+                     "armour_legwear_included": "kLegwearCount"}[key]
+            values[key] = "0" * POOL_COUNTS[const]
         elif key == "left_hand_weapons_included":
             # The same fail-safe again, at 14 characters rather than 78. The two
             # lines are DIFFERENT lengths on purpose: each is bound to one table,
@@ -1943,10 +2065,18 @@ def main():
     band = flag_right - row_x
 
     widest_label, widest_row = 0, ""
-    for table in ("EnemyPoolTable.h", "EnemySkipTable.h", "BossPoolTable.h"):
+    # InsertedBossTable.h and InsertAreaTable.h are feature 013's. The area rows
+    # draw no id column (plan 013 D3), so their label is the name alone - and
+    # their `model` is a map-name prefix, which the creature regex would not
+    # match anyway.
+    for table, show_row_id in (("EnemyPoolTable.h", True),
+                               ("EnemySkipTable.h", True),
+                               ("BossPoolTable.h", True),
+                               ("InsertedBossTable.h", True),
+                               ("InsertAreaTable.h", False)):
         src = read(os.path.join(RND, table))
-        for model, name in re.findall(r'"(c\d+)"\s*,\s*"([^"]+)"', src):
-            label = "%s %s" % (model.upper(), name)
+        for model, name in re.findall(r'"(\w+)"\s*,\s*"([^"]+)"', src):
+            label = "%s %s" % (model.upper(), name) if show_row_id else name
             w = width(label, PICKER_ROW_SCALE)
             if w > widest_label:
                 widest_label, widest_row = w, label

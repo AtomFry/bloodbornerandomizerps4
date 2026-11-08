@@ -1,31 +1,58 @@
 #!/usr/bin/env python3
-"""Starting weapon / shop weapon randomization verification.
+"""Shop listing randomization verification - weapons, armour and consumables.
 
 A PROPERTY VALIDATOR over the real item-data archive. It never re-derives which
-weapon should land in which slot - it checks invariants of generated output
+item should land in which listing - it checks invariants of generated output
 against trusted vanilla input.
+
+It owns ShopLineupParam, which is why TWO features are verified here rather than
+by two tools (spec 011 §6): backlog row 5 (RANDOMIZE STARTING WEAPONS / GUNS /
+SHOP WEAPONS) permutes the 644 equipType 0 listings and the five Hunter's Dream
+coffin rows, and backlog row 11 (RANDOMIZE SHOP ARMOUR / SHOP ITEMS) permutes the
+220 equipType 1 and 397 shufflable equipType 3 listings. Those three buckets are
+disjoint, and EVERY per-listing check below dispatches on the listing's VANILLA
+equipType byte - never on the numeric shape of an id, because weapon, armour and
+goods ids overlap and five goods ids also exist as EquipParamProtector row ids.
 
 The melee and firearm candidate lists are parsed straight out of the reference
 C# (RandomizeFunctions.cs rightHandList/leftHandList), NOT out of our
 StartingWeaponLists.h. That keeps the validator independent of the code it is
 validating: if the transcription into C++ were wrong, this would catch it.
 
-Invariants (docs/plans/starting-weapons.md):
-  SW-I1  only ShopLineupParam.param and EquipParamWeapon.param may differ
+Invariants (docs/plans/starting-weapons.md, docs/features/011-randomize-shop-items/):
+  SW-I1  only ShopLineupParam.param and EquipParamWeapon.param may differ.
+         EquipParamProtector.param and EquipParamGoods.param are read for the
+         existence checks and stay UNTOLERATED - feature 011 reads them and must
+         never write them
   SW-I2  within ShopLineupParam only equipId may differ; row ids and equipType intact
-  SW-I3  melee slots (2000-2002) get melee-list ids; gun slots (2010-2011) get firearms
-  SW-I4  every assigned equipId exists as a row in EquipParamWeapon
+  SW-I3  melee slots (2000-2002) get melee-list ids; gun slots (2010-2011) get
+         firearms - equipType 0 listings only
+  SW-I4  every assigned equipId on an equipType 0 listing exists as a row in
+         EquipParamWeapon
   SW-I5  the three melee slots are distinct, and so are the two gun slots
   SW-I6  within EquipParamWeapon only the four stat-requirement bytes may differ,
          and only on an assigned weapon or one of its +100n upgrade tiers
   SW-I7  each assigned slot's weapon carries that slot's stat profile on every
          tier that exists
-  SW-I8  shop rows outside the five slots are a permutation of vanilla stock
+  SW-I8  shop rows outside the five slots are a permutation of vanilla stock -
+         equipType 0 listings only
   SW-I9  the archive member list is unchanged
+  SW-I10 every assigned equipId on an equipType 1 listing exists as a row in
+         EquipParamProtector, and on an equipType 3 listing in EquipParamGoods
+  SW-I11 each bucket's output ids are a permutation of that bucket's vanilla ids
+  SW-I12 the buckets never cross: an id written into a listing was one that
+         listing's OWN bucket held in vanilla
+  SW-I13 the three never-touched ids (1000 Blood Vials, 900 Quicksilver Bullets,
+         240) are neither sources nor destinations - a listing selling one is
+         unchanged, and no listing is ever assigned one
+  SW-I14 a bucket that was NOT declared is byte-identical to vanilla, and a
+         declared one is either untouched or wholesale-changed - never partly
+         permuted
 
 Usage:
     python starting_weapons_verify.py pool     <vanilla_dvdroot>
     python starting_weapons_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
+                                               [--shop-armour] [--shop-items]
                                                [--granted <weapon id>]...
     python starting_weapons_verify.py selftest <vanilla_dvdroot>
 
@@ -36,9 +63,17 @@ run, and this tool does not care which hand a granted weapon went into - only
 which weapons were allowed to be restatted. Without the flag a correct combined
 run reports FAILED on three invariants that are working exactly as intended -
 see GRANT_PROFILE.
+
+--shop-armour and --shop-items say the run had feature 011's two settings on.
+They are DECLARATIONS, not tolerances: an undeclared bucket must come out
+byte-identical to vanilla, so passing neither is how an all-off run is checked,
+and passing one is how "the other setting stayed off" is checked. This tool
+cannot and does not predict which item a seed puts in a given listing -
+determinism is a hardware check.
 """
 
 import os
+import random
 import re
 import struct
 import sys
@@ -51,10 +86,34 @@ REL = os.path.join("param", "gameparam", "gameparam.parambnd.dcx")
 
 SHOP_MEMBER = "ShopLineupParam.param"
 WEAPON_MEMBER = "EquipParamWeapon.param"
+# Read-only, for SW-I10's existence check. Deliberately NOT added to the
+# tolerated set in compare(): feature 011 reads these two tables to know which
+# ids exist and writes neither, so a single changed byte in either is SW-I1.
+PROTECTOR_MEMBER = "EquipParamProtector.param"
+GOODS_MEMBER = "EquipParamGoods.param"
 
 SHOP_EQUIP_ID = 0     # s32
-SHOP_EQUIP_TYPE = 23  # u8, 0 = weapon
+SHOP_EQUIP_TYPE = 23  # u8: which table equipId indexes
 EQUIP_TYPE_WEAPON = 0
+EQUIP_TYPE_ARMOUR = 1
+EQUIP_TYPE_GOODS = 3
+
+# equipType -> (bucket name, the member its ids must exist in). The listing's
+# own vanilla byte picks the row; nothing here is inferred from an id's value.
+BUCKETS = {
+    EQUIP_TYPE_WEAPON: ("weapon", WEAPON_MEMBER),
+    EQUIP_TYPE_ARMOUR: ("armour", PROTECTOR_MEMBER),
+    EQUIP_TYPE_GOODS: ("items", GOODS_MEMBER),
+}
+
+# SW-I14's churn bound. A selection-sampling permutation over a whole bucket
+# either reshuffles it wholesale - about 5 of the 220 armour listings and 9 of
+# the 397 item listings are expected to draw the item they already had, since 44
+# distinct ids over 220 listings and 57 over 397 means each listing has about a
+# 2% chance of drawing its own - or, astronomically unlikely, comes out as the
+# identity. What it CANNOT do is leave most of the bucket holding its vanilla
+# item: that is a half-applied pass, and this is the bound that says so.
+DECLARED_CHURN_FRACTION = 0.5
 
 # EquipParamWeapon requirements are single bytes, not int32.
 PROPER_STRENGTH = 237
@@ -195,6 +254,27 @@ def cmd_pool(vanilla_root):
         print("NOTE %d list ids are not sold anywhere, so unreachable: %s"
               % (len(not_sold), not_sold))
 
+    # Feature 011's two buckets beside the weapon pool. Ids and counts only,
+    # never names: printing an item name on this console raises
+    # UnicodeEncodeError that reads like a parse failure (docs/known-traps.md),
+    # and this tool needs no FMG access at all.
+    all_shop = rows_of(plain, members, SHOP_MEMBER)
+    print()
+    for etype in (EQUIP_TYPE_ARMOUR, EQUIP_TYPE_GOODS):
+        name, member = BUCKETS[etype]
+        listings = [i32(plain, at + SHOP_EQUIP_ID) for at in all_shop.values()
+                    if plain[at + SHOP_EQUIP_TYPE] == etype]
+        shufflable = [e for e in listings if e not in NEVER_TOUCHED]
+        member_rows = set(rows_of(plain, members, member))
+        missing_ids = sorted(set(shufflable) - member_rows)
+        print("%s bucket: %d listings, %d shufflable, %d distinct   "
+              "(%d skipped by the never-touch list)"
+              % (name, len(listings), len(shufflable), len(set(shufflable)),
+                 len(listings) - len(shufflable)))
+        if missing_ids:
+            print("  WARNING %d sold ids have no %s row: %s"
+                  % (len(missing_ids), member, missing_ids))
+
     print("\nvanilla starting slots:")
     all_rows = rows_of(plain, members, SHOP_MEMBER)
     for rid in MELEE_SLOTS + GUN_SLOTS:
@@ -203,9 +283,14 @@ def cmd_pool(vanilla_root):
     return 0
 
 
-def compare(van_plain, van_members, out_plain, out_members, granted=None):
+def compare(van_plain, van_members, out_plain, out_members, granted=None,
+            shop_armour=False, shop_items=False):
     failures = []
     notes = []
+    # Which of feature 011's two buckets the run declared. equipType 0 is not in
+    # here on purpose: row 5's buckets have no declaration flag, and this
+    # feature must never write an equipType 0 listing at all.
+    declared = {EQUIP_TYPE_ARMOUR: shop_armour, EQUIP_TYPE_GOODS: shop_items}
     # `granted` is one id, several ids, or None. Normalised once here so every
     # use below reads the same whether the run had one grant or two.
     if granted is None:
@@ -247,14 +332,41 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
         failures.append("SW-I1 EquipParamWeapon row id set changed")
         return failures, notes, {}
 
+    # The id sets the three buckets' existence checks are made against, read from
+    # the VANILLA tree and read-only. SW-I4 has always used the weapon one; the
+    # other two are what makes an armour or consumable listing judgeable at all
+    # (F13). Before this the weapon check ran on every listing and an armour id
+    # failed it, so the tool was wrong in feature 011's presence.
+    bucket_row_ids = {
+        EQUIP_TYPE_WEAPON: set(van_weapons),
+        EQUIP_TYPE_ARMOUR: set(rows_of(van_plain, van_members, PROTECTOR_MEMBER)),
+        EQUIP_TYPE_GOODS: set(rows_of(van_plain, van_members, GOODS_MEMBER)),
+    }
+
+    # What each bucket held in vanilla: the multiset SW-I11 compares against and
+    # the set SW-I12 tests membership in. Keyed by the VANILLA equipType byte,
+    # and the three never-touched ids are excluded, because a listing selling one
+    # is not part of any permutation - SW-I13 requires it to be untouched.
+    van_bucket_ids = {t: [] for t in BUCKETS}
+    for rid, vat in van_shop.items():
+        vtype = van_plain[vat + SHOP_EQUIP_TYPE]
+        v_id = i32(van_plain, vat + SHOP_EQUIP_ID)
+        if vtype in van_bucket_ids and v_id not in NEVER_TOUCHED:
+            van_bucket_ids[vtype].append(v_id)
+
     # --- ShopLineupParam: only equipId may move -----------------------------
     assigned = {}
     slot_changed = 0
     shop_changed = 0
+    bucket_changed = {t: 0 for t in BUCKETS}
     for rid, vat in van_shop.items():
         oat = out_shop[rid]
         v_id = i32(van_plain, vat + SHOP_EQUIP_ID)
         o_id = i32(out_plain, oat + SHOP_EQUIP_ID)
+        # The bucket comes from the VANILLA byte, so a listing whose equipType
+        # was tampered with is still judged as what it was - and SW-I2 below
+        # catches the tampering itself.
+        vtype = van_plain[vat + SHOP_EQUIP_TYPE]
 
         if van_plain[vat + 4:vat + 32] != out_plain[oat + 4:oat + 32]:
             failures.append("SW-I2 shop row %d changed outside equipId" % rid)
@@ -262,23 +374,86 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
         if v_id == o_id:
             continue
 
-        if rid in STAT_PROFILES:
-            assigned[rid] = o_id
-            slot_changed += 1
-        else:
-            shop_changed += 1
-
-        if rid in MELEE_SLOTS and o_id not in melee_ids:
-            failures.append("SW-I3 melee slot %d assigned %d, not on the melee list"
-                            % (rid, o_id))
-        if rid in GUN_SLOTS and o_id not in gun_ids:
-            failures.append("SW-I3 gun slot %d assigned %d, not on the firearm list"
-                            % (rid, o_id))
-        if o_id not in van_weapons:
-            failures.append("SW-I4 row %d assigned %d, which has no EquipParamWeapon row"
-                            % (rid, o_id))
+        # SW-I13, both halves: a protected listing is not a destination, and a
+        # protected id is not a source. Applies to every bucket - the list is
+        # one list, shared by both features through Randomizer/ShopLineup.h.
+        if v_id in NEVER_TOUCHED:
+            failures.append("SW-I13 row %d sold never-touched id %d and was changed to %d"
+                            % (rid, v_id, o_id))
         if o_id in NEVER_TOUCHED:
-            failures.append("SW-I2 row %d assigned a never-touch id %d" % (rid, o_id))
+            failures.append("SW-I13 row %d assigned a never-touch id %d" % (rid, o_id))
+
+        if vtype in bucket_changed:
+            bucket_changed[vtype] += 1
+
+        # SW-I10 / SW-I4 - ONE existence check, dispatched on the bucket. Every
+        # id lands in the table its own listing points at, and nothing is
+        # inferred from how big the number is.
+        if vtype in BUCKETS:
+            _name, member = BUCKETS[vtype]
+            if o_id not in bucket_row_ids[vtype]:
+                code = "SW-I4" if vtype == EQUIP_TYPE_WEAPON else "SW-I10"
+                failures.append("%s row %d assigned %d, which has no %s row"
+                                % (code, rid, o_id, member))
+        else:
+            failures.append("SW-I12 row %d has equipType %d, which no feature writes, "
+                            "but changed %d -> %d" % (rid, vtype, v_id, o_id))
+
+        if vtype == EQUIP_TYPE_WEAPON:
+            # Row 5's territory, and these three checks are scoped to it: an
+            # armour or consumable id is not on either weapon list and does not
+            # belong to a coffin slot.
+            if rid in STAT_PROFILES:
+                assigned[rid] = o_id
+                slot_changed += 1
+            else:
+                shop_changed += 1
+
+            if rid in MELEE_SLOTS and o_id not in melee_ids:
+                failures.append("SW-I3 melee slot %d assigned %d, not on the melee list"
+                                % (rid, o_id))
+            if rid in GUN_SLOTS and o_id not in gun_ids:
+                failures.append("SW-I3 gun slot %d assigned %d, not on the firearm list"
+                                % (rid, o_id))
+        elif vtype in BUCKETS:
+            # SW-I12: feature 011's two buckets never cross. The existence check
+            # above cannot say this on its own - five goods ids also exist as
+            # EquipParamProtector row ids - so membership of the listing's own
+            # vanilla bucket is asserted separately.
+            name, _member = BUCKETS[vtype]
+            if o_id not in set(van_bucket_ids[vtype]):
+                failures.append("SW-I12 row %d is a %s listing but was assigned %d, "
+                                "which no %s listing sold in vanilla"
+                                % (rid, name, o_id, name))
+
+    # --- SW-I11 / SW-I14: feature 011's two buckets -------------------------
+    for vtype in (EQUIP_TYPE_ARMOUR, EQUIP_TYPE_GOODS):
+        name, _member = BUCKETS[vtype]
+        want = sorted(van_bucket_ids[vtype])
+        got = []
+        for rid, vat in van_shop.items():
+            if van_plain[vat + SHOP_EQUIP_TYPE] != vtype:
+                continue
+            if i32(van_plain, vat + SHOP_EQUIP_ID) in NEVER_TOUCHED:
+                continue
+            got.append(i32(out_plain, out_shop[rid] + SHOP_EQUIP_ID))
+        if want != sorted(got):
+            failures.append("SW-I11 the %s bucket is not a permutation of vanilla "
+                            "(%d listings, %d distinct in vanilla, %d in output)"
+                            % (name, len(want), len(set(want)), len(set(got))))
+
+        changed = bucket_changed[vtype]
+        if not declared[vtype]:
+            if changed:
+                failures.append("SW-I14 %d of the %d %s listings changed, but the run "
+                                "did not declare that bucket" % (changed, len(want), name))
+        elif changed and changed < DECLARED_CHURN_FRACTION * len(want):
+            failures.append("SW-I14 only %d of the %d declared %s listings changed - a "
+                            "whole-bucket permutation cannot leave that many holding "
+                            "their vanilla item" % (changed, len(want), name))
+        elif declared[vtype]:
+            notes.append("%s bucket declared: %d of %d listings changed"
+                         % (name, changed, len(want)))
 
     # SW-I5: distinctness within each group of slots.
     for label, group in (("melee", MELEE_SLOTS), ("gun", GUN_SLOTS)):
@@ -364,11 +539,17 @@ def compare(van_plain, van_members, out_plain, out_members, granted=None):
         notes.append("slot assignments: " +
                      ", ".join("%d->%d" % (r, w) for r, w in sorted(assigned.items())))
 
-    counts = {"slots": slot_changed, "shop": shop_changed, "stat_rows": stat_rows}
+    # "shop" is row 5's churn figure and counts equipType 0 listings ONLY - it
+    # was every changed non-slot listing before feature 011 existed, which would
+    # have folded the two features' counts into one number.
+    counts = {"slots": slot_changed, "shop": shop_changed, "stat_rows": stat_rows,
+              "armour": bucket_changed[EQUIP_TYPE_ARMOUR],
+              "items": bucket_changed[EQUIP_TYPE_GOODS]}
     return failures, notes, counts
 
 
-def cmd_verify(vanilla_root, output_root, granted=None):
+def cmd_verify(vanilla_root, output_root, granted=None, shop_armour=False,
+               shop_items=False):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when every param toggle was off")
@@ -377,12 +558,18 @@ def cmd_verify(vanilla_root, output_root, granted=None):
     out_plain, out_members = load_archive(output_root)
 
     print("vanilla decompressed=%d  output decompressed=%d" % (len(van_plain), len(out_plain)))
+    print("declared: %s" % (", ".join(
+        [n for n, on in (("--shop-armour", shop_armour), ("--shop-items", shop_items))
+         if on] + ["--granted %d" % g for g in (granted or ())]) or "nothing"))
     failures, notes, counts = compare(van_plain, van_members, out_plain, out_members,
-                                      granted=granted)
+                                      granted=granted, shop_armour=shop_armour,
+                                      shop_items=shop_items)
     if counts:
         print("starting slots changed: %d   other shop weapon rows changed: %d   "
               "weapon rows restatted: %d"
               % (counts["slots"], counts["shop"], counts["stat_rows"]))
+        print("shop armour listings changed: %d   shop item listings changed: %d"
+              % (counts["armour"], counts["items"]))
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -581,6 +768,182 @@ def cmd_selftest(vanilla_root):
     results.append(("038: two ids still reject a THIRD restatted weapon",
                     any("SW-I6" in x for x in fw2), []))
 
+    # --- feature 011: the two shop-stock declarations ------------------------
+    #
+    # S1-S11 of plan 011 §6. Every case above ran with neither flag and still
+    # holds, which is half of "an unmodified archive passes with no flags". These
+    # simulate output in Python - a seeded selection-sampling permutation over
+    # each bucket, the same shape ShopStock.cpp performs - and then break it one
+    # way at a time. Nothing here predicts WHICH item a seed puts in a listing;
+    # that is a hardware check.
+    def bucket_targets(etype):
+        """[(row id, absolute offset)] for one bucket's shufflable listings."""
+        out = []
+        for rid, at in sorted(shop.items()):
+            if van_plain[at + SHOP_EQUIP_TYPE] != etype:
+                continue
+            if i32(van_plain, at + SHOP_EQUIP_ID) in NEVER_TOUCHED:
+                continue
+            out.append((rid, at))
+        return out
+
+    armour_targets = bucket_targets(EQUIP_TYPE_ARMOUR)
+    item_targets = bucket_targets(EQUIP_TYPE_GOODS)
+
+    def permute(buf, etype, seed):
+        """Selection sampling, exactly ShopStock.cpp's loop, over one bucket."""
+        rng = random.Random(seed)
+        targets = bucket_targets(etype)
+        pool = [i32(van_plain, at + SHOP_EQUIP_ID) for _rid, at in targets]
+        for _rid, at in targets:
+            set_i32(buf, at + SHOP_EQUIP_ID, pool.pop(rng.randrange(len(pool))))
+
+    def ids_at(buf, targets):
+        return sorted(i32(buf, at + SHOP_EQUIP_ID) for _rid, at in targets)
+
+    def check(label, buf, expect, armour=False, items=False, granted=None):
+        """expect None -> must pass; a code string -> must be rejected for it."""
+        f, _, _ = compare(van_plain, van_members, buf, van_members, granted=granted,
+                          shop_armour=armour, shop_items=items)
+        ok = (not f) if expect is None else any(expect in x for x in f)
+        results.append((label, ok, f))
+
+    # S1 - an identity permutation is a permutation.
+    check("011 S1: an unmodified archive passes with BOTH flags",
+          bytearray(van_plain), None, armour=True, items=True)
+
+    # S2 / S3 - one bucket at a time, declared and undeclared.
+    armour_only = bytearray(van_plain)
+    permute(armour_only, EQUIP_TYPE_ARMOUR, 11)
+    check("011 S2: an armour-only permutation passes with --shop-armour",
+          armour_only, None, armour=True)
+    check("011 S2: the same bytes are REJECTED without it",
+          armour_only, "SW-I14")
+    check("011 S2: and declaring only --shop-items does not cover it",
+          armour_only, "SW-I14", items=True)
+
+    items_only = bytearray(van_plain)
+    permute(items_only, EQUIP_TYPE_GOODS, 12)
+    check("011 S3: an items-only permutation passes with --shop-items",
+          items_only, None, items=True)
+    check("011 S3: the same bytes are REJECTED without it",
+          items_only, "SW-I14")
+
+    # S4 - both at once, and the multisets checked here as well as by SW-I11.
+    both = bytearray(van_plain)
+    permute(both, EQUIP_TYPE_ARMOUR, 11)
+    permute(both, EQUIP_TYPE_GOODS, 12)
+    check("011 S4: both buckets permuted pass with both flags",
+          both, None, armour=True, items=True)
+    results.append(("011 S4: each bucket's %d and %d output ids equal vanilla's"
+                    % (len(armour_targets), len(item_targets)),
+                    ids_at(both, armour_targets) == ids_at(van_plain, armour_targets) and
+                    ids_at(both, item_targets) == ids_at(van_plain, item_targets), []))
+
+    # S5 - the buckets crossing. Five goods ids also exist as
+    # EquipParamProtector row ids, so the existence check alone cannot say this.
+    crossed = bytearray(both)
+    set_i32(crossed, armour_targets[0][1] + SHOP_EQUIP_ID,
+            i32(both, item_targets[0][1] + SHOP_EQUIP_ID))
+    set_i32(crossed, item_targets[0][1] + SHOP_EQUIP_ID,
+            i32(both, armour_targets[0][1] + SHOP_EQUIP_ID))
+    check("011 S5: an armour and a consumable listing trading ids is REJECTED",
+          crossed, "SW-I12", armour=True, items=True)
+
+    # S6 - an id with no row in the bucket's own table.
+    fabricated_armour = bytearray(both)
+    set_i32(fabricated_armour, armour_targets[1][1] + SHOP_EQUIP_ID, 987654321)
+    check("011 S6: an armour listing given an id with no EquipParamProtector row",
+          fabricated_armour, "SW-I10", armour=True, items=True)
+    fabricated_item = bytearray(both)
+    set_i32(fabricated_item, item_targets[1][1] + SHOP_EQUIP_ID, 987654321)
+    check("011 S6: a consumable listing given an id with no EquipParamGoods row",
+          fabricated_item, "SW-I10", armour=True, items=True)
+
+    # S7 - the three never-touched ids, in both directions. These 27 listings are
+    # the ones whose loss would end a playthrough.
+    vial_rows = [(rid, at) for rid, at in sorted(shop.items())
+                 if i32(van_plain, at + SHOP_EQUIP_ID) == 1000]
+    results.append(("011 S7: the vanilla tree really has Blood Vial listings to protect",
+                    len(vial_rows) >= 2, []))
+    swapped_vials = bytearray(both)
+    for (_vrid, vat), (_grid, gat) in zip(vial_rows[:2], item_targets[:2]):
+        keep = i32(both, gat + SHOP_EQUIP_ID)
+        set_i32(swapped_vials, gat + SHOP_EQUIP_ID, 1000)
+        set_i32(swapped_vials, vat + SHOP_EQUIP_ID, keep)
+    check("011 S7: trading two Blood Vial listings' ids away is REJECTED",
+          swapped_vials, "SW-I13", armour=True, items=True)
+    for protected in sorted(NEVER_TOUCHED):
+        planted = bytearray(both)
+        set_i32(planted, item_targets[2][1] + SHOP_EQUIP_ID, protected)
+        check("011 S7: writing never-touched id %d into a listing is REJECTED" % protected,
+              planted, "SW-I13", armour=True, items=True)
+
+    # S8 - anything but equipId, in a bucket the run DID declare. The equipType
+    # case above covers the byte the dispatch reads; this is one of the others.
+    price_touched = bytearray(both)
+    price_touched[item_targets[3][1] + 4] ^= 0xFF
+    check("011 S8: a byte of a listing outside equipId is REJECTED even when declared",
+          price_touched, "SW-I2", armour=True, items=True)
+    type_touched = bytearray(both)
+    type_touched[armour_targets[2][1] + SHOP_EQUIP_TYPE] = 9
+    check("011 S8: so is equipType, which is what the bucket dispatch reads",
+          type_touched, "SW-I2", armour=True, items=True)
+
+    # S9 - the two new members are READ, never written.
+    for member in (PROTECTOR_MEMBER, GOODS_MEMBER):
+        moff, _msize = van_members[member]
+        touched = bytearray(both)
+        touched[moff:moff + 4] = b"\xDE\xAD\xBE\xEF"
+        check("011 S9: one changed byte of %s is REJECTED" % member,
+              touched, "SW-I1", armour=True, items=True)
+
+    # S10 - a declared bucket is untouched or wholesale-changed, never partly
+    # permuted. About 5 of 220 and 9 of 397 listings are EXPECTED to hold their
+    # vanilla item, so reverting one more must not fail.
+    # Reverted by SWAPPING rather than by overwriting: a listing that holds its
+    # vanilla item inside a permutation is one extra fixed point, not a missing
+    # id, and SW-I11 would rightly reject the latter.
+    one_fixed = bytearray(both)
+    for targets in (armour_targets, item_targets):
+        _rid, at = targets[0]
+        want = i32(van_plain, at + SHOP_EQUIP_ID)
+        if i32(one_fixed, at + SHOP_EQUIP_ID) == want:
+            continue
+        other = next(o for _r, o in targets
+                     if i32(one_fixed, o + SHOP_EQUIP_ID) == want)
+        set_i32(one_fixed, other + SHOP_EQUIP_ID, i32(one_fixed, at + SHOP_EQUIP_ID))
+        set_i32(one_fixed, at + SHOP_EQUIP_ID, want)
+    check("011 S10: one listing per bucket holding its vanilla item still passes",
+          one_fixed, None, armour=True, items=True)
+    # A genuine permutation of the armour bucket that only moves the last 20
+    # listings - so SW-I11 holds and SW-I14 is the only thing left to catch it.
+    # That is what a half-applied pass looks like from the outside.
+    partial = bytearray(van_plain)
+    tail = armour_targets[200:]
+    tail_pool = [i32(van_plain, at + SHOP_EQUIP_ID) for _rid, at in tail]
+    tail_rng = random.Random(13)
+    for _rid, at in tail:
+        set_i32(partial, at + SHOP_EQUIP_ID, tail_pool.pop(tail_rng.randrange(len(tail_pool))))
+    check("011 S10: only 20 of the 220 armour listings moving is REJECTED",
+          partial, "SW-I14", armour=True, items=True)
+
+    # S11 - row 5, row 11 and a grant in one archive, which is the shape of the
+    # single hardware run plan 011 D2 takes. Then the same archive with one of
+    # row 5's own rules broken, to show the three declarations are not an
+    # amnesty for each other.
+    all_on = bytearray(good)
+    apply_grant(all_on, grant_weapon)
+    all_on[chara_off + 0x100] ^= 0xFF
+    permute(all_on, EQUIP_TYPE_ARMOUR, 11)
+    permute(all_on, EQUIP_TYPE_GOODS, 12)
+    check("011 S11: row 5 + row 11 + a grant passes with all three declarations",
+          all_on, None, armour=True, items=True, granted=grant_weapon)
+    all_on_broken = bytearray(all_on)
+    set_i32(all_on_broken, shop[2000] + SHOP_EQUIP_ID, gun_pool[0])
+    check("011 S11: row 5's melee rule still fails on that same archive",
+          all_on_broken, "SW-I3", armour=True, items=True, granted=grant_weapon)
+
     passed = 0
     for label, ok, detail in results:
         print("  %-58s %s" % (label, "OK" if ok else "MISSED"))
@@ -601,10 +964,20 @@ def main():
         i = args.index("--granted")
         granted.append(int(args[i + 1]))
         del args[i:i + 2]
+    # Feature 011's two declarations. Order-independent and combinable with
+    # --granted in any arrangement, because each is removed before the
+    # positional arguments are read.
+    shop_armour = "--shop-armour" in args
+    if shop_armour:
+        args.remove("--shop-armour")
+    shop_items = "--shop-items" in args
+    if shop_items:
+        args.remove("--shop-items")
     if len(args) >= 2 and args[0] == "pool":
         return cmd_pool(args[1])
     if len(args) >= 3 and args[0] == "verify":
-        return cmd_verify(args[1], args[2], granted=granted)
+        return cmd_verify(args[1], args[2], granted=granted,
+                          shop_armour=shop_armour, shop_items=shop_items)
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     print(__doc__)

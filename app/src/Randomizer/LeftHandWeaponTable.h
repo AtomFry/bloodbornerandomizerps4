@@ -41,8 +41,8 @@ namespace bbr {
 
 // Kept as a function-local static for the same reason as the pool tables:
 // header-only, no translation-unit duplication.
-inline const std::array<ModelPoolEntry, 14>& LeftHandWeaponTable() {
-    static const std::array<ModelPoolEntry, 14> kTable = {{
+inline const std::array<ModelPoolEntry, 16>& LeftHandWeaponTable() {
+    static const std::array<ModelPoolEntry, 16> kTable = {{
         { "15000000",  "CANNON",             1 },
         { "35000000",  "CHURCH CANNON",      1 },
         { "14100000",  "EVELYN",             1 },
@@ -57,10 +57,12 @@ inline const std::array<ModelPoolEntry, 14>& LeftHandWeaponTable() {
         { "36000000",  "PIERCING RIFLE",     1 },
         { "14200000",  "REPEATING PISTOL",   1 },
         { "18000000",  "ROSMARINUS",         1 },
+        { "20100000",  "TORCH",              1 },
+        { "19000000",  "WOODEN SHIELD",      1 },
     }};
     return kTable;
 }
 
-const int kLeftHandWeaponCount = 14;
+const int kLeftHandWeaponCount = 16;
 
 } // namespace bbr

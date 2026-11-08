@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 
+#include "BossInsertion.h"
 #include "EasyModes.h"
 #include "EnemyPoolSelection.h"
 
@@ -57,6 +58,14 @@ struct EnemyRandomizerResult {
     int startingGunsChanged = 0;
     int shopWeaponsChanged = 0;
 
+    // RANDOMIZE SHOP ARMOUR / SHOP ITEMS. How many listings of each bucket
+    // actually ended up holding a different item - 220 and 397 are the bucket
+    // sizes, and about 5 and 9 listings are expected to draw the item they
+    // already had, so a figure a little under each is correct. Two counters
+    // rather than one, because either setting may be on alone.
+    int shopArmourChanged = 0;
+    int shopItemsChanged = 0;
+
     // START WITH HUNTER TOOLS. How many CharaInitParam origin rows received
     // the two workshop key items, and how many item slots that took. Both
     // blocks of origin rows are written (see HunterTools.cpp), so the honest
@@ -64,6 +73,14 @@ struct EnemyRandomizerResult {
     // UI reports the feature as on rather than reporting this count.
     int hunterToolRowsChanged = 0;
     int hunterToolSlotsWritten = 0;
+
+    // START WITH SUPPLIES, feature 040 - the same two figures for the two
+    // consumables. Separate counters rather than the pair above reused, because
+    // both features can be on in one run and each fills its own two slots, and
+    // because a combined run filling four slots is the thing worth being able to
+    // read in the log.
+    int suppliesRowsChanged = 0;
+    int suppliesSlotsWritten = 0;
 
     // START WITH A TRICK WEAPON. The weapon id the run drew, 0 when nothing was
     // ticked and nothing was granted, and how many origin rows received it.
@@ -78,6 +95,22 @@ struct EnemyRandomizerResult {
     // features can be on in one run and each grants its own weapon.
     int32_t leftHandWeaponGranted = 0;
     int leftHandWeaponRowsChanged = 0;
+
+    // The four armour pickers, feature 040. One id per slot in the frozen slot
+    // order - head, body, gloves, legwear - 0 where that slot had nothing ticked
+    // and kept its vanilla garment. Ids rather than a count, because the UI names
+    // each piece on its own progress line and "wearing something" does not answer
+    // the player's question when a picker holds 34 rows.
+    //
+    // armourDraws is the raw rng() word count the pass consumed, and it is
+    // reported rather than inferred: it must be 0 or exactly 4 and nothing else,
+    // which is the property that makes the four slots independent of one another
+    // (spec 040 B6). A 1, 2 or 3 here would mean the draw loop learned to skip an
+    // empty slot, which is the one way this feature can quietly stop being
+    // deterministic.
+    int32_t armourGranted[4] = { 0, 0, 0, 0 };
+    int armourRowsChanged = 0;
+    int armourDraws = 0;
 
     // NO TEAM TYPE. How many NpcParam rows were put onto the one team type -
     // 31398 when the setting is on, 0 when it is off. The figure is FIXED, so
@@ -98,6 +131,15 @@ struct EnemyRandomizerResult {
     // small emissary that the enemy loop randomized and the easy pass then
     // overwrote. These four counts are the numbers to read instead.
     EasyModeCounts easyCounts;
+
+    // BOSSES CAN REPLACE ENEMIES (feature 013). How many ordinary placements
+    // became bosses, how many map files could not supply the count asked for,
+    // and how many identities the insertion pool held - 32 with everything
+    // ticked, 0 with nothing, which is the figure that tells a silent skip apart
+    // from a pass that ran and found nothing to do.
+    int insertedBosses = 0;
+    int insertShortfallMaps = 0;
+    int insertPoolSize = 0;
 };
 
 // What a run should actually do. Both may be off (the job then just mirrors
@@ -121,6 +163,14 @@ struct EnemyRandomizerOptions {
     bool randomizeStartingGuns = false;
     bool randomizeShopWeapons = false;
 
+    // RANDOMIZE SHOP ARMOUR and RANDOMIZE SHOP ITEMS - the other two thirds of
+    // the same shop table, each dealt back out within its own kind. Independent
+    // of each other and of the three above: the three equipType buckets are
+    // disjoint, so no two of these five passes ever write the same listing. See
+    // ShopStock.h.
+    bool randomizeShopArmour = false;
+    bool randomizeShopItems = false;
+
     // START WITH HUNTER TOOLS - puts the Blood Gem and Rune Workshop Tools
     // into every new character's starting inventory, so gems and runes can be
     // used from the first area instead of being dead weight until their
@@ -134,6 +184,15 @@ struct EnemyRandomizerOptions {
     // Not a randomizer: it draws no randomness and the same seed produces the
     // same world with it on or off, exactly like enableMergoDarkness.
     bool startWithHunterTools = false;
+
+    // START WITH SUPPLIES - grants 20 Blood Vials and 20 Quicksilver Bullets at
+    // character creation, into free inventory slots. See StartingSupplies.h.
+    //
+    // Not a randomizer: it draws no randomness and the same seed produces the
+    // same world with it on or off, exactly like startWithHunterTools above.
+    // Independent of that setting and of everything else - both may be on, and
+    // together they fill four of the ten item slots.
+    bool startWithSupplies = false;
 
     // START WITH A TRICK WEAPON - grants one of the 78 right-hand trick weapon
     // versions at character creation. See TrickWeaponGrant.h, including the
@@ -153,13 +212,38 @@ struct EnemyRandomizerOptions {
     // are the last two rolls of the run and neither moves an earlier one.
     LeftHandWeaponSelection leftHandWeapons;
 
+    // START WITH HEADWEAR / BODY ARMOUR / GLOVES / LEGWEAR - which armour pieces
+    // may be granted in each of the four slots. See ArmourGrant.h.
+    //
+    // FOUR selections and one pass: the four are separate settings, but they are
+    // drawn together because that is what makes each slot's draw independent of
+    // the other three (spec 040 B6). Pools and no booleans, like the two weapon
+    // pickers above: nothing ticked in a slot leaves that slot's vanilla garment
+    // alone. The pass runs LAST in the run, after both weapon grants, so its four
+    // draws cannot move any earlier roll.
+    HeadwearSelection   headwear;
+    BodyArmourSelection bodyArmour;
+    GlovesSelection     gloves;
+    LegwearSelection    legwear;
+
+    // True when any of the four armour pickers has anything ticked - the one test
+    // the armour pass is gated on, written once here because three call sites ask
+    // it and four || terms spelled out three times is three chances to forget a
+    // slot.
+    bool AnyArmourTicked() const {
+        return headwear.CountEnabled() > 0 || bodyArmour.CountEnabled() > 0 ||
+               gloves.CountEnabled() > 0 || legwear.CountEnabled() > 0;
+    }
+
     bool AnyParamFeature() const {
         return randomizeEnemyDrops || randomizeStartingWeapons ||
                randomizeStartingGuns || randomizeShopWeapons ||
-               startWithHunterTools ||
+               randomizeShopArmour || randomizeShopItems ||
+               startWithHunterTools || startWithSupplies ||
                noTeamType ||
                trickWeapons.CountEnabled() > 0 ||
-               leftHandWeapons.CountEnabled() > 0;
+               leftHandWeapons.CountEnabled() > 0 ||
+               AnyArmourTicked();
     }
 
     // The reference's "Randomize Workshop Tools" setting: when false, the two
@@ -252,6 +336,20 @@ struct EnemyRandomizerOptions {
     // slot that boss randomization filled, or that ENEMIES SKIPPED pinned,
     // becomes a larva anyway.
     EasyModeOptions easyModes;
+
+    // BOSSES CAN REPLACE ENEMIES and its seven modifiers (feature 013) - the
+    // second pass that writes boss identities over ordinary enemy placements.
+    // See BossInsertion.h, including why its position in StepWriteMap is
+    // behaviour and why an off run draws no randomness.
+    //
+    // Nested, following easyModes above, because the eight belong together and
+    // because the pass takes the whole struct: a caller that set seven of them
+    // would be a caller that forgot one.
+    //
+    // Independent of randomizeEnemies. A run may put bosses in the world without
+    // a single mob having moved, and with the shuffle on this pass writes last -
+    // a spot the shuffle filled with a crow can still become Ludwig.
+    InsertionOptions bossInsertion;
 };
 
 // A full run takes 10-20 seconds, which is far too long to spend inside one

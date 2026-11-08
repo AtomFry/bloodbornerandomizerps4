@@ -768,19 +768,38 @@ void WorldActivationJob::Step() {
             options.randomizeStartingWeapons = run.randomizeStartingWeapons;
             options.randomizeStartingGuns = run.randomizeStartingGuns;
             options.randomizeShopWeapons = run.randomizeShopWeapons;
+            options.randomizeShopArmour = run.randomizeShopArmour;
+            options.randomizeShopItems = run.randomizeShopItems;
             options.enableMergoDarkness = run.enableMergoDarkness;
             options.noTeamType = run.noTeamType;
             options.doNotRandomizeCagedDogs = run.doNotRandomizeCagedDogs;
             options.startWithHunterTools = run.startWithHunterTools;
+            options.startWithSupplies = run.startWithSupplies;
             options.easyModes.shadows = run.easyShadows;
             options.easyModes.rom = run.easyRom;
             options.easyModes.failures = run.easyFailures;
             options.easyModes.emissary = run.easyEmissary;
+            // Feature 013's eight. The two protections the insertion pass also
+            // honours - ENEMIES SKIPPED and DO NOT RANDOMIZE CAGED DOGS - are
+            // NOT set here: the job copies them from the enemy options itself,
+            // so this screen cannot set seven of the nine and look complete.
+            options.bossInsertion.enabled = run.bossesCanReplaceEnemies;
+            options.bossInsertion.exactCount = run.bossReplacementsExact;
+            options.bossInsertion.countPerMap = run.bossReplacementsPerMap;
+            options.bossInsertion.replaceAll = run.replaceAllEnemies;
+            options.bossInsertion.spaceOut = run.spaceOutInsertedBosses;
+            options.bossInsertion.keepEnemyAi = run.insertedBossKeepsEnemyAi;
+            options.bossInsertion.includedBosses = run.insertedBosses;
+            options.bossInsertion.areas = run.bossAreas;
             options.enemiesIncluded = run.enemiesIncluded;
             options.bossesIncluded = run.bossesIncluded;
             options.enemiesSkipped = run.enemiesSkipped;
             options.trickWeapons = run.trickWeapons;
             options.leftHandWeapons = run.leftHandWeapons;
+            options.headwear = run.headwear;
+            options.bodyArmour = run.bodyArmour;
+            options.gloves = run.gloves;
+            options.legwear = run.legwear;
 
             // The Enable wizard's run decision, kept verbatim, and reported
             // here rather than used to skip the run: a world with nothing
@@ -793,14 +812,24 @@ void WorldActivationJob::Step() {
                 run.randomizeEnemies || run.randomizeBosses || run.randomizeTreasure ||
                 run.randomizeEnemyDrops || run.randomizeStartingWeapons ||
                 run.randomizeStartingGuns || run.randomizeShopWeapons ||
+                run.randomizeShopArmour || run.randomizeShopItems ||
                 run.enableMergoDarkness || run.noTeamType ||
-                run.startWithHunterTools ||
+                run.startWithHunterTools || run.startWithSupplies ||
                 run.easyShadows || run.easyRom || run.easyFailures || run.easyEmissary ||
                 // A picker-only setting still gates a run: ticking one weapon
                 // and nothing else is a complete request, so it must not report
                 // "no randomizer settings are on" (spec 037 §7).
                 run.trickWeapons.CountEnabled() > 0 ||
-                run.leftHandWeapons.CountEnabled() > 0;
+                run.leftHandWeapons.CountEnabled() > 0 ||
+                // Feature 040's four, and the same rule a fourth to a seventh
+                // time: ticking one piece in one slot and nothing else is a
+                // complete request (spec 040 B14). Four terms and not
+                // AnyArmourTicked(), because this chain is `run.` - the stored
+                // recipe - and not the options struct that helper belongs to.
+                run.headwear.CountEnabled() > 0 ||
+                run.bodyArmour.CountEnabled() > 0 ||
+                run.gloves.CountEnabled() > 0 ||
+                run.legwear.CountEnabled() > 0;
             if (!anythingOn) {
                 s.Say("NO RANDOMIZER SETTINGS ARE ON - THE TREE IS A PLAIN MIRROR");
             }

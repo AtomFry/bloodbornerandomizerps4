@@ -3,6 +3,7 @@
 #include "BinUtil.h"
 
 #include <algorithm>
+#include <cstring>
 
 namespace bbr {
 
@@ -153,6 +154,22 @@ std::string GetName(const std::vector<uint8_t>& blob) {
 int32_t GetEntityID(const std::vector<uint8_t>& blob) {
     int64_t baseDataOffset = ReadI64LE(blob, 0xB0);
     return ReadI32LE(blob, (size_t)baseDataOffset);
+}
+
+Position GetPosition(const std::vector<uint8_t>& blob) {
+    // A float32 is read by reinterpreting the four little-endian bytes, not by
+    // casting the integer value: memcpy through a local is the only spelling of
+    // that with no aliasing question, and the compiler emits a plain load.
+    Position p;
+    float parts[3] = { 0.0f, 0.0f, 0.0f };
+    for (int i = 0; i < 3; i++) {
+        uint32_t bits = ReadU32LE(blob, 0x28 + (size_t)i * 4);
+        memcpy(&parts[i], &bits, sizeof(float));
+    }
+    p.x = parts[0];
+    p.y = parts[1];
+    p.z = parts[2];
+    return p;
 }
 
 int32_t GetEnemyThinkParamID(const std::vector<uint8_t>& blob) {

@@ -35,6 +35,17 @@ that weapon's requirement rows may carry the profile. Without the flag a correct
 combined run reports FAILED on G3 and G5, which are working exactly as intended.
 The tolerance is FIELD-SPECIFIC - a left-hand weapon in equip_Wep_Right, or a
 different id in equip_Wep_Left, is still a failure.
+
+--armour h,b,g,l says the run also had feature 040's four armour pickers on, and
+which piece each slot was granted: four comma-separated armour ids in the frozen
+slot order - head, body, gloves, legwear - with an EMPTY field meaning that slot
+was not granted and keeps its vanilla garment. "--armour ,281000,," is a
+body-armour-only run.
+
+It is FOUR SEPARATE PERMISSIONS and not a set of tolerated ids: each id is
+tolerated in ITS OWN clothing field and nowhere else. A head piece appearing in
+equip_Armer is the mistake four near-identical chains can actually make, and it is
+still a failure with the flag given.
 """
 
 import os
@@ -229,7 +240,8 @@ def apply_hunter_tools(plain, members, offs):
 
 # --- G1-G6, over a real or simulated output tree ----------------------------
 
-def compare(van, van_m, out, out_m, offs, ticked=None, granted_left=None):
+def compare(van, van_m, out, out_m, offs, ticked=None, granted_left=None,
+            armour=None):
     failures, notes = [], []
 
     # G6 / G1
@@ -270,6 +282,14 @@ def compare(van, van_m, out, out_m, offs, ticked=None, granted_left=None):
     if granted_left is not None:
         allowed += [offs["equip_Wep_Left"] + k for k in range(4)]
         notes.append("tolerating feature 038's grant of weapon %d" % granted_left)
+    # Feature 040 writes the four clothing fields of these same rows. --armour
+    # widens G3 by exactly the granted slots' own fields, each holding exactly the
+    # declared id - so a piece in another slot's field is still a failure.
+    if armour is not None:
+        for slot, f in enumerate(CLOTHING_FIELDS):
+            if armour[slot]:
+                allowed += [offs[f] + k for k in range(4)]
+        notes.append("tolerating feature 040's armour grant %s" % (armour,))
     granted_ids = set()
     rows_written = 0
 
@@ -303,8 +323,15 @@ def compare(van, van_m, out, out_m, offs, ticked=None, granted_left=None):
         if (i32(out, oa + offs[ITEM_FIELDS[0]]) != VANILLA_START_ITEM or
                 out[oa + offs[ITEM_NUM_FIELDS[0]]] != 1):
             failures.append("G3 origin row %d displaced the starting Hunter's Mark" % rid)
-        for f in CLOTHING_FIELDS:
-            if i32(van, va + offs[f]) != i32(out, oa + offs[f]):
+        for slot, f in enumerate(CLOTHING_FIELDS):
+            want = armour[slot] if armour is not None else 0
+            if want:
+                # Declared: that field must hold THAT id, in THAT slot.
+                got = i32(out, oa + offs[f])
+                if got != want:
+                    failures.append("G3 origin row %d has %d in %s, not the "
+                                    "tolerated %d" % (rid, got, f, want))
+            elif i32(van, va + offs[f]) != i32(out, oa + offs[f]):
                 failures.append("G3 origin row %d changed %s" % (rid, f))
 
     # G4
@@ -799,6 +826,63 @@ def cmd_selftest(root):
     cases.append(("038: --granted-left still rejects a DIFFERENT left-hand weapon",
                   any("G3" in x for x in f_wl), ""))
 
+    # --- 040: the --armour tolerance ---------------------------------------
+    #
+    # Every case above ran WITHOUT the flag and still holds. Feature 040 writes the
+    # four clothing fields of these same 22 rows, which G3 above otherwise forbids
+    # outright - and rightly, because those fields hold a real garment in vanilla.
+    #
+    # The mirror of feature 040's write is two lines, so it is written here rather
+    # than imported: importing starting_gear_verify.py from this file would make
+    # two tools mutually dependent for the sake of a loop.
+    armour_pick = [230000, 281000, 72000, 73000]
+
+    def with_armour(buf, picks):
+        for rid in ORIGIN_ROWS:
+            at = member_row_map(buf, van_m, CHARA_MEMBER)[rid]
+            for slot, f in enumerate(CLOTHING_FIELDS):
+                if picks[slot]:
+                    set_i32(buf, at + offs[f], picks[slot])
+
+    dressed = bytearray(van)
+    apply_grant(dressed, van_m, offs, saw_cleaver, GRANT_PROFILE)
+    with_armour(dressed, armour_pick)
+    f_ar, _ = compare(van, van_m, dressed, van_m, offs, ticked={saw_cleaver},
+                      armour=armour_pick)
+    cases.append(("040: a dressed run passes WITH --armour", not f_ar, f_ar))
+    f_no_ar, _ = compare(van, van_m, dressed, van_m, offs, ticked={saw_cleaver})
+    cases.append(("040: the same bytes are REJECTED without --armour",
+                  any("G3" in x for x in f_no_ar), f_no_ar[:2]))
+    wrong_piece = bytearray(dressed)
+    set_i32(wrong_piece, chara[2000] + offs[CLOTHING_FIELDS[1]], 301000)
+    f_wp, _ = compare(van, van_m, wrong_piece, van_m, offs, ticked={saw_cleaver},
+                      armour=armour_pick)
+    cases.append(("040: --armour still rejects a DIFFERENT piece in a row",
+                  any("G3" in x for x in f_wp), ""))
+    # A head piece in the BODY field, with every id declared - which a flag that
+    # tolerated a SET of ids rather than four separate permissions would pass.
+    crossed = bytearray(van)
+    apply_grant(crossed, van_m, offs, saw_cleaver, GRANT_PROFILE)
+    with_armour(crossed, [0, armour_pick[0], 0, 0])
+    f_cr, _ = compare(van, van_m, crossed, van_m, offs, ticked={saw_cleaver},
+                      armour=armour_pick)
+    cases.append(("040: --armour does NOT tolerate a piece in another slot's field",
+                  any("G3" in x for x in f_cr), ""))
+    # One slot declared, two written.
+    extra = bytearray(van)
+    apply_grant(extra, van_m, offs, saw_cleaver, GRANT_PROFILE)
+    with_armour(extra, [0, armour_pick[1], armour_pick[2], 0])
+    f_ex, _ = compare(van, van_m, extra, van_m, offs, ticked={saw_cleaver},
+                      armour=[0, armour_pick[1], 0, 0])
+    cases.append(("040: --armour with one slot declared rejects a second slot "
+                  "being written", any("G3" in x for x in f_ex), ""))
+    cases.append(("040: parse_armour needs four fields and rejects anything else",
+                  parse_armour("1,2,3,4") == [1, 2, 3, 4] and
+                  parse_armour(",281000,,") == [0, 281000, 0, 0] and
+                  parse_armour("1,2,3") is None and
+                  parse_armour("1,2,3,4,5") is None and
+                  parse_armour("1,x,3,4") is None, ""))
+
     # T14 - the config line.
     cases.append(("T14 a %d-character line round-trips" % EXPECTED_ROWS,
                   decode_selection("1" + "0" * (EXPECTED_ROWS - 1)) == [0], ""))
@@ -814,6 +898,28 @@ def cmd_selftest(root):
     return report(cases, notes)
 
 
+def parse_armour(text):
+    """Mirror of --armour h,b,g,l: four armour ids in the frozen slot order, an
+    empty field meaning that slot was not granted. Returns a 4-list of ints with 0
+    for "not granted", or None if the shape is wrong.
+
+    Four fields always, even when only one slot was granted, so the flag cannot be
+    written in a way that leaves which slot ambiguous."""
+    parts = text.split(",")
+    if len(parts) != 4:
+        return None
+    out = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            out.append(0)
+            continue
+        if not p.isdigit():
+            return None
+        out.append(int(p))
+    return out
+
+
 def decode_selection(line):
     """Mirror of ModelPoolSelection<78, false>::Decode. Returns the ticked
     indices, or None when the length guard rejects the line - which leaves the
@@ -823,7 +929,8 @@ def decode_selection(line):
     return [i for i, c in enumerate(line) if c != "0"]
 
 
-def cmd_verify(vanilla_root, output_root, ticked=None, granted_left=None):
+def cmd_verify(vanilla_root, output_root, ticked=None, granted_left=None,
+               armour=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when no param feature was on")
@@ -843,7 +950,8 @@ def cmd_verify(vanilla_root, output_root, ticked=None, granted_left=None):
         picked = {rows[i][0] for i in idx}
 
     failures, notes = compare(van, van_m, out, out_m, offs, ticked=picked,
-                              granted_left=granted_left)
+                              granted_left=granted_left,
+                              armour=armour)
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -888,6 +996,7 @@ def report(cases, notes=()):
 
 def main():
     args = list(sys.argv[1:])
+    armour = None
     ticked = None
     granted_left = None
     if "--ticked" in args:
@@ -898,13 +1007,22 @@ def main():
         i = args.index("--granted-left")
         granted_left = int(args[i + 1])
         del args[i:i + 2]
+    if "--armour" in args:
+        i = args.index("--armour")
+        armour = parse_armour(args[i + 1])
+        if armour is None:
+            print("--armour takes four comma-separated armour ids in slot order "
+                  "(head,body,gloves,legwear); an empty field means that slot was "
+                  "not granted")
+            return 2
+        del args[i:i + 2]
     if len(args) >= 2 and args[0] == "list":
         return cmd_list(args[1])
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     if len(args) >= 3 and args[0] == "verify":
         return cmd_verify(args[1], args[2], ticked=ticked,
-                          granted_left=granted_left)
+                          granted_left=granted_left, armour=armour)
     print(__doc__)
     return 2
 

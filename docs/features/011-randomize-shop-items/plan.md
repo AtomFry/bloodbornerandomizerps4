@@ -507,8 +507,14 @@ The developer's answers to §8, both taken 2026-09-28:
 
 ## 10. Changes during implementation
 
-Keep empty until implementation begins.
+All three milestones were implemented in one continuous pass on 2026-09-28. See
+`implementation-report.md` for the full account; these are the points at which
+the built code departs from §1–§7 as written.
 
 | Date | Change | Reason |
 | ---- | ------ | ------ |
-| | | |
+| 2026-09-28 | **The config byte arithmetic is rebased: 743 → 790 for the settings block and 794 → 841 for the worst-case `defaults.cfg`**, not the plan's 728 → 775 and 779 → 826. Affects the §3.3 hazard row, the §5 `RandomizerDefaultsStore.cpp` and `pool_verify.py` rows, §6's Config check, M2 change 7 and §9 P4 | Backlog row 27 was implemented and committed after this plan was approved, adding the key `no_team_type` (15 bytes with its "=1" and newline). The plan's figures were computed from a pre-row-27 baseline. The new figures are what `pool_verify.py selftest` reported before this feature's first edit — 743 and 794 — plus this plan's own +47 (24 for `randomize_shop_armour`, 23 for `randomize_shop_items`), and the exact-equality assertions were moved to them rather than to whatever the code happened to produce. Still inside `char buf[1024]`, with 234 bytes spare |
+| 2026-09-28 | **The new pass is called immediately after row 5's block, which is now *before* the `noTeamType` block rather than directly before the `startWithHunterTools` one** | Row 27 inserted its pass between the two positions §4.3 names. This position satisfies both halves of §4.3 literally — after every draw row 5 makes, before the two character-creation grants — and the `noTeamType` pass draws no randomness and writes a byte nothing here reads, so it commutes with this one either way |
+| 2026-09-28 | **Selftest S10's first half reverts a listing by SWAPPING two listings' ids, not by overwriting one with its vanilla value**, and its second half permutes only the last 20 of the 220 armour listings instead of reverting 200 of them | Taken literally, both break SW-I11: overwriting a listing with its vanilla id duplicates one id and loses another, so the bucket stops being a permutation and the tool rightly rejects it for that reason instead of the one the case is about. Both are now genuine permutations, which is what isolates SW-I14 — the property S10 exists to pin |
+| 2026-09-28 | **SW-I14's declared-bucket half reads "untouched or wholesale-changed", with a churn bound of half the bucket** (`DECLARED_CHURN_FRACTION`) | §6 S1 requires an unmodified archive to PASS with both flags, and §6 S10 requires a 20-of-220 partial permutation to be REJECTED with both flags. A bound of "some churn" fails S1 and a bound of "any churn is fine" fails S10; "zero, or more than half" is the only shape that satisfies both, and it is what a whole-bucket permutation can actually produce |
+| 2026-09-28 | **Writing a never-touched id into a listing is reported as SW-I13 rather than SW-I2** | §6 S7 assigns the skip list to SW-I13 for *any* listing. Keeping the old SW-I2 label for weapon rows would have meant two checks for one rule — the drift §3.1 forbids for the list itself. No existing selftest case asserted the old label |

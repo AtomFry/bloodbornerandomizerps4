@@ -63,6 +63,12 @@ const Glyph kGlyphs[] = {
     { ')',  { 0x30,0x18,0x0C,0x0C,0x0C,0x18,0x30,0x00 } },
     { '-',  { 0x00,0x00,0x00,0x7E,0x00,0x00,0x00,0x00 } },
     { ',',  { 0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x30 } },
+    // The solidus, added for feature 040's armour names: three of the 124
+    // pieces the game names carry one - and an unknown character here is a
+    // full-width BLANK column, not an error, so without this glyph those rows
+    // would read "KNIGHT'S TROUSERS DRESS" with a hole in the middle. The
+    // game's own text is never sanitised to avoid a missing glyph.
+    { '/',  { 0x06,0x06,0x0C,0x18,0x30,0x60,0x60,0x00 } },
     // The Hunter's Mark at codepoint 127, matching the atlas glyph baked by
     // app/tools/mark_glyph.py. This is the FALLBACK shape: it is drawn only
     // when FontAtlasInit fails and the whole UI is already in 8x8 blocks. An

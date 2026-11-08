@@ -16,13 +16,16 @@ shipped data is. What is NOT imported is anything about WHICH field is written o
 WHICH weapons are offered - this file owns that, and the membership rules come
 from gen_left_hand_table.py, which owns them once.
 
-THE ONE RULE THAT IS GENUINELY DIFFERENT. On the right hand the name test and the
-obtainability test agree on every candidate, and trick_weapons_verify.py asserts
-that agreement. On the left hand they do NOT: 16 of the 18 candidates are named
-and only 14 are obtainable, because the game names a Wooden Shield and a Torch it
-never gives a player. So L4 below asserts the disagreement in its own direction -
-obtainable implies named, never the reverse - and the picker is the intersection.
-Asserting agreement here would be asserting something false about correct data.
+THE RULE THIS FILE WAS WRITTEN AROUND HAS CHANGED. It was written to state a
+disagreement: 16 of the 18 candidates named and only 14 obtainable, the game
+naming a Wooden Shield and a Torch it supposedly never gives a player. That was an
+ARTEFACT, not a finding. gen_weapon_table.py's LOT_CATEGORY_WEAPON read 1, which
+is the armour category, so the lot half of the obtainability test was looking at
+the wrong data; the Shield and the Torch are in lot category 0 and are obtainable.
+Corrected on 2026-09-29, the two tests AGREE on this hand exactly as they do on
+the other, the table is 16 rows rather than 14, and L4 asserts that agreement in
+both directions. The one-directional implication - obtainable implies named - is
+kept as its own case, because that half must hold whatever else changes.
 
 WHAT THIS CANNOT DO. It pins the rules, not the C++ implementation of them. It
 cannot show the engine consults the table correctly, and it deliberately does not
@@ -36,8 +39,19 @@ Usage:
     python left_hand_weapons_verify.py list     <vanilla_dvdroot>
     python left_hand_weapons_verify.py selftest <vanilla_dvdroot>
     python left_hand_weapons_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
-                                               [--ticked <14-character line>]
+                                               [--ticked <16-character line>]
                                                [--granted-right <weapon id>]
+
+--armour h,b,g,l says the run also had feature 040's four armour pickers on, and
+which piece each slot was granted: four comma-separated armour ids in the frozen
+slot order - head, body, gloves, legwear - with an EMPTY field meaning that slot
+was not granted and keeps its vanilla garment. "--armour ,281000,," is a
+body-armour-only run.
+
+It is FOUR SEPARATE PERMISSIONS and not a set of tolerated ids: each id is
+tolerated in ITS OWN clothing field and nowhere else. A head piece appearing in
+equip_Armer is the mistake four near-identical chains can actually make, and it is
+still a failure with the flag given.
 """
 
 import os
@@ -75,18 +89,34 @@ EQUIP_WEP_RIGHT = "equip_Wep_Right"
 
 EXPECTED_CANDIDATES = 18   # tier-0 rows with leftHandEquipable set
 EXPECTED_NAMED = 16        # ...of which the game's own text names
-EXPECTED_ROWS = 14         # ...of which a shop or an item lot can give a player
+EXPECTED_ROWS = 16         # ...of which a shop or an item lot can give a player
 
-# How many of the 14 no origin can wield as the game ships them. Reported as an
+# 14 until 2026-09-29. gen_weapon_table.py's LOT_CATEGORY_WEAPON read 1, which is
+# ARMOUR - so the lot half of the obtainability test this feature GOVERNS on was
+# looking at the wrong category, and the Wooden Shield (19000000) and the Torch
+# (20100000) - in no shop, in lot category 0 - were wrongly excluded. Row 38
+# shipped 14 rows where it should have had 16. Correcting the constant made the
+# two membership tests AGREE on this hand, which is why L4 below now asserts
+# agreement rather than the disagreement this file was originally written around.
+
+# How many of the 16 no origin can wield as the game ships them. Reported as an
 # assertion because it is the measurement that justifies the profile existing at
-# all: five of fourteen, and they are the heavy end - the Cannon, the Church
-# Cannon, the Gatling Gun, Evelyn and the Repeating Pistol.
+# all: five of sixteen, and they are the heavy end - the Cannon, the Church
+# Cannon, the Gatling Gun, Evelyn and the Repeating Pistol. The two rows that
+# joined the table in 2026-09-29's lot-category fix - the Wooden Shield and the
+# Torch - are both wieldable by every origin, so this figure did not move.
 EXPECTED_UNWIELDABLE = 5
 
-# The one row in either hand's table with no upgrade tiers. Asserted as a COUNT
-# and reported as an id, never asserted as an id: "exactly one row is a base row
-# and nothing else" is the property, and which row it is is data.
-EXPECTED_TIERLESS = 1
+# How many rows in this table are a base row and nothing else - no +1..+10.
+# Asserted as a COUNT and reported as ids, never asserted as a list of ids: "this
+# many rows are a base row and nothing else" is the property, and which rows they
+# are is data. WeaponRequirementWriter skips a missing tier rather than treating
+# it as an error, which is what makes a tierless row a non-event.
+#
+# 1 until 2026-09-29: the Loch Shield was the only one until the lot-category fix
+# added the Wooden Shield and the Torch, neither of which has upgrade tiers
+# either.
+EXPECTED_TIERLESS = 3
 
 
 def strip_line_comments(text):
@@ -162,7 +192,8 @@ def apply_right_hand_grant(plain, members, offs, weapon):
 
 # --- G1-G6, over a real or simulated output tree ----------------------------
 
-def compare(van, van_m, out, out_m, offs, ticked=None, granted_right=None):
+def compare(van, van_m, out, out_m, offs, ticked=None, granted_right=None,
+            armour=None):
     failures, notes = [], []
 
     # G6 / G1
@@ -198,6 +229,14 @@ def compare(van, van_m, out, out_m, offs, ticked=None, granted_right=None):
     if granted_right is not None:
         allowed += [offs[EQUIP_WEP_RIGHT] + k for k in range(4)]
         notes.append("tolerating feature 037's grant of weapon %d" % granted_right)
+    # Feature 040 writes the four clothing fields of these same rows. --armour
+    # widens G3 by exactly the granted slots' own fields, each holding exactly the
+    # declared id - so a piece in another slot's field is still a failure.
+    if armour is not None:
+        for slot, f in enumerate(CLOTHING_FIELDS):
+            if armour[slot]:
+                allowed += [offs[f] + k for k in range(4)]
+        notes.append("tolerating feature 040's armour grant %s" % (armour,))
     granted_ids = set()
     rows_written = 0
 
@@ -231,8 +270,15 @@ def compare(van, van_m, out, out_m, offs, ticked=None, granted_right=None):
         if (i32(out, oa + offs[ITEM_FIELDS[0]]) != VANILLA_START_ITEM or
                 out[oa + offs[ITEM_NUM_FIELDS[0]]] != 1):
             failures.append("G3 origin row %d displaced the starting Hunter's Mark" % rid)
-        for f in CLOTHING_FIELDS:
-            if i32(van, va + offs[f]) != i32(out, oa + offs[f]):
+        for slot, f in enumerate(CLOTHING_FIELDS):
+            want = armour[slot] if armour is not None else 0
+            if want:
+                # Declared: that field must hold THAT id, in THAT slot.
+                got = i32(out, oa + offs[f])
+                if got != want:
+                    failures.append("G3 origin row %d has %d in %s, not the "
+                                    "tolerated %d" % (rid, got, f, want))
+            elif i32(van, va + offs[f]) != i32(out, oa + offs[f]):
                 failures.append("G3 origin row %d changed %s" % (rid, f))
 
     # G4
@@ -297,6 +343,28 @@ def baked_count():
     text = open(os.path.join(SRC, HEADER), encoding="utf-8").read()
     m = re.search(r"kLeftHandWeaponCount\s*=\s*(\d+)", text)
     return int(m.group(1)) if m else -1
+
+
+def parse_armour(text):
+    """Mirror of --armour h,b,g,l: four armour ids in the frozen slot order, an
+    empty field meaning that slot was not granted. Returns a 4-list of ints with 0
+    for "not granted", or None if the shape is wrong.
+
+    Four fields always, even when only one slot was granted, so the flag cannot be
+    written in a way that leaves which slot ambiguous."""
+    parts = text.split(",")
+    if len(parts) != 4:
+        return None
+    out = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            out.append(0)
+            continue
+        if not p.isdigit():
+            return None
+        out.append(int(p))
+    return out
 
 
 def decode_selection(line):
@@ -379,19 +447,31 @@ def cmd_selftest(root):
     cases.append(("L3 derivation by OBTAINABILITY alone gives %d rows" % EXPECTED_ROWS,
                   len(by_obtainable) == EXPECTED_ROWS, len(by_obtainable)))
 
-    # L4 - the direction that must hold, and the direction that must not be
-    # asserted. Feature 037's tool requires the two tests to AGREE; here that
-    # would be false about correct data, so what is asserted is the implication.
+    # L4 - the relationship between the two tests, which CHANGED on 2026-09-29.
+    #
+    # This file was written around a disagreement: 16 named rows against 14
+    # obtainable ones, the Wooden Shield and the Torch being named but
+    # unobtainable, and obtainability governing. That disagreement was an
+    # artefact. gen_weapon_table.py's LOT_CATEGORY_WEAPON read 1, which is the
+    # ARMOUR category, so the lot half of the obtainability test was looking at the
+    # wrong data and those two rows were wrongly excluded.
+    #
+    # With the constant corrected the two tests AGREE on this hand, exactly as they
+    # do on the other, so that is what is asserted now - in both directions, which
+    # is the stronger statement and the one feature 037's generator makes. The
+    # implication that used to be the only safe claim is kept as the first case
+    # because it is the half that must hold whatever else changes: a row a player
+    # can be handed but the inventory cannot label would mean the two sources
+    # describe different data.
     cases.append(("L4 every obtainable candidate is also NAMED",
                   by_obtainable <= by_name, sorted(by_obtainable - by_name)))
     cases.append(("L4 the picker is the intersection, %d rows" % EXPECTED_ROWS,
                   set(d["included"]) == (by_name & by_obtainable) and
                   len(d["included"]) == EXPECTED_ROWS, len(d["included"])))
     named_only = sorted(by_name - by_obtainable)
-    cases.append(("L4 the two tests disagree, and every row they disagree on is "
-                  "EXCLUDED",
-                  bool(named_only) and all(w not in set(d["included"])
-                                           for w in named_only), named_only))
+    cases.append(("L4 the two tests now AGREE, in both directions",
+                  not named_only and not (by_obtainable - by_name),
+                  (named_only, sorted(by_obtainable - by_name))))
     excluded = d["excluded"]
     cases.append(("L4 no excluded candidate is obtainable",
                   not [w for w in excluded if w in by_obtainable], ""))
@@ -688,6 +768,63 @@ def cmd_selftest(root):
                   req_writer_sequence([(GRANT, GRANT_PROFILE),
                                        (GRANT, (1, 1, 1, 1))]) == (1, 1, 1, 1), ""))
 
+    # --- 040: the --armour tolerance ---------------------------------------
+    #
+    # Every case above ran WITHOUT the flag and still holds. Feature 040 writes the
+    # four clothing fields of these same 22 rows, which G3 above otherwise forbids
+    # outright - and rightly, because those fields hold a real garment in vanilla.
+    #
+    # The mirror of feature 040's write is two lines, so it is written here rather
+    # than imported: importing starting_gear_verify.py from this file would make
+    # two tools mutually dependent for the sake of a loop.
+    armour_pick = [230000, 281000, 72000, 73000]
+
+    def with_armour(buf, picks):
+        for rid in ORIGIN_ROWS:
+            at = member_row_map(buf, van_m, CHARA_MEMBER)[rid]
+            for slot, f in enumerate(CLOTHING_FIELDS):
+                if picks[slot]:
+                    set_i32(buf, at + offs[f], picks[slot])
+
+    dressed = bytearray(van)
+    apply_grant(dressed, van_m, offs, evelyn, GRANT_PROFILE)
+    with_armour(dressed, armour_pick)
+    f_ar, _ = compare(van, van_m, dressed, van_m, offs, ticked={evelyn},
+                      armour=armour_pick)
+    cases.append(("040: a dressed run passes WITH --armour", not f_ar, f_ar))
+    f_no_ar, _ = compare(van, van_m, dressed, van_m, offs, ticked={evelyn})
+    cases.append(("040: the same bytes are REJECTED without --armour",
+                  any("G3" in x for x in f_no_ar), f_no_ar[:2]))
+    wrong_piece = bytearray(dressed)
+    set_i32(wrong_piece, chara[2000] + offs[CLOTHING_FIELDS[1]], 301000)
+    f_wp, _ = compare(van, van_m, wrong_piece, van_m, offs, ticked={evelyn},
+                      armour=armour_pick)
+    cases.append(("040: --armour still rejects a DIFFERENT piece in a row",
+                  any("G3" in x for x in f_wp), ""))
+    # A head piece in the BODY field, with every id declared - which a flag that
+    # tolerated a SET of ids rather than four separate permissions would pass.
+    crossed = bytearray(van)
+    apply_grant(crossed, van_m, offs, evelyn, GRANT_PROFILE)
+    with_armour(crossed, [0, armour_pick[0], 0, 0])
+    f_cr, _ = compare(van, van_m, crossed, van_m, offs, ticked={evelyn},
+                      armour=armour_pick)
+    cases.append(("040: --armour does NOT tolerate a piece in another slot's field",
+                  any("G3" in x for x in f_cr), ""))
+    # One slot declared, two written.
+    extra = bytearray(van)
+    apply_grant(extra, van_m, offs, evelyn, GRANT_PROFILE)
+    with_armour(extra, [0, armour_pick[1], armour_pick[2], 0])
+    f_ex, _ = compare(van, van_m, extra, van_m, offs, ticked={evelyn},
+                      armour=[0, armour_pick[1], 0, 0])
+    cases.append(("040: --armour with one slot declared rejects a second slot "
+                  "being written", any("G3" in x for x in f_ex), ""))
+    cases.append(("040: parse_armour needs four fields and rejects anything else",
+                  parse_armour("1,2,3,4") == [1, 2, 3, 4] and
+                  parse_armour(",281000,,") == [0, 281000, 0, 0] and
+                  parse_armour("1,2,3") is None and
+                  parse_armour("1,2,3,4,5") is None and
+                  parse_armour("1,x,3,4") is None, ""))
+
     # L15 - the config line.
     cases.append(("L15 a %d-character line round-trips" % EXPECTED_ROWS,
                   decode_selection("1" + "0" * (EXPECTED_ROWS - 1)) == [0], ""))
@@ -708,7 +845,8 @@ def cmd_selftest(root):
     return report(cases, notes)
 
 
-def cmd_verify(vanilla_root, output_root, ticked=None, granted_right=None):
+def cmd_verify(vanilla_root, output_root, ticked=None, granted_right=None,
+               armour=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when no param feature was on")
@@ -728,7 +866,7 @@ def cmd_verify(vanilla_root, output_root, ticked=None, granted_right=None):
         picked = {rows[i][0] for i in idx}
 
     failures, notes = compare(van, van_m, out, out_m, offs, ticked=picked,
-                              granted_right=granted_right)
+                              granted_right=granted_right, armour=armour)
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -748,6 +886,7 @@ def main():
     args = list(sys.argv[1:])
     ticked = None
     granted_right = None
+    armour = None
     if "--ticked" in args:
         i = args.index("--ticked")
         ticked = args[i + 1]
@@ -756,12 +895,22 @@ def main():
         i = args.index("--granted-right")
         granted_right = int(args[i + 1])
         del args[i:i + 2]
+    if "--armour" in args:
+        i = args.index("--armour")
+        armour = parse_armour(args[i + 1])
+        if armour is None:
+            print("--armour takes four comma-separated armour ids in slot order "
+                  "(head,body,gloves,legwear); an empty field means that slot was "
+                  "not granted")
+            return 2
+        del args[i:i + 2]
     if len(args) >= 2 and args[0] == "list":
         return cmd_list(args[1])
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     if len(args) >= 3 and args[0] == "verify":
-        return cmd_verify(args[1], args[2], ticked=ticked, granted_right=granted_right)
+        return cmd_verify(args[1], args[2], ticked=ticked,
+                          granted_right=granted_right, armour=armour)
     print(__doc__)
     return 2
 

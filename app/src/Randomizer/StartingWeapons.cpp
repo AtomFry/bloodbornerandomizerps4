@@ -4,6 +4,7 @@
 
 #include "StartingWeapons.h"
 
+#include "ShopLineup.h"
 #include "StartingWeaponLists.h"
 #include "WeaponRequirements.h"
 
@@ -14,15 +15,10 @@ namespace bbr {
 
 namespace {
 
-// Field offsets, from tools/param_offsets.py against the real paramdef.
-const size_t kShopEquipId   = 0;   // ShopLineupParam.equipId,   s32, 32-byte row
-const size_t kShopEquipType = 23;  // ShopLineupParam.equipType, u8
-const uint8_t kEquipTypeWeapon = 0;
-
-// The reference skips any shop row selling one of these regardless of type
-// (RandomizeFunctions.cs:635-638). Reproduced for fidelity; on real data none
-// of them are weapon rows, so it changes nothing today.
-const int32_t kNeverTouchEquipIds[] = { 1000, 900, 240 };
+// The field offsets, kEquipTypeWeapon and the never-touch list now live in
+// ShopLineup.h, because feature 011 writes the same table's armour and goods
+// rows and the two features' protection must not drift apart. No value changed
+// in the move, so this pass writes exactly the bytes it always did.
 
 // The five Hunter's Dream choices.
 const int32_t kMeleeSlotRows[] = { 2000, 2001, 2002 };
@@ -48,13 +44,6 @@ const StatProfile kStatProfiles[] = {
     { 2010, { 7, 9, 5, 0 } },
     { 2011, { 7, 9, 5, 0 } },
 };
-
-bool IsNeverTouched(int32_t equipId) {
-    for (int32_t v : kNeverTouchEquipIds) {
-        if (equipId == v) return true;
-    }
-    return false;
-}
 
 bool IsStartingSlotRow(int32_t rowId) {
     for (int32_t r : kMeleeSlotRows) {
@@ -112,7 +101,7 @@ bool RandomizeStartingWeapons(std::vector<uint8_t>& plain,
     for (const ParamRow& row : shopRows) {
         if (plain[row.dataOffset + kShopEquipType] != kEquipTypeWeapon) continue;
         int32_t equipId = ReadI32LE(plain, row.dataOffset + kShopEquipId);
-        if (IsNeverTouched(equipId)) continue;
+        if (IsNeverTouchedEquipId(equipId)) continue;
 
         std::vector<int32_t>* target = nullptr;
         if (IsMeleeWeaponId(equipId)) target = &meleePool;
@@ -179,7 +168,7 @@ bool RandomizeStartingWeapons(std::vector<uint8_t>& plain,
             if (plain[row.dataOffset + kShopEquipType] != kEquipTypeWeapon) continue;
             if (IsStartingSlotRow(row.id)) continue;
             int32_t equipId = ReadI32LE(plain, row.dataOffset + kShopEquipId);
-            if (IsNeverTouched(equipId)) continue;
+            if (IsNeverTouchedEquipId(equipId)) continue;
             targets.push_back(&row);
             stock.push_back(equipId);
         }

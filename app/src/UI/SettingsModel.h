@@ -75,8 +75,44 @@ enum class SettingCategory {
 // separate kind and not a parameter on the previous one, because the two are
 // separate selections of different sizes on different tables and the switches
 // below are where those pairings are stated.
+//
+// Feature 013 adds four, which is why there are eleven kinds and not eight:
+//
+// NamedChoice is a two-state setting whose states have NAMES, carried by the
+// row itself in choiceOff/choiceOn. It is what SaveChoice would have been if
+// SaveChoice were general, and it is a new kind rather than a reuse for two
+// verified reasons: SettingValueText hardcodes KEEP EXISTING / START FRESH
+// inside the SaveChoice case, and settings_ui_verify.py asserts that SAVE DATA
+// is the ONLY SaveChoice row. Both of those are load-bearing statements about
+// the save policy and neither should be loosened to let a boss setting share
+// it. Two rows use this kind - BOSS REPLACEMENTS and BOSS BEHAVIOUR.
+//
+// Number is an integer in [numberMin, numberMax], edited by Left/Right one
+// step at a time and clamped at both ends. A 0-15 range is reachable in at most
+// fifteen presses, so it needs no editor screen of its own; if a range ever
+// grows past what that tolerates, the seed editor is the model to copy. It is
+// the first kind with NO bool flag and NO selection, which is why
+// CountChangedSettings needs an explicit case for it - see WorldEditorScreen.cpp.
+//
+// InsertedBossPool and InsertAreaPool are the sixth and seventh pool kinds:
+// INSERTED BOSSES' 22 rows and AREAS INCLUDED's 14. Each is its own kind for
+// the same reason as all the others - ModelPoolSelection<22> and
+// ModelPoolSelection<14> are distinct types and cannot share a
+// pointer-to-member. InsertedBossPool is emphatically not BossPool: different
+// table, different harvest rules, different config key, different pass.
+// HeadwearPool, BodyArmourPool, GlovesPool and LegwearPool are feature 040's
+// four, and they are FOUR KINDS rather than one parameterised on a slot for the
+// same reason every kind above is its own: HeadwearSelection,
+// BodyArmourSelection, GlovesSelection and LegwearSelection are four distinct
+// types on four tables of 33 / 34 / 26 / 31 rows, so they cannot share a
+// pointer-to-member, and the switches below are where those four pairings are
+// stated once. Like the two weapon pools they are pools and NOT
+// toggle-plus-pools - each setting's entire state is its selection - so none of
+// them is in ToggleCount() or EnabledToggleCount() either (spec 040 B15).
 enum class SettingKind { Toggle, SaveChoice, EnemyPool, EnemySkip, BossPool,
-                         TrickWeaponPool, LeftHandWeaponPool };
+                         TrickWeaponPool, LeftHandWeaponPool, NamedChoice,
+                         Number, InsertedBossPool, InsertAreaPool,
+                         HeadwearPool, BodyArmourPool, GlovesPool, LegwearPool };
 
 // A stable name per setting. NEVER reordered and never reused: a screen asks
 // for a setting by identity, and nothing outside this file may assume an id's
@@ -88,15 +124,30 @@ enum class SettingId {
     DoNotRandomizeCagedDogs,
     RandomizeBosses,
     BossesIncluded,
+    BossesCanReplaceEnemies,
+    BossReplacements,
+    BossReplacementsPerMap,
+    ReplaceAllEnemies,
+    BossAreas,
+    InsertedBosses,
+    SpreadBossesOut,
+    BossBehaviour,
     RandomizeTreasure,
     RandomizeWorkshopTools,
     RandomizeEnemyDrops,
     RandomizeStartingWeapons,
     RandomizeStartingGuns,
     RandomizeShopWeapons,
+    RandomizeShopArmour,
+    RandomizeShopItems,
     StartWithHunterTools,
     StartWithTrickWeapon,
     StartWithLeftHandWeapon,
+    StartWithHeadwear,
+    StartWithBodyArmour,
+    StartWithGloves,
+    StartWithLegwear,
+    StartWithSupplies,
     EasyShadows,
     EasyRom,
     EasyFailures,
@@ -112,9 +163,20 @@ struct SettingDef {
     SettingKind     kind;
     const char*     label;           // the on-screen row label - today's shipped
                                      // wording, not the spec's prose name (§9 D2)
-    bool RandomizerDefaults::* flag; // Toggle and SaveChoice; nullptr for the
-                                     // three pool kinds
+    bool RandomizerDefaults::* flag; // Toggle, SaveChoice and NamedChoice;
+                                     // nullptr for the pool kinds and Number
     const char*     help;            // spec Appendix A, never empty
+
+    // EVERY MEMBER BELOW THIS LINE IS NEW AND MUST STAY BELOW IT. kSettings is
+    // aggregate-initialised and its rows stop at `help`; C++ value-initialises
+    // trailing missing initialisers, so adding members here leaves all 21
+    // shipped rows compiling and behaving exactly as they did. Adding one
+    // ABOVE `help` would mean editing every row in the table.
+    int RandomizerDefaults::* number; // Number only; nullptr otherwise
+    int             numberMin;        // inclusive, Number only
+    int             numberMax;        // inclusive, Number only
+    const char*     choiceOff;        // NamedChoice: what `false` is called
+    const char*     choiceOn;         // NamedChoice: what `true` is called
 };
 
 // The table, read only through the functions below so no screen indexes it.
@@ -126,22 +188,26 @@ const char*       CategoryLabel(SettingCategory category);
 int               CategorySize(SettingCategory category);
 const SettingDef& SettingInCategory(SettingCategory category, int index);
 
-// "YES"/"NO" for a toggle, "KEEP EXISTING"/"START FRESH" for SaveChoice,
-// "N OF M" for the four pool kinds.
+// "YES"/"NO" for a toggle, "KEEP EXISTING"/"START FRESH" for SaveChoice, the
+// row's own two words for a NamedChoice, the decimal value for a Number, and
+// "N OF M" for the six pool kinds.
 std::string SettingValueText(const SettingDef& def, const RandomizerDefaults& values);
 
-// THE ONLY WRITER of a setting. Flips a toggle or a SaveChoice whichever way
-// `direction` points - both have two states, so left and right do the same
-// thing to them - and is a no-op for the pool kinds, which are edited in their
-// picker. X never comes here: X advances, it does not change a value (spec §10
-// 9.2).
+// THE ONLY WRITER of a setting. Flips a toggle, a SaveChoice or a NamedChoice
+// whichever way `direction` points - all three have two states, so left and
+// right do the same thing to them - steps a Number by +1 or -1 with clamping,
+// which is the one kind where `direction` means something, and is a no-op for
+// the pool kinds, which are edited in their picker. X never comes here: X
+// advances, it does not change a value (spec §10 9.2).
 void AdjustSetting(const SettingDef& def, RandomizerDefaults& values, int direction);
 
-// True for the four settings X opens a picker for.
+// True for the six settings X opens a picker for. A Number and a NamedChoice
+// are edited in place by Left/Right, so X must do nothing on them either.
 bool IsDrillIn(const SettingDef& def);
 
 // The picker's four host-supplied pieces, so a host does not repeat the
-// switch on kind. SelectionFlags returns nullptr for a toggle.
+// switch on kind. SelectionFlags returns nullptr for anything that is not a
+// picker.
 //
 // Both hosting screens reach a picker entirely through IsDrillIn and these
 // four, so neither needed a line changed when the fourth kind arrived.

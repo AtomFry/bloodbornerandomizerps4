@@ -360,3 +360,32 @@ post-approval change belongs.
 **The label got cheaper as well as truer:** 392 px against 558, and the pane row
 485 px against 651. The app's widest row goes back to
 `START WITH A TRICK WEAPON` at 649 px, which `settings_ui_verify.py` now reports.
+
+---
+
+## 2026-09-29 — hardware test passed. Row 27 is DONE, and the suppression reading is confirmed.
+
+The developer reports all tests passing, which for this feature includes the
+paired-seed run the previous entry said was outstanding: `RANDOMIZE ENEMIES` on
+for both runs, one seed, toggling only `ENEMIES ON SAME TEAM`.
+
+That closes the question this feature spent its whole life on. **The pass
+suppresses the infighting that shuffling creates** — it does not create hostility,
+and never could, because 81.6% of placed creatures already share team 23. The
+label `ENEMIES ON SAME TEAM` (spec D4) states what the setting does, and the
+audit's measured 12.1%-off against 0%-on now has observation behind it rather
+than arithmetic alone.
+
+It also covers §6 item 7, the combination with `EASY SHADOWS`: the substituted
+larvae move from team 26 to 25 and **stayed harmless**. So plan §9 D1's refusal to
+exempt rows `252100`, `6071` and the 31 scaled variants was correct, and the
+unevidenced protection list `docs/enemy-exclusion-history.md` warns about was
+rightly not written.
+
+The backlog row is **DONE**. Nothing in the code changed for this entry.
+
+**One inference this does NOT license.** That the larvae survived the move to 25
+does not establish what 25 means, only that it does not make a passive creature
+hostile. The field's semantics remain an archetype relating a creature to the
+player, per the audit, and nothing here promotes that from a well-supported
+reading to a fact.

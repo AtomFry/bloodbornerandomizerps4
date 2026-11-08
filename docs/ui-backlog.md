@@ -30,9 +30,9 @@ Same meanings as the randomization backlog, so the two read alike:
 | # | Item | What it did | Status | Folder |
 |---|---|---|---|---|
 | U0a | Font atlas | Replaced the 8×8 bitmap font with an EB Garamond atlas | **DONE** | [features/font-atlas/](features/font-atlas/) |
-| U0b | Randomizer Settings UI | The six-category settings screen; re-modelled Setup Defaults | **BUILT** — none of the four milestones hardware-tested | [features/randomizer-settings-ui/](features/randomizer-settings-ui/) |
+| U0b | Randomizer Settings UI | The six-category settings screen; re-modelled Setup Defaults | **DONE** — hardware-tested and confirmed 2026-09-29 | [features/randomizer-settings-ui/](features/randomizer-settings-ui/) |
 | U0c | Worlds | Named playthroughs with their own save data; retired the Enable/Disable wizards | **DONE** — hardware test passed in full 2026-09-25 | [features/worlds/](features/worlds/) |
-| U0d | Startup screen | Replaced the streaming boot log with a loading screen | **BUILT** — awaiting hardware test | [features/startup-screen/](features/startup-screen/) |
+| U0d | Startup screen | Replaced the streaming boot log with a loading screen | **DONE** — hardware-tested and confirmed 2026-09-29 | [features/startup-screen/](features/startup-screen/) |
 
 U0d is the **precedent for U1 and U2 below**: same complaint (a screen that
 reads as a log), same intended fix (state what is happening, not every step
@@ -44,8 +44,8 @@ taken). Read its spec before specifying either.
 
 | # | Item | What it does | Status |
 |---|---|---|---|
-| U1 | **Simplify the activation screens** | Replaced the streaming per-phase log with the startup screen's loading shape, and success now hands straight to the `WORLDS` tab instead of a result screen | **BUILT** 2026-09-26 — **not yet hardware-tested**. See [features/U1-activation-screens/](features/U1-activation-screens/) |
-| U2 | **Condense the activation confirmation** | Replaced the 27-row scrolling review with two fixed tiers — five rows of what is about to happen, three of what this world is — that never scroll | **BUILT** 2026-09-26 — **not yet hardware-tested**. See [features/U2-confirm-screen/](features/U2-confirm-screen/) |
+| U1 | **Simplify the activation screens** | Replaced the streaming per-phase log with the startup screen's loading shape, and success now hands straight to the `WORLDS` tab instead of a result screen | **DONE** — hardware-tested and confirmed 2026-09-29 |
+| U2 | **Condense the activation confirmation** | Replaced the 27-row scrolling review with two fixed tiers — five rows of what is about to happen, three of what this world is — that never scroll | **DONE** — hardware-tested and confirmed 2026-09-29 |
 
 Both were built directly from these rows, without a spec or a plan, at the
 developer's request. Each folder holds an `implementation-report.md` and nothing
@@ -98,7 +98,7 @@ started fresh, and any refusal or store error (`storeError_`).
 
 | # | Item | What it does | Status | Cost |
 |---|---|---|---|---|
-| U4 | **Bloodborne menu styling** | Restyle every screen toward the game's own menus — warm near-black ground, gold headings, framed panels, banded selection, hairline row separators, a vignette, button glyphs. Not a layout change: the geometry U1, U2 and the settings screens settled stays put | **BUILT** 2026-09-27, all four passes — **not hardware-tested** | Medium, and spread across every screen |
+| U4 | **Bloodborne menu styling** | Restyle every screen toward the game's own menus — warm near-black ground, gold headings, framed panels, banded selection, hairline row separators, a vignette, button glyphs. Not a layout change: the geometry U1, U2 and the settings screens settled stays put | **DONE** — hardware-tested and confirmed 2026-09-29 | Medium, and spread across every screen |
 
 **Reference:** the in-game inventory screen (three framed columns, gold headings,
 parchment body text, banded selection, hairline separators, button glyphs in the

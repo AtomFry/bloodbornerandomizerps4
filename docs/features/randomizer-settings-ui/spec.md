@@ -316,9 +316,9 @@ go; the seed line, the randomizer steps and the completion lines are untouched.
 | Category | Settings (current) | Settings (backlog, when built) |
 |---|---|---|
 | **Enemies** | Randomize Enemies · Enemies Included · Enemies Skipped · Protect Caged Dogs | Randomize NPCs · Melee/Gun Movesets |
-| **Bosses** | Randomize Bosses · Bosses Included | Per-Zone Toggles · Include Lesser Bosses · Bosses Can Replace Enemies |
-| **Items & Treasure** | Randomize Treasure · Randomize Workshop Tools · Randomize Enemy Drops | Non-Key Overworld · Key Overworld (Logic) · Shop Items · Gems + Runes |
-| **Weapons & Starting Gear** | Randomize Starting Weapons · Randomize Starting Guns · Randomize Shop Weapons · Start With Hunter Tools · Start With A Trick Weapon · Start With A Left Weapon | — |
+| **Bosses** | Randomize Bosses · Bosses Included · Bosses Can Replace Enemies · Boss Replacements · Boss Replacements Per Map · Replace All Enemies · Areas Included · Inserted Bosses · Spread Bosses Out · Boss Behaviour | Include Lesser Bosses |
+| **Items & Treasure** | Randomize Treasure · Randomize Workshop Tools · Randomize Enemy Drops | Non-Key Overworld · Key Overworld (Logic) · Gems + Runes |
+| **Weapons & Starting Gear** | Randomize Starting Weapons · Randomize Starting Guns · Randomize Shop Weapons · Randomize Shop Armour · Randomize Shop Items · Start With Hunter Tools · Start With A Trick Weapon · Start With A Left Weapon · Start With Headwear · Start With Body Armour · Start With Gloves · Start With Legwear · Start With Supplies | — |
 | **Difficulty** | Easy Shadows · Easy Rom · Easy Failures · Easy Emissary | No Scaling · Custom Scaling |
 | **World** | Enable Mergo Darkness · No Team Type | Blood Decals · Face Data · Talk Data · VFX / AI Sound |
 

@@ -1388,27 +1388,67 @@ def source_cases():
         ("randomizeStartingWeapons", "randomizeStartingWeapons"),
         ("randomizeStartingGuns", "randomizeStartingGuns"),
         ("randomizeShopWeapons", "randomizeShopWeapons"),
+        # Feature 011 - and this pair is the ONLY evidence that the two labels
+        # are wired to their own flags rather than to each other's. Plan 011 D2
+        # took a single all-on hardware run, which cannot tell a crossed pair
+        # apart, so this case is not optional.
+        ("randomizeShopArmour", "randomizeShopArmour"),
+        ("randomizeShopItems", "randomizeShopItems"),
         ("enableMergoDarkness", "enableMergoDarkness"),
         ("noTeamType", "noTeamType"),
         ("doNotRandomizeCagedDogs", "doNotRandomizeCagedDogs"),
         ("startWithHunterTools", "startWithHunterTools"),
+        # Feature 040's toggle, mapped immediately after the one it sits beside
+        # in the settings pane and in the engine.
+        ("startWithSupplies", "startWithSupplies"),
         ("easyModes.shadows", "easyShadows"),
         ("easyModes.rom", "easyRom"),
         ("easyModes.failures", "easyFailures"),
         ("easyModes.emissary", "easyEmissary"),
+        # Feature 013's eight. Missed when row 13 was implemented, and invisible
+        # to `worlds_verify.py selftest` - which plan 013 §6 names - because this
+        # case lives in source_cases() and only `all` runs those. Added 2026-09-29.
+        #
+        # Eight entries rather than one grouped check, for feature 011's reason:
+        # six of the eight are bools assigned from bools, so a crossed pair would
+        # compile, behave plausibly and be invisible to every other check here.
+        ("bossInsertion.enabled", "bossesCanReplaceEnemies"),
+        ("bossInsertion.exactCount", "bossReplacementsExact"),
+        ("bossInsertion.countPerMap", "bossReplacementsPerMap"),
+        ("bossInsertion.replaceAll", "replaceAllEnemies"),
+        ("bossInsertion.spaceOut", "spaceOutInsertedBosses"),
+        ("bossInsertion.keepEnemyAi", "insertedBossKeepsEnemyAi"),
+        ("bossInsertion.includedBosses", "insertedBosses"),
+        ("bossInsertion.areas", "bossAreas"),
         ("enemiesIncluded", "enemiesIncluded"),
         ("bossesIncluded", "bossesIncluded"),
         ("enemiesSkipped", "enemiesSkipped"),
         ("trickWeapons", "trickWeapons"),
         ("leftHandWeapons", "leftHandWeapons"),
+        # Feature 040's four armour selections, mapped immediately after the two
+        # weapon selections and in the frozen slot order. Four entries and not
+        # one, for the same reason feature 011's pair is two: a single case could
+        # not tell a crossed pair apart, and four near-identical chains are where
+        # a crossing happens.
+        ("headwear", "headwear"),
+        ("bodyArmour", "bodyArmour"),
+        ("gloves", "gloves"),
+        ("legwear", "legwear"),
     ]
     WIZARD_RUN_DECISION = [
         "randomizeEnemies", "randomizeBosses", "randomizeTreasure",
         "randomizeEnemyDrops", "randomizeStartingWeapons", "randomizeStartingGuns",
-        "randomizeShopWeapons", "enableMergoDarkness",
+        "randomizeShopWeapons",
+        # Feature 011. A world whose only setting is one of these is a complete
+        # request, and it does rewrite the item-data archive.
+        "randomizeShopArmour", "randomizeShopItems",
+        "enableMergoDarkness",
         # Feature 027, NO TEAM TYPE - a world whose only setting is this one
         # is a complete request, and it does rewrite the item-data archive.
         "noTeamType", "startWithHunterTools",
+        # Feature 040. A world whose only setting is START WITH SUPPLIES is a
+        # complete request, and it does rewrite the item-data archive.
+        "startWithSupplies",
         "easyShadows", "easyRom", "easyFailures", "easyEmissary",
         # A picker-only setting still gates a run: ticking one weapon and
         # nothing else is a complete request (spec 037 section 7). It is LAST
@@ -1417,6 +1457,9 @@ def source_cases():
         # Feature 038, the same rule for the other hand: a world whose only
         # setting is one ticked left-hand weapon is a complete request too.
         "leftHandWeapons",
+        # Feature 040's four. A world whose only setting is one ticked piece in one
+        # slot is a complete request too (spec 040 B14).
+        "headwear", "bodyArmour", "gloves", "legwear",
     ]
 
     editor = code_of(read(os.path.join(SRC, "UI", "WorldEditorScreen.cpp")))
@@ -1462,7 +1505,8 @@ def source_cases():
     # one, still on the screen that always drew them.
     for field in ("randomizeEnemies", "randomizeBosses", "randomizeTreasure",
                   "randomizeEnemyDrops", "randomizeStartingWeapons",
-                  "randomizeStartingGuns", "randomizeShopWeapons"):
+                  "randomizeStartingGuns", "randomizeShopWeapons",
+                  "randomizeShopArmour", "randomizeShopItems"):
         cases.append(("the SKIPPING line for %s survived the rewrite" % field,
                       bool(re.search(r'if \(!run_\.%s\)\s+AddProgressLine\("SKIPPING '
                                      % field, editor))))

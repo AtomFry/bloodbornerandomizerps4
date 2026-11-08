@@ -19,6 +19,17 @@ Invariants:
   H-I4  every origin row ends holding BOTH tools, exactly once each, count 1
   H-I5  the vanilla starting item (1x goods 100) is never displaced
   H-I6  the archive still holds the same members
+  H-I7  no item slot holds anything OTHER than the Hunter's Mark and the two
+        tools - anything else has to be declared with a flag
+
+--shop-stock says the run also had one of the shop randomizers on - feature 5's
+RANDOMIZE SHOP WEAPONS or feature 11's RANDOMIZE SHOP ARMOUR / SHOP ITEMS. Those
+write ShopLineupParam.param, which H-I1 otherwise forbids. The flag tolerates
+that one member WHOLESALE and asserts nothing about it:
+app/tools/starting_weapons_verify.py owns that table's positive invariants, and
+this tool only has to be able to judge CharaInitParam in its presence. It exists
+because plan 011 D2 takes a SINGLE hardware run with everything on, so without it
+this tool would have no tree to speak about at all.
 
 This tool CANNOT prove the feature works in game. It proves the bytes land
 where they were meant to. Whether Bloodborne unlocks gem fitting on possession
@@ -30,6 +41,9 @@ Usage:
     python hunter_tools_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
                                            [--granted <weapon id>]
                                            [--granted-left <weapon id>]
+                                           [--supplies]
+                                           [--armour h,b,g,l]
+                                           [--shop-stock]
     python hunter_tools_verify.py selftest <vanilla_dvdroot>
 
 --granted <id> says the run also had feature 037's START WITH A TRICK WEAPON on
@@ -37,6 +51,26 @@ and that it granted that weapon. --granted-left <id> says the same of feature
 038's START WITH A LEFT WEAPON. Either flag may be given alone or both together.
 Without them a correct combined run reports FAILED on H-I1 and H-I3, which are
 working exactly as intended.
+
+--supplies says the run also had feature 040's START WITH SUPPLIES on. That
+feature writes the SAME item slots this one does, which is why H-I7 exists at
+all: without an invariant saying "nothing else is in these slots" the flag would
+be tolerating something already tolerated, and a supplies run that had gone into
+the WRONG slot - displacing a tool rather than taking a free one - would read as
+a pass. With the flag, goods 1000 and 900 may appear once each at count 20 and
+nothing else may; without it they are H-I7 failures. The Hunter's Mark and both
+tools must still be exactly where they were either way, which is the half of
+this that matters.
+--armour h,b,g,l says the run also had feature 040's four armour pickers on, and
+which piece each slot was granted: four comma-separated armour ids in the frozen
+slot order - head, body, gloves, legwear - with an EMPTY field meaning that slot
+was not granted and keeps its vanilla garment. "--armour ,281000,," is a
+body-armour-only run.
+
+It is FOUR SEPARATE PERMISSIONS and not a set of tolerated ids: each id is
+tolerated in ITS OWN clothing field and nowhere else. A head piece appearing in
+equip_Armer is the mistake four near-identical chains can actually make, and it is
+still a failure with the flag given.
 """
 
 import os
@@ -78,7 +112,20 @@ LOT_CATEGORY_GOODS = 4
 # The vanilla starting item every origin row carries, 1x.
 VANILLA_START_ITEM = 100
 
+# Feature 040's START WITH SUPPLIES writes the same item slots this feature does.
+# Tolerated under --supplies and never otherwise, and unlike the two weapon flags
+# this one is about the SLOTS rather than about a field: the two ids may appear
+# once each at count 20, in slots that were empty in vanilla. The count is each
+# goods row's own maxNum (starting_gear_verify.py A9), not a number chosen here.
+BLOOD_VIAL = 1000
+QUICKSILVER_BULLETS = 900
+SUPPLIES = (BLOOD_VIAL, QUICKSILVER_BULLETS)
+SUPPLY_COUNT = 20
+
 WEAPON_MEMBER = "EquipParamWeapon.param"
+# Tolerated wholesale under --shop-stock, and never otherwise. Written by the
+# five shop settings of backlog rows 5 and 11, none of which touch CharaInitParam.
+SHOP_MEMBER = "ShopLineupParam.param"
 
 # Feature 037's START WITH A TRICK WEAPON writes the SAME 22 origin rows, plus
 # the requirement bytes of one weapon. A combined run therefore breaks two of
@@ -104,10 +151,44 @@ WEAPON_MEMBER = "EquipParamWeapon.param"
 EQUIP_WEP_RIGHT = 16  # CHARACTER_INIT_PARAM.equip_Wep_Right, s32, -1 in vanilla
 EQUIP_WEP_LEFT = 24   # CHARACTER_INIT_PARAM.equip_Wep_Left,  s32, -1 in vanilla
 
+# Feature 040's four clothing fields, in the frozen slot order - head, body,
+# gloves, legwear. Tolerated one slot at a time under --armour and never
+# otherwise, and unlike the two weapon fields these are POPULATED in vanilla, so
+# an undeclared change here is a garment being taken away rather than a -1 being
+# filled in.
+EQUIP_CLOTHING = (32, 36, 40, 44)  # equip_Helm, equip_Armer, equip_Gaunt, equip_Leg
+
 # Every row HunterTools.cpp targets. Both ten-row blocks plus 3500/3501,
 # because the data cannot say which block the game reads - see the comment on
 # kOriginRows.
 ORIGIN_ROWS = tuple(list(range(2000, 2010)) + list(range(3000, 3010)) + [3500, 3501])
+
+
+def parse_armour(text):
+    """Mirror of --armour h,b,g,l: four armour ids in the frozen slot order, an
+    empty field meaning that slot was not granted. Returns a 4-list of ints with 0
+    for "not granted", or None if the shape is wrong.
+
+    Four fields always, even when only one slot was granted, so the flag cannot be
+    written in a way that leaves which slot ambiguous."""
+    parts = text.split(",")
+    if len(parts) != 4:
+        return None
+    out = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            out.append(0)
+            continue
+        if not p.isdigit():
+            return None
+        out.append(int(p))
+    return out
+
+
+def rnd_dir():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "src", "Randomizer")
 
 
 def i32(buf, off):
@@ -207,9 +288,17 @@ def check_vanilla(plain, members):
 
 # --- output comparison ------------------------------------------------------
 
-def compare(van, van_m, out, out_m, granted=None, granted_left=None):
+def compare(van, van_m, out, out_m, granted=None, granted_left=None,
+            shop_stock=False, supplies=False, armour=None):
     failures, notes = [], []
     tolerated = {CHARA_MEMBER}
+    if supplies:
+        notes.append("tolerating feature 040's supplies in free item slots")
+    if armour is not None:
+        notes.append("tolerating feature 040's armour grant %s" % (armour,))
+    if shop_stock:
+        tolerated.add(SHOP_MEMBER)
+        notes.append("tolerating a shop randomizer's writes to " + SHOP_MEMBER)
     if granted is not None:
         tolerated.add(WEAPON_MEMBER)
         notes.append("tolerating feature 037's grant of weapon %d" % granted)
@@ -271,6 +360,17 @@ def compare(van, van_m, out, out_m, granted=None, granted_left=None):
             got = i32(out, oa + EQUIP_WEP_LEFT)
             if got == granted_left:
                 set_i32(patched, EQUIP_WEP_LEFT, got)
+        if armour is not None:
+            # Feature 040, one slot at a time and each in ITS OWN field: the piece
+            # declared for a slot is patched in only where the output actually
+            # holds that piece in that slot's field, so a crossed write - a head
+            # piece landing in equip_Armer - is left as an H-I3 difference.
+            for slot, off in enumerate(EQUIP_CLOTHING):
+                if not armour[slot]:
+                    continue
+                got = i32(out, oa + off)
+                if got == armour[slot]:
+                    set_i32(patched, off, got)
         if patched != out[oa:oa + ROW_BYTES]:
             failures.append("H-I3 row %d changed outside item_* / itemNum_*" % rid)
 
@@ -292,6 +392,31 @@ def compare(van, van_m, out, out_m, granted=None, granted_left=None):
         if out_slots[0] != (VANILLA_START_ITEM, 1):
             failures.append("H-I5 row %d displaced the vanilla starting item: slot 0 is %r"
                             % (rid, out_slots[0]))
+
+        # H-I7: nothing ELSE is in the item slots. This is what makes every
+        # slot-writing feature declare itself, and it is the only check here that
+        # can catch a second feature's grant going into a slot that was not free -
+        # which looks identical to a correct run in H-I3 and H-I4, because both
+        # tools are still present and only the item arrays changed.
+        allowed = {VANILLA_START_ITEM: 1, TOOLS[0]: 1, TOOLS[1]: 1}
+        if supplies:
+            allowed[BLOOD_VIAL] = SUPPLY_COUNT
+            allowed[QUICKSILVER_BULLETS] = SUPPLY_COUNT
+        for k, (v, n) in enumerate(out_slots):
+            if v == EMPTY:
+                continue
+            if v not in allowed:
+                failures.append("H-I7 row %d slot %d holds undeclared item %d"
+                                % (rid, k, v))
+            elif n != allowed[v]:
+                failures.append("H-I7 row %d slot %d holds item %d at count %d, "
+                                "expected %d" % (rid, k, v, n, allowed[v]))
+        if supplies:
+            ids = [v for v, _n in out_slots]
+            for item in SUPPLIES:
+                if ids.count(item) != 1:
+                    failures.append("H-I7 row %d holds supply %d %d times, "
+                                    "expected 1" % (rid, item, ids.count(item)))
 
     if changed != len(targets):
         failures.append("H-I4 %d of %d origin rows changed" % (changed, len(targets)))
@@ -335,7 +460,8 @@ def cmd_rows(vanilla_root):
     return 0
 
 
-def cmd_verify(vanilla_root, output_root, granted=None, granted_left=None):
+def cmd_verify(vanilla_root, output_root, granted=None, granted_left=None,
+               shop_stock=False, supplies=False, armour=None):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when no param feature was on")
@@ -345,7 +471,9 @@ def cmd_verify(vanilla_root, output_root, granted=None, granted_left=None):
 
     print("vanilla decompressed=%d  output decompressed=%d" % (len(van), len(out)))
     failures, notes, changed = compare(van, van_m, out, out_m, granted=granted,
-                                       granted_left=granted_left)
+                                       granted_left=granted_left,
+                                       shop_stock=shop_stock, supplies=supplies,
+                                       armour=armour)
     for n in notes:
         print("  NOTE: " + n)
     if failures:
@@ -377,11 +505,13 @@ def cmd_selftest(vanilla_root):
                 set_i32(buf, at + ITEM_ID_BASE + k * 4, t)
                 buf[at + ITEM_NUM_BASE + k] = 1
 
-    def run(mutate, granted=None, granted_left=None):
+    def run(mutate, granted=None, granted_left=None, shop_stock=False,
+            supplies=False, armour=None):
         out = bytearray(van)
         mutate(out)
         f, _, _ = compare(van, van_m, out, van_m, granted=granted,
-                          granted_left=granted_left)
+                          granted_left=granted_left, shop_stock=shop_stock,
+                          supplies=supplies, armour=armour)
         return f
 
     # The identification and the vanilla preconditions, against real data.
@@ -536,6 +666,206 @@ def cmd_selftest(vanilla_root):
     results.append(("038: all three features on is REJECTED with only one flag",
                     bool(run(apply_all_three, granted=grant_weapon)), []))
 
+    # --- feature 040's --supplies tolerance ----------------------------------
+    #
+    # Same shape as the flags above: it passes with the flag, is rejected without
+    # it, and is not an amnesty for anything else. The last three cases are the
+    # ones that matter, because they are the mistake this feature can actually
+    # make - a supply written over a slot that was NOT free.
+    def apply_supplies(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            at = rows[rid]
+            s = [i32(buf, at + ITEM_ID_BASE + k * 4) for k in range(ITEM_SLOTS)]
+            free = [k for k in range(ITEM_SLOTS) if s[k] == EMPTY]
+            for item, k in zip(SUPPLIES, free):
+                set_i32(buf, at + ITEM_ID_BASE + k * 4, item)
+                buf[at + ITEM_NUM_BASE + k] = SUPPLY_COUNT
+
+    results.append(("040: tools and supplies together pass WITH --supplies",
+                    not run(apply_supplies, supplies=True),
+                    run(apply_supplies, supplies=True)))
+    results.append(("040: the same bytes are REJECTED without --supplies",
+                    bool(run(apply_supplies)), []))
+
+    def wrong_count(buf):
+        apply_supplies(buf)
+        at = rows[ORIGIN_ROWS[0]]
+        s = [i32(buf, at + ITEM_ID_BASE + k * 4) for k in range(ITEM_SLOTS)]
+        buf[at + ITEM_NUM_BASE + s.index(BLOOD_VIAL)] = 1
+    results.append(("040: --supplies still rejects a count other than 20",
+                    bool(run(wrong_count, supplies=True)), []))
+
+    def supply_over_a_tool(buf):
+        # The failure the invariant exists for: the supplies took slots 1 and 2
+        # instead of the free ones, so both tools are gone.
+        for rid in ORIGIN_ROWS:
+            at = rows[rid]
+            for item, k in zip(SUPPLIES, (1, 2)):
+                set_i32(buf, at + ITEM_ID_BASE + k * 4, item)
+                buf[at + ITEM_NUM_BASE + k] = SUPPLY_COUNT
+    results.append(("040: --supplies still rejects a supply that displaced a tool",
+                    bool(run(supply_over_a_tool, supplies=True)), []))
+
+    def supply_over_the_mark(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            at = rows[rid]
+            set_i32(buf, at + ITEM_ID_BASE, BLOOD_VIAL)
+            buf[at + ITEM_NUM_BASE] = SUPPLY_COUNT
+    results.append(("040: --supplies still rejects a supply in slot 0",
+                    bool(run(supply_over_the_mark, supplies=True)), []))
+
+    def third_consumable(buf):
+        apply_supplies(buf)
+        at = rows[ORIGIN_ROWS[0]]
+        s = [i32(buf, at + ITEM_ID_BASE + k * 4) for k in range(ITEM_SLOTS)]
+        k = [j for j in range(ITEM_SLOTS) if s[j] == EMPTY][0]
+        set_i32(buf, at + ITEM_ID_BASE + k * 4, 2000)
+        buf[at + ITEM_NUM_BASE + k] = 1
+    results.append(("040: --supplies is not an amnesty for a THIRD item",
+                    bool(run(third_consumable, supplies=True)), []))
+
+    # StartingSupplies.cpp's two ids and its count must agree with this tool, or
+    # both implementations are checking different numbers at once.
+    sup = open(os.path.join(rnd_dir(), "StartingSupplies.cpp"),
+               encoding="utf-8").read()
+    results.append(("040: StartingSupplies.cpp ids and count match this tool",
+                    ("kBloodVial          = %d" % BLOOD_VIAL) in sup and
+                    ("kQuicksilverBullets = %d" % QUICKSILVER_BULLETS) in sup and
+                    ("kSupplyCount = %d" % SUPPLY_COUNT) in sup, []))
+
+    # --- feature 040's --armour tolerance ------------------------------------
+    #
+    # The four clothing fields, unlike either weapon field, hold a REAL garment in
+    # vanilla, so an undeclared change here is a garment being taken away. The
+    # crossed-slot case is the one that earns the flag being four permissions and
+    # not a set of ids.
+    #
+    # The four ids are real rows of the four generated tables: Black Hood (230000,
+    # head), Hunter Garb (281000, body), Hunter Gloves (72000, gloves) and Hunter
+    # Trousers (73000, legwear). Each has its slot's own digit at id/1000 % 10,
+    # which is the property starting_gear_verify.py A8 establishes.
+    armour_pick = [230000, 281000, 72000, 73000]
+
+    def apply_armour(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            for slot, off in enumerate(EQUIP_CLOTHING):
+                set_i32(buf, rows[rid] + off, armour_pick[slot])
+
+    results.append(("040: tools and armour together pass WITH --armour",
+                    not run(apply_armour, armour=armour_pick),
+                    run(apply_armour, armour=armour_pick)))
+    results.append(("040: the same bytes are REJECTED without --armour",
+                    bool(run(apply_armour)), []))
+
+    def wrong_piece(buf):
+        apply_armour(buf)
+        set_i32(buf, rows[ORIGIN_ROWS[0]] + EQUIP_CLOTHING[1], 301000)
+    results.append(("040: --armour still rejects a DIFFERENT piece in a row",
+                    bool(run(wrong_piece, armour=armour_pick)), []))
+
+    def crossed_slots(buf):
+        # The head piece written into the BODY field. Every id is declared, so a
+        # flag that tolerated a SET of ids would pass this.
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_CLOTHING[1], armour_pick[0])
+    results.append(("040: --armour does NOT tolerate a piece in another slot's "
+                    "field", bool(run(crossed_slots, armour=armour_pick)), []))
+
+    def undeclared_slot(buf):
+        # Only the body slot declared, but the gloves field written too.
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_CLOTHING[1], armour_pick[1])
+            set_i32(buf, rows[rid] + EQUIP_CLOTHING[2], armour_pick[2])
+    results.append(("040: --armour with one slot declared rejects a second slot "
+                    "being written",
+                    bool(run(undeclared_slot, armour=[0, armour_pick[1], 0, 0])), []))
+
+    def body_only(buf):
+        apply_good(buf)
+        for rid in ORIGIN_ROWS:
+            set_i32(buf, rows[rid] + EQUIP_CLOTHING[1], armour_pick[1])
+    results.append(("040: a body-armour-only run passes with only that slot "
+                    "declared",
+                    not run(body_only, armour=[0, armour_pick[1], 0, 0]),
+                    run(body_only, armour=[0, armour_pick[1], 0, 0])))
+
+    # All six writers of these rows at once, which is what a fully-enabled
+    # hardware run will actually produce. Written out rather than composed from the
+    # helpers above, because apply_good() writes the tools unconditionally rather
+    # than through RowHasItem - calling three of these helpers in a row would put
+    # each tool in three slots and the case would be testing the helpers.
+    def apply_all_six(buf):
+        for rid in ORIGIN_ROWS:
+            at = rows[rid]
+            set_i32(buf, at + EQUIP_WEP_RIGHT, grant_weapon)
+            set_i32(buf, at + EQUIP_WEP_LEFT, left_weapon)
+            for slot, off in enumerate(EQUIP_CLOTHING):
+                set_i32(buf, at + off, armour_pick[slot])
+            for item, count in ((TOOLS[0], 1), (TOOLS[1], 1),
+                                (SUPPLIES[0], SUPPLY_COUNT),
+                                (SUPPLIES[1], SUPPLY_COUNT)):
+                s = [i32(buf, at + ITEM_ID_BASE + k * 4) for k in range(ITEM_SLOTS)]
+                k = [j for j in range(ITEM_SLOTS) if s[j] == EMPTY][0]
+                set_i32(buf, at + ITEM_ID_BASE + k * 4, item)
+                buf[at + ITEM_NUM_BASE + k] = count
+        woff, _ = van_m[WEAPON_MEMBER]
+        buf[woff + 0x80] ^= 0xFF
+
+    results.append(("040: all six writers of these rows on passes with every flag",
+                    not run(apply_all_six, granted=grant_weapon,
+                            granted_left=left_weapon, supplies=True,
+                            armour=armour_pick),
+                    run(apply_all_six, granted=grant_weapon,
+                        granted_left=left_weapon, supplies=True,
+                        armour=armour_pick)))
+    results.append(("040: ...and is REJECTED with the armour flag missing",
+                    bool(run(apply_all_six, granted=grant_weapon,
+                             granted_left=left_weapon, supplies=True)), []))
+
+    # parse_armour's own shape, because a flag that silently parses to the wrong
+    # thing is worse than one that refuses.
+    results.append(("040: parse_armour needs four fields and rejects anything else",
+                    parse_armour("1,2,3,4") == [1, 2, 3, 4] and
+                    parse_armour(",281000,,") == [0, 281000, 0, 0] and
+                    parse_armour("1,2,3") is None and
+                    parse_armour("1,2,3,4,5") is None and
+                    parse_armour("1,x,3,4") is None, []))
+
+    # --- 011 D3: the --shop-stock declaration --------------------------------
+    #
+    # The same shape as the two grant flags above: it passes with the flag, is
+    # rejected without it, and is not an amnesty for anything else.
+    shop_off, shop_size = van_m[SHOP_MEMBER]
+
+    def apply_with_shop(buf):
+        apply_good(buf)
+        for at in range(shop_off, shop_off + shop_size, 997):
+            buf[at] ^= 0xFF
+
+    results.append(("011: a shop-randomised tree passes WITH --shop-stock",
+                    not run(apply_with_shop, shop_stock=True),
+                    run(apply_with_shop, shop_stock=True)))
+    results.append(("011: the same bytes are REJECTED without --shop-stock",
+                    bool(run(apply_with_shop)), []))
+
+    def shop_plus_missing_tool(buf):
+        for at in range(shop_off, shop_off + shop_size, 997):
+            buf[at] ^= 0xFF
+    results.append(("011: --shop-stock still rejects the tools not being granted",
+                    bool(run(shop_plus_missing_tool, shop_stock=True)), []))
+
+    def shop_plus_other_member(buf):
+        apply_with_shop(buf)
+        off, _ = van_m[GOODS_MEMBER]
+        set_i32(buf, off + 0x40, 12345)
+    results.append(("011: --shop-stock still rejects a THIRD member changing",
+                    bool(run(shop_plus_other_member, shop_stock=True)), []))
+
     # The C++ constants must agree with the paramdef, or every offset above is
     # checking the wrong bytes in both implementations at once.
     #
@@ -587,6 +917,22 @@ def main():
     args = list(sys.argv[1:])
     granted = None
     granted_left = None
+    shop_stock = "--shop-stock" in args
+    if shop_stock:
+        args.remove("--shop-stock")
+    supplies = "--supplies" in args
+    if supplies:
+        args.remove("--supplies")
+    armour = None
+    if "--armour" in args:
+        i = args.index("--armour")
+        armour = parse_armour(args[i + 1])
+        if armour is None:
+            print("--armour takes four comma-separated armour ids in slot order "
+                  "(head,body,gloves,legwear); an empty field means that slot was "
+                  "not granted")
+            return 2
+        del args[i:i + 2]
     if "--granted-left" in args:
         i = args.index("--granted-left")
         granted_left = int(args[i + 1])
@@ -599,7 +945,8 @@ def main():
         return cmd_rows(args[1])
     if len(args) >= 3 and args[0] == "verify":
         return cmd_verify(args[1], args[2], granted=granted,
-                          granted_left=granted_left)
+                          granted_left=granted_left, shop_stock=shop_stock,
+                          supplies=supplies, armour=armour)
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     print(__doc__)

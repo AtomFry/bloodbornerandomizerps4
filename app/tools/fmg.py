@@ -50,6 +50,13 @@ from param_offsets import bnd4_members  # noqa: E402
 WEAPON_NAME_FMG = "武器名.fmg"         # weapon names
 WEAPON_DESC_FMG = "武器説明.fmg"   # weapon descriptions
 
+# Feature 040's two, spelled as escapes rather than as literals. The two above
+# predate this file being read on a cp1252 console; these are written the way
+# gen_armour_table.py's own comments are, so a grep for either member name finds
+# it and no editor has to round-trip the glyphs.
+ARMOUR_NAME_FMG = "防具名.fmg"          # armour names
+GOODS_NAME_FMG = "アイテム名.fmg"  # item (goods) names
+
 ITEM_MSGBND = os.path.join("msg", "engus", "item.msgbnd.dcx")
 
 GROUP_TABLE_OFFSET = 0x28
@@ -138,6 +145,27 @@ def weapon_names(root):
 
 def weapon_descriptions(root):
     entries, _count = load_fmg(root, WEAPON_DESC_FMG)
+    return entries
+
+
+def armour_names(root):
+    """{armour id: name as the game spells it}. Ids with no string are absent.
+
+    Feature 040's source of every picker row's label: the four armour tables are
+    ordered by this string and display it, so a name is READ at each exact id and
+    never composed from an outfit prefix - the same rule weapon_names() exists
+    for, and for the same reason (docs/features/040-starting-gear-selection).
+    """
+    entries, _count = load_fmg(root, ARMOUR_NAME_FMG)
+    return entries
+
+
+def goods_names(root):
+    """{goods id: name as the game spells it} - Blood Vial, Quicksilver Bullets
+    and the rest of the consumables. Read so starting_gear_verify.py can pin the
+    two ids START WITH SUPPLIES grants to the game's own text rather than to a
+    comment."""
+    entries, _count = load_fmg(root, GOODS_NAME_FMG)
     return entries
 
 

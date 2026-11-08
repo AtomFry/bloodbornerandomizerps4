@@ -9,6 +9,7 @@
 #include "../Platform/Log.h"
 #include "../Randomizer/EnemyRandomizer.h"
 #include "../Randomizer/RandomizerDefaultsStore.h"
+#include "../Randomizer/ArmourGrant.h"
 #include "../Randomizer/LeftHandWeaponGrant.h"
 #include "../Randomizer/TrickWeaponGrant.h"
 
@@ -861,6 +862,15 @@ int CountChangedSettings(const RandomizerDefaults& a, const RandomizerDefaults& 
             if ((left.*(def.flag)) != (right.*(def.flag))) changed++;
             continue;
         }
+        // A Number carries neither a flag nor a selection, so without this it
+        // would fall through to SelectionFlags, get nullptr, and a changed
+        // count would never be reported at all. Not a compile error and not
+        // something the "added fields are counted for free" comment above
+        // covers - that holds for bools and selections only.
+        if (def.kind == SettingKind::Number && def.number) {
+            if ((left.*(def.number)) != (right.*(def.number))) changed++;
+            continue;
+        }
         const bool* lf = SelectionFlags(def, left);
         const bool* rf = SelectionFlags(def, right);
         int count = SelectionCount(def);
@@ -1187,6 +1197,8 @@ void WorldEditorScreen::StartCommit() {
     if (!run_.randomizeStartingWeapons) AddProgressLine("SKIPPING STARTING WEAPON RANDOMIZATION");
     if (!run_.randomizeStartingGuns) AddProgressLine("SKIPPING STARTING GUN RANDOMIZATION");
     if (!run_.randomizeShopWeapons) AddProgressLine("SKIPPING SHOP WEAPON RANDOMIZATION");
+    if (!run_.randomizeShopArmour) AddProgressLine("SKIPPING SHOP ARMOUR RANDOMIZATION");
+    if (!run_.randomizeShopItems) AddProgressLine("SKIPPING SHOP ITEM RANDOMIZATION");
 
     // THE OPTIONS MAPPING AND THE RUN DECISION ARE GONE FROM THIS FILE, and
     // that is milestone 6's whole point about parity: they now exist once, in
@@ -1279,6 +1291,19 @@ void WorldEditorScreen::FinishCommit() {
                 AddProgressLine("RANDOMIZED " + std::to_string(result.shopWeaponsChanged) +
                                 " SHOP WEAPONS");
             }
+            // Feature 011, one line per bucket and a COUNT rather than a state,
+            // matching the shop weapon line above: the bucket sizes are fixed
+            // at 220 and 397, so a 0 or a wildly wrong figure means the row
+            // walk or the equipType filter is wrong. A few listings below each
+            // size is correct - a listing may be dealt the item it already had.
+            if (run_.randomizeShopArmour) {
+                AddProgressLine("RANDOMIZED " + std::to_string(result.shopArmourChanged) +
+                                " SHOP ARMOUR LISTINGS");
+            }
+            if (run_.randomizeShopItems) {
+                AddProgressLine("RANDOMIZED " + std::to_string(result.shopItemsChanged) +
+                                " SHOP ITEM LISTINGS");
+            }
             if (run_.randomizeEnemyDrops) {
                 AddProgressLine("RANDOMIZED " + std::to_string(result.dropsRandomized) +
                                 " ENEMY DROPS");
@@ -1309,6 +1334,15 @@ void WorldEditorScreen::FinishCommit() {
             if (run_.startWithHunterTools) {
                 AddProgressLine("STARTING WITH BOTH HUNTER WORKSHOP TOOLS");
             }
+            // Feature 040, and reported as a state for the same reason the line
+            // above is: the honest count covers both blocks of origin rows, so a
+            // player who picks one origin would read 22 as a defect. The line
+            // names the two amounts because those are what the player is about to
+            // see in the inventory, and 20 is the game's own maximum for each
+            // rather than a number this app chose.
+            if (run_.startWithSupplies) {
+                AddProgressLine("STARTING WITH 20 BLOOD VIALS AND 20 BULLETS");
+            }
             // Only when something was actually granted, and it names the
             // weapon: with several ticked the player's whole question is which
             // one the run drew, and the count of ticked rows does not answer it.
@@ -1331,6 +1365,26 @@ void WorldEditorScreen::FinishCommit() {
                                        ? std::string(granted)
                                        : std::to_string(result.leftHandWeaponGranted);
                 AddProgressLine("STARTING WITH " + what + " IN THE LEFT HAND");
+            }
+            // Feature 040 - one line per GRANTED slot, and only for the slots that
+            // were granted: a slot with nothing ticked kept its vanilla garment,
+            // which is not news. The line names the piece for the same reason the
+            // two above do - with several ticked the player's whole question is
+            // which one the run drew - and the name comes from the engine
+            // (ArmourGrant.h), so no screen file learns how an armour id is
+            // spelled or which table a slot uses.
+            //
+            // It does NOT say which slot. The four piece names are distinct
+            // enough that a player reads WEARING HUNTER GARB and knows what it
+            // is, and naming the slot would make the widest line - a 30-character
+            // name - overflow the 71-character fallback budget.
+            for (int slot = 0; slot < 4; slot++) {
+                if (result.armourGranted[slot] == 0) continue;
+                const char* piece = ArmourPieceName(slot, result.armourGranted[slot]);
+                std::string wearing =
+                    piece != nullptr ? std::string(piece)
+                                     : std::to_string(result.armourGranted[slot]);
+                AddProgressLine("WEARING " + wearing);
             }
             // One line per ENABLED easy setting, each carrying its count
             // (plan 018 P2). No SKIPPING counterparts, for the same reason
@@ -1355,6 +1409,31 @@ void WorldEditorScreen::FinishCommit() {
                 AddProgressLine("EASY EMISSARY REPLACED " +
                                 std::to_string(result.easyCounts.emissary) + " PLACEMENTS");
             }
+            // Feature 013, and only when the master switch is on. Three lines,
+            // because the three say different things and a player needs all
+            // three: what happened, that nothing happened ON PURPOSE, and that
+            // a map could not supply what was asked.
+            //
+            // The silent-skip line is the one worth arguing about. Spec 013 D-G
+            // makes an empty INSERTED BOSSES selection skip the pass with no
+            // error, nothing refused at commit and no warning - so this is not a
+            // warning. It is the run reporting what it did, in the same voice as
+            // every line above, because a player who ticked the master switch and
+            // saw no bosses would otherwise have nothing to read.
+            if (run_.bossesCanReplaceEnemies) {
+                if (run_.insertedBosses.NoneEnabled()) {
+                    AddProgressLine("NO INSERTED BOSSES TICKED - NO BOSSES PLACED");
+                } else if (run_.bossAreas.NoneEnabled()) {
+                    AddProgressLine("NO AREAS TICKED - NO BOSSES PLACED");
+                } else {
+                    AddProgressLine("PLACED " + std::to_string(result.insertedBosses) +
+                                    " BOSSES IN THE WORLD");
+                }
+                if (result.insertShortfallMaps > 0) {
+                    AddProgressLine(std::to_string(result.insertShortfallMaps) +
+                                    " MAPS HELD FEWER CREATURES THAN ASKED FOR");
+                }
+            }
             // Only when it did something - an all-enabled pool is the default
             // and saying so every run is noise.
             if (run_.randomizeEnemies && !run_.enemiesIncluded.AllEnabled()) {
@@ -1378,9 +1457,15 @@ void WorldEditorScreen::FinishCommit() {
             // features ran, so report it once rather than per feature.
             if (run_.randomizeEnemyDrops || run_.randomizeStartingWeapons ||
                 run_.randomizeStartingGuns || run_.randomizeShopWeapons ||
-                run_.startWithHunterTools || run_.noTeamType ||
+                run_.randomizeShopArmour || run_.randomizeShopItems ||
+                run_.startWithHunterTools || run_.startWithSupplies ||
+                run_.noTeamType ||
                 run_.trickWeapons.CountEnabled() > 0 ||
-                run_.leftHandWeapons.CountEnabled() > 0) {
+                run_.leftHandWeapons.CountEnabled() > 0 ||
+                run_.headwear.CountEnabled() > 0 ||
+                run_.bodyArmour.CountEnabled() > 0 ||
+                run_.gloves.CountEnabled() > 0 ||
+                run_.legwear.CountEnabled() > 0) {
                 AddProgressLine("ITEM DATA " + std::to_string(result.itemDataMembers) +
                                 " ENTRIES, WROTE " +
                                 std::to_string(result.itemDataWrittenBytes / 1048576) + " MB");

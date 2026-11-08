@@ -15,7 +15,8 @@ dvdroot tree:
      nor the placeholder "*".
   4. The id is obtainable in vanilla: sold in a ShopLineupParam.param row with
      equipType == 0, or present in an ItemLotParam.param slot whose matching
-     lotItemCategory is 1.
+     lotItemCategory is 0. (Category 0 is WEAPONS; category 1 is armour. This
+     read 1 until 2026-09-29 - see LOT_CATEGORY_WEAPON.)
 
 Tests 3 and 4 are independent measurements of the same question - "is this a
 weapon a player can actually get" - and on the shipped data they agree on every
@@ -67,11 +68,20 @@ SHOP_EQUIP_ID = 0
 SHOP_EQUIP_TYPE = 23
 SHOP_ROW_TYPE_WEAPON = 0
 
-# ItemLotParam: eight (id, category) pairs. Category 1 is "weapon".
+# ItemLotParam: eight (id, category) pairs.
+#
+# Category 0 is WEAPONS and category 1 is ARMOUR - measured, 63 weapon ids
+# against 3 protector in category 0, and 99 protector against 2 weapon in
+# category 1. This constant read 1 until 2026-09-29, which made the lot half of
+# the obtainability test look at armour. TrickWeaponTable.h was unaffected (all
+# 78 of its rows are in a shop listing, so the OR never needed the lot half) but
+# LeftHandWeaponTable.h was not: obtainability GOVERNS there, and the Torch and
+# the Wooden Shield - in no shop, in lot category 0 - were wrongly excluded, so
+# row 38 shipped 14 rows where it should have had 16.
 LOT_ITEM_ID = 0
 LOT_ITEM_CATEGORY = 32
 LOT_SLOTS = 8
-LOT_CATEGORY_WEAPON = 1
+LOT_CATEGORY_WEAPON = 0
 
 PLACEHOLDER_NAME = "*"
 

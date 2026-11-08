@@ -302,6 +302,141 @@ def boss_pool_models(vanilla_root):
     return sorted(models, key=lambda mdl: ((model_name(mdl) or mdl).upper(), mdl))
 
 
+# --- The INSERTION list (feature 013) --------------------------------------
+# A DIFFERENT list from build_pool() above, and deliberately not a parameter on
+# it. The reference harvests insertBossesEnemy at RandomizeFunctions.cs:1657,
+# which sits INSIDE the else branch of the reject chain and therefore BEFORE
+# three of the de-eligibility tests pool_eligible() applies:
+#
+#   !m26 && c0000_0005      (:1660)
+#   m34  && npc == 210030   (:1669)
+#   m28  && c2100           (:1677)
+#
+# Those three set addEnemy, which gates a different list further down. So the
+# insertion list is the first SIX tests only. It also skips kInsertReject and
+# the per-map npc dedupe that the boss pool applies. Measured consequence: 32
+# identities across 22 models, not the 18/17 of the boss pool - see
+# plan-evidence 013 §E4 M2. The tempList.Contains test at :1600 is vacuous
+# (MSBB.Part.Enemy has no value equality) and is not reproduced.
+
+def insertion_eligible(name, npc, think, entity_id):
+    """The six tests of RandomizeFunctions.cs:1587-1638 that precede the
+    harvest line. NOT pool_eligible() - see the comment above."""
+    if npc in REJECT_NPC:
+        return False
+    if entity_id == -1:
+        return False
+    if npc in (0, -1):
+        return False
+    if think == -1:
+        return False
+    if "c5070" in name:
+        return False
+    if "c3060" in name and npc != 210306016:
+        return False
+    return True
+
+
+# Moon Presence. The reference strips it with a one-shot loop that removes a
+# single entry; the list is Distinct()-ed first and holds exactly one c5400
+# entry, so a plain filter is equivalent (plan-evidence §E4 M2).
+INSERTION_EXCLUDE_MODEL = "c5400"
+
+
+def insertion_list(vanilla_root, maps=None, order=None):
+    """The insertion candidate list as [(npc, think, model)], first-seen order.
+
+    Order is kBaseMaps' 24 files by default, because the port harvests during
+    its existing StepReadMap walk. Measured set-identical over the reference's
+    16 files and over BossMapOrder()'s 17, which is what makes that legal.
+    """
+    from enemy_lookup import BASE_MAPS, enemies, load_base_maps
+    if maps is None:
+        maps = load_base_maps(vanilla_root)
+    if order is None:
+        order = BASE_MAPS
+    out = []
+    for map_name in order:
+        m = maps.get(map_name)
+        if m is None:
+            continue
+        for e in enemies(m):
+            if not is_boss_name(e["name"]):
+                continue
+            if not insertion_eligible(e["name"], e["npc"], e["think"], e["entity"]):
+                continue
+            if e["think"] == 1:          # :1841, a STRING comparison in the C#
+                continue
+            if e["model"] == INSERTION_EXCLUDE_MODEL:
+                continue
+            triple = (e["npc"], e["think"], e["model"])
+            if triple not in out:        # Distinct() by npc*think*model
+                out.append(triple)
+    return out
+
+
+def insertion_models(vanilla_root, maps=None):
+    """The distinct models of the insertion list, in the frozen table order:
+    display name, then model id to break ties - the same rule as every other
+    generated table."""
+    from names import model_name
+    entries = insertion_list(vanilla_root, maps)
+    models = sorted({m for _npc, _think, m in entries if m})
+    return sorted(models, key=lambda mdl: ((model_name(mdl) or mdl).upper(), mdl))
+
+
+# The fourteen area groups of StartFunctions.cs:1038-1101, as map-name
+# PREFIXES. Keyed on the prefix and not on a file name because each group can
+# cover two or three files and the pass must visit all of them, exactly as the
+# reference does. Checked for mutual exclusivity, for covering all 22 area
+# files, and for matching neither m21 file, in insert_bosses_verify.py.
+INSERT_AREA_PREFIXES = [
+    "m22", "m23", "m24_00", "m24_01", "m24_02", "m25", "m26", "m27",
+    "m28", "m32", "m33", "m34", "m35", "m36",
+]
+
+
+def insertion_areas(vanilla_root, maps=None):
+    """[(prefix, live_file, display_name, eligible_target_count)] in the frozen
+    table order.
+
+    The live file - the one variant the retail game loads - comes from the
+    port's own BossParamScaling.h rather than a second list here, so the two
+    cannot drift. The count is that live file's eligible-target count, which is
+    what the table's poolEntries column reports; the fourteen sum to 1,381.
+    """
+    from enemy_lookup import (_scaling_maps, load_base_maps,
+                              overwritable_placements)
+    from names import map_name as area_name
+    if maps is None:
+        maps = load_base_maps(vanilla_root)
+    live = {}
+    for mn in _scaling_maps():
+        if mn.startswith("m21"):
+            continue  # Hunter's Dream / Old Workshop - never an insertion area
+        for prefix in INSERT_AREA_PREFIXES:
+            if mn.startswith(prefix):
+                live[prefix] = mn
+    counts = {}
+    for mn, _e in overwritable_placements(vanilla_root, maps):
+        counts[mn] = counts.get(mn, 0) + 1
+    rows = []
+    for prefix in INSERT_AREA_PREFIXES:
+        lf = live[prefix]
+        rows.append((prefix, lf, (area_name(lf) or lf).upper(), counts.get(lf, 0)))
+    return sorted(rows, key=lambda r: (r[2], r[0]))
+
+
+def insertion_area_files(vanilla_root=None):
+    """{prefix: [every base map file that prefix matches]}. The pass visits all
+    of them; only the live one is stat-scaled."""
+    from enemy_lookup import BASE_MAPS
+    out = {}
+    for prefix in INSERT_AREA_PREFIXES:
+        out[prefix] = [mn for mn in BASE_MAPS if mn.startswith(prefix)]
+    return out
+
+
 # --- Commands --------------------------------------------------------------
 
 def cmd_pool(vanilla_root):

@@ -558,6 +558,50 @@ def cmd_selftest(root):
     cases.append(("032: the two failure messages are different strings",
                   len(set(fail_msgs.values())) == 2))
 
+    # --- 040: every WHOLE-LITERAL progress line, against the same two budgets --
+    #
+    # The four constants above are the ones the worlds feature froze as named
+    # strings. Most progress lines are not: they are built inline, often from a
+    # count, and the ones that are a single literal end to end can be measured
+    # exactly. Those are checked here, which is what brings feature 040's two new
+    # lines - STARTING WITH 20 BLOOD VIALS AND 20 BULLETS, and one WEARING <NAME>
+    # per granted slot - under the same 71-character and renderability budgets the
+    # rest of the log is held to.
+    #
+    # A lowercase line passes any length budget and draws as blank columns on the
+    # fallback path, which is why the character check is the one that matters.
+    editor_src = open(os.path.join(UI_SRC, "WorldEditorScreen.cpp"),
+                      encoding="utf-8").read()
+    whole_literals = re.findall(r'AddProgressLine\(\s*"((?:[^"\\]|\\.)*)"\s*\)',
+                                editor_src)
+    cases.append(("040: the progress log has whole-literal lines to measure",
+                  len(whole_literals) >= 5))
+    cases.append(("040: every whole-literal progress line is renderable and fits "
+                  "the 71-character line",
+                  all(renderable(s) and len(s) <= LINE_CHARS
+                      for s in whole_literals)))
+    # Feature 040's other new line is BUILT, not a whole literal: one
+    # "WEARING <NAME>" per granted slot, where the name comes from the engine. Its
+    # worst case is measurable even so, because the names are in a generated
+    # header - so the widest of the 124 is the line to check, against the same 71
+    # characters.
+    #
+    # Deliberately NOT generalised to every AddProgressLine fragment in the file.
+    # One shipped fragment - "STARTING CHOICES: " on the confirm block - carries a
+    # colon, which the FALLBACK glyph table does not hold; that predates this
+    # feature, is out of its scope, and a sweeping case here would read as feature
+    # 040 having broken it.
+    armour_src = open(os.path.join(SRC, "ArmourTables.h"), encoding="utf-8").read()
+    armour_names = re.findall(r'\{\s*"\d+",\s*"([^"]*)",\s*\d+\s*\}', armour_src)
+    wearing = [f for f in
+               re.findall(r'"((?:[^"\\]|\\.)*)"', editor_src) if "WEARING" in f]
+    cases.append(("040: the widest WEARING line fits the 71-character line",
+                  len(armour_names) == 124 and bool(wearing) and
+                  all(renderable(f) for f in wearing) and
+                  all(renderable(n) for n in armour_names) and
+                  max(len(f) for f in wearing) +
+                  max(len(n) for n in armour_names) <= LINE_CHARS))
+
     # --- Feature 032 milestone 2: the table, the polarity, the two halves --
     skip_rows = baked_table("skip")
     skip_models = [m for m, _n, _w in skip_rows]
@@ -688,6 +732,17 @@ def cmd_selftest(root):
     # --- the config line ---------------------------------------------------
     store = open(os.path.join(SRC, "RandomizerDefaultsStore.cpp"), encoding="utf-8").read()
     bufs = [int(x) for x in re.findall(r"char buf\[(\d+)\]", store)]
+    # The buffer that matters is FormatSettings' own, not the largest one in the
+    # file: LoadRandomizerDefaults' char buf[4096] is a READ buffer, so
+    # max(bufs) silently made the fit check below a comparison against that
+    # instead. Feature 013 is the first change where the difference decides the
+    # answer - 1,038 bytes fits 4,096 and does not fit 1,024 - so the format
+    # buffer is now parsed from inside the function it belongs to.
+    format_body = store.split("std::string FormatSettings", 1)[1].split("\n}", 1)[0]
+    # The semicolon matters: the narrating comment above the declaration quotes
+    # "char buf[1024]" and "char buf[4096]" as prose, and a regex without it
+    # reads the history instead of the code.
+    format_buf = int(re.search(r"char buf\[(\d+)\];", format_body).group(1))
     # Worst case: every fixed line at its longest, plus all three selections.
     #
     # The SETTINGS BLOCK is the part FormatSettings() builds in char buf[1024],
@@ -695,22 +750,74 @@ def cmd_selftest(root):
     # it in two more lines of its own, which are built separately and are not
     # in that buffer - so the buffer check below is against the block, and the
     # total is what the whole file costs on disk.
+    # The five picker selection lines are one character per table row, so their
+    # lengths are a property of the GENERATED HEADERS and must be read from them.
+    # They were hardcoded here until 2026-09-29, when correcting
+    # gen_weapon_table.py's LOT_CATEGORY_WEAPON took LeftHandWeaponTable.h from
+    # 14 rows to 16 and this arithmetic did not notice: the exact-equality
+    # assertion below went on passing against a stale figure, which is precisely
+    # the failure it exists to prevent.
+    def _rows(header):
+        src = open(os.path.join(SRC, header), encoding="utf-8").read()
+        return int(re.search(r"std::array<ModelPoolEntry,\s*(\d+)>", src).group(1))
+
+    n_boss  = _rows("BossPoolTable.h")
+    n_enemy = _rows("EnemyPoolTable.h")
+    n_skip  = _rows("EnemySkipTable.h")
+    n_trick = _rows("TrickWeaponTable.h")
+    n_left  = _rows("LeftHandWeaponTable.h")
+
+    # Feature 040's four are all in ONE generated header, so they cannot be read
+    # by _rows() above - it takes the first std::array in the file and there are
+    # four. Read by count constant instead, which is the same thing the C++
+    # template argument is.
+    def _count(header, const):
+        src = open(os.path.join(SRC, header), encoding="utf-8").read()
+        return int(re.search(r"const int %s = (\d+);" % const, src).group(1))
+
+    n_head    = _count("ArmourTables.h", "kHeadwearCount")
+    n_body    = _count("ArmourTables.h", "kBodyArmourCount")
+    n_gloves  = _count("ArmourTables.h", "kGlovesCount")
+    n_legwear = _count("ArmourTables.h", "kLegwearCount")
+
     settings_block = (len("randomize_enemies=1") + 1 +
                       len("randomize_bosses=1") + 1 + len("randomize_treasure=1") + 1 +
                       len("randomize_workshop_tools=1") + 1 + len("randomize_enemy_drops=1") + 1 +
                       len("randomize_starting_weapons=1") + 1 + len("randomize_starting_guns=1") + 1 +
-                      len("randomize_shop_weapons=1") + 1 + len("enable_mergo_darkness=1") + 1 +
+                      len("randomize_shop_weapons=1") + 1 +
+                      len("randomize_shop_armour=1") + 1 +
+                      len("randomize_shop_items=1") + 1 +
+                      len("enable_mergo_darkness=1") + 1 +
                       len("no_team_type=1") + 1 +
                       len("do_not_randomize_caged_dogs=1") + 1 +
                       len("start_with_hunter_tools=1") + 1 +
+                      len("start_with_supplies=1") + 1 +
                       len("easy_shadows=1") + 1 + len("easy_rom=1") + 1 +
                       len("easy_failures=1") + 1 + len("easy_emissary=1") + 1 +
                       len("start_fresh_save=1") + 1 +
-                      len("bosses_included=") + 17 + 1 +
-                      len("enemies_included=") + 82 + 1 +
-                      len("enemies_skipped=") + 85 + 1 +
-                      len("trick_weapons_included=") + 78 + 1 +
-                      len("left_hand_weapons_included=") + 14 + 1)
+                      len("bosses_included=") + n_boss + 1 +
+                      len("enemies_included=") + n_enemy + 1 +
+                      len("enemies_skipped=") + n_skip + 1 +
+                      len("trick_weapons_included=") + n_trick + 1 +
+                      len("left_hand_weapons_included=") + n_left + 1 +
+                      # Feature 040's four picker lines, 217 bytes together.
+                      # Measured from the headers rather than written out, for
+                      # the same reason the five lines above are.
+                      len("armour_head_included=") + n_head + 1 +
+                      len("armour_body_included=") + n_body + 1 +
+                      len("armour_gloves_included=") + n_gloves + 1 +
+                      len("armour_legwear_included=") + n_legwear + 1 +
+                      # Feature 013's eight, 248 bytes. The count key is
+                      # measured at its widest value, 15, because that is what
+                      # a worst case means for an integer setting.
+                      len("bosses_can_replace_enemies=1") + 1 +
+                      len("boss_replacements_exact=1") + 1 +
+                      len("boss_replacements_per_map=15") + 1 +
+                      len("replace_all_enemies=1") + 1 +
+                      len("space_out_inserted_bosses=1") + 1 +
+                      len("inserted_boss_keeps_enemy_ai=1") + 1 +
+                      len("inserted_bosses_included=") + 22 + 1 +
+                      len("inserted_boss_areas=") + 14 + 1)
     worst = (len("bloodborne_title_id=CUSA00000") + 1 +
              settings_block +
              len("last_seed=4294967295") + 1)
@@ -730,12 +837,41 @@ def cmd_selftest(root):
     # neither key name can be renamed without redoing this arithmetic. Then 794
     # once feature 027 added no_team_type, which is 15 bytes - the 12-character
     # key, its "=1" and its newline - taking the settings block to 743 and
-    # leaving 281 bytes of char buf[1024] spare.
+    # leaving 281 bytes of char buf[1024] spare. Then 841 once feature 011 added
+    # randomize_shop_armour and randomize_shop_items, which are 24 and 23 bytes -
+    # each the key, its "=1" and its newline - taking the settings block to 790
+    # and leaving 234 bytes of char buf[1024] spare.
+    #
+    # Then 1,089 once feature 013 added its eight keys, which are 248 bytes
+    # together (29 + 26 + 29 + 22 + 28 + 31 + 48 + 35), taking the settings
+    # block to 1,038 - FOURTEEN BYTES OVER char buf[1024], which snprintf would
+    # have clamped, dropping the tail of the last key in silence. That is why
+    # feature 013 grows the buffer to 2,048 (spec 013 D-I): the growth is a
+    # prerequisite of the feature, not a tidy-up, and 1,038 leaves 1,010 spare.
+    #
+    # The 790 this rebases from is itself the sum of rows 27 (+15) and 11 (+47)
+    # landing after plan 013 was written; the plan's own 976 figure was measured
+    # against the 728-byte block that predated both, and 728 + 15 + 47 + 248 is
+    # 1,038 either way. Whoever lands next rebases the same way.
+    #
+    # Then 1,091 / a 1,040-byte block, because correcting gen_weapon_table.py's
+    # LOT_CATEGORY_WEAPON took LeftHandWeaponTable.h from 14 rows to 16 and every
+    # picker line is one character per table row. That is the two bytes the five
+    # lengths above are now READ for rather than written out.
+    #
+    # Then 1,330 / a 1,279-byte block once feature 040 added its five keys, which
+    # are 239 bytes together: 55 + 56 + 50 + 56 for the four armour pickers (each
+    # the key, the '=', its 33 / 34 / 26 / 31 character selection line and a
+    # newline) and 22 for start_with_supplies=1. That leaves 769 bytes of char
+    # buf[2048] spare. Those five lengths are why none of the five key names can
+    # be renamed without redoing this arithmetic.
+    #
     # This is an exact equality on purpose: it fails the
     # moment a key is added or removed without the buffer being thought about.
-    cases.append(("worst-case defaults.cfg is 794 bytes", worst == 794))
-    cases.append(("the 743-byte settings block fits char buf[1024]",
-                  settings_block == 743 and bufs and settings_block < max(bufs)))
+    cases.append(("worst-case defaults.cfg is 1330 bytes", worst == 1330))
+    cases.append(("the 1279-byte settings block fits FormatSettings' char buf[2048]",
+                  settings_block == 1279 and format_buf == 2048 and
+                  settings_block < format_buf))
     # The save-data removal, checked the way the two cases below check a key
     # that must be PRESENT: on the quoted key literal in the load chain, the
     # "key=%d" fragment of the save format string, and the struct field the
@@ -771,6 +907,18 @@ def cmd_selftest(root):
                   store.count('"no_team_type"') == 1 and
                   "no_team_type=%d" in store and
                   "defaults.noTeamType ? 1 : 0" in store))
+    # Feature 011, one case per key and the same trap again: a key written but
+    # never read loads as off forever, and a key read but never written is
+    # forgotten on save. Two separate cases rather than one, because a single
+    # case that checked "either key" would pass on a build that forgot one.
+    cases.append(("011: randomize_shop_armour is in both load and save",
+                  store.count('"randomize_shop_armour"') == 1 and
+                  "randomize_shop_armour=%d" in store and
+                  "defaults.randomizeShopArmour ? 1 : 0" in store))
+    cases.append(("011: randomize_shop_items is in both load and save",
+                  store.count('"randomize_shop_items"') == 1 and
+                  "randomize_shop_items=%d" in store and
+                  "defaults.randomizeShopItems ? 1 : 0" in store))
     # Same trap, one shape different: a selection key is written as %s from
     # Encode(), so the save side is checked on the format fragment AND on the
     # Encode() call, not on a "=%d".
@@ -778,6 +926,53 @@ def cmd_selftest(root):
                   store.count('"trick_weapons_included"') == 1 and
                   "trick_weapons_included=%s" in store and
                   "defaults.trickWeapons.Encode().c_str()" in store))
+    # Feature 013, eight keys and the same trap eight more times: written but
+    # never read loads as off forever, read but never written is forgotten on
+    # save. The scalar keys are checked on the format fragment AND on the
+    # argument that feeds it, because "%d" alone would pass with the wrong field
+    # behind it; the two selections are checked on Decode/Encode instead, since
+    # that is how a selection crosses the same boundary.
+    for key, arg in (("bosses_can_replace_enemies", "defaults.bossesCanReplaceEnemies ? 1 : 0"),
+                     ("boss_replacements_exact", "defaults.bossReplacementsExact ? 1 : 0"),
+                     ("boss_replacements_per_map", "defaults.bossReplacementsPerMap"),
+                     ("replace_all_enemies", "defaults.replaceAllEnemies ? 1 : 0"),
+                     ("space_out_inserted_bosses", "defaults.spaceOutInsertedBosses ? 1 : 0"),
+                     ("inserted_boss_keeps_enemy_ai", "defaults.insertedBossKeepsEnemyAi ? 1 : 0")):
+        cases.append(("013: %s is in both load and save" % key,
+                      store.count('"%s"' % key) == 1 and
+                      "%s=%%d" % key in store and arg in store))
+    cases.append(("013: inserted_bosses_included is in both load and save",
+                  store.count('"inserted_bosses_included"') == 1 and
+                  "inserted_bosses_included=%s" in store and
+                  "out.insertedBosses.Decode(value)" in store and
+                  "defaults.insertedBosses.Encode().c_str()" in store))
+    cases.append(("013: inserted_boss_areas is in both load and save",
+                  store.count('"inserted_boss_areas"') == 1 and
+                  "inserted_boss_areas=%s" in store and
+                  "out.bossAreas.Decode(value)" in store and
+                  "defaults.bossAreas.Encode().c_str()" in store))
+    # The count is the app's first integer setting, and a hand-edited config is
+    # the one path that can present a value the UI cannot reach, so the loader
+    # clamps as well as AdjustSetting.
+    cases.append(("013: the count key is clamped to 0-15 on load, not just in the UI",
+                  "if (n < 0) n = 0;" in store and "if (n > 15) n = 15;" in store))
+    # Feature 040, five more of the same trap. Four separate cases for the four
+    # picker keys rather than one that checks "any of them": a single case would
+    # pass on a build that wired the gloves key to the legwear selection, which is
+    # the mistake four near-identical chains actually make.
+    for key, field in (("armour_head_included", "headwear"),
+                       ("armour_body_included", "bodyArmour"),
+                       ("armour_gloves_included", "gloves"),
+                       ("armour_legwear_included", "legwear")):
+        cases.append(("040: %s is in both load and save, on %s" % (key, field),
+                      store.count('"%s"' % key) == 1 and
+                      "%s=%%s" % key in store and
+                      "out.%s.Decode(value)" % field in store and
+                      "defaults.%s.Encode().c_str()" % field in store))
+    cases.append(("040: start_with_supplies is in both load and save",
+                  store.count('"start_with_supplies"') == 1 and
+                  "start_with_supplies=%d" in store and
+                  "defaults.startWithSupplies ? 1 : 0" in store))
     cases.append(("038: left_hand_weapons_included is in both load and save",
                   store.count('"left_hand_weapons_included"') == 1 and
                   "left_hand_weapons_included=%s" in store and
@@ -791,8 +986,8 @@ def cmd_selftest(root):
     # to compile. Counting the initialisers is the only check that catches it.
     picker_defs = re.findall(
         r"inline constexpr PickerStrings (\w+) = \{(.*?)\};", picker_src, re.S)
-    cases.append(("037: five PickerStrings are declared",
-                  len(picker_defs) == 5))
+    cases.append(("037: eleven PickerStrings are declared",
+                  len(picker_defs) == 11))
     row_ids = {name: re.findall(r"\b(true|false)\b", body)
                for name, body in picker_defs}
     cases.append(("037: every PickerStrings sets showRowId explicitly",
@@ -804,6 +999,21 @@ def cmd_selftest(root):
                   row_ids.get("kEnemiesSkippedStrings") == ["true"] and
                   row_ids.get("kTrickWeaponsStrings") == ["false"] and
                   row_ids.get("kLeftHandWeaponsStrings") == ["false"]))
+    # Feature 013's two. INSERTED BOSSES keeps the id column for the same reason
+    # the three creature lists do; AREAS INCLUDED has none (plan 013 D3) because
+    # a map-name prefix means nothing to a player and all fourteen names differ.
+    cases.append(("013: the inserted-boss picker keeps its id column and the "
+                  "area picker has none",
+                  row_ids.get("kInsertedBossesStrings") == ["true"] and
+                  row_ids.get("kBossAreasStrings") == ["false"]))
+    # Feature 040's four. No id column on any of them: every name is the game's
+    # own and a six-digit param id means nothing to a player. Checked one by one
+    # rather than with all(), so a single slot that silently dropped the field
+    # names itself.
+    for name in ("kHeadwearStrings", "kBodyArmourStrings", "kGlovesStrings",
+                 "kLegwearStrings"):
+        cases.append(("040: %s has no id column" % name,
+                      row_ids.get(name) == ["false"]))
     picker_cpp = open(os.path.join(UI_SRC, "ModelPicker.cpp"), encoding="utf-8").read()
     cases.append(("037: RowLabel honours showRowId and is called with it",
                   "RowLabel(const ModelPoolEntry& m, bool showRowId)" in picker_cpp and

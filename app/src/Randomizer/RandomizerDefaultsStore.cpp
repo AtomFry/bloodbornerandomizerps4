@@ -25,29 +25,63 @@ const int kBsdTrunc  = 0x0400;
 // ---------------------------------------------------------------------------
 
 std::string FormatSettings(const RandomizerDefaults& defaults) {
-    // 1024, not 512: enemies_included is ~99 bytes, enemies_skipped ~102, and
-    // the feature spec has ~20 more settings queued. Worst case today is 636
-    // bytes for a whole defaults.cfg, pinned by a pool_verify selftest case.
-    // The clamp below is still the real guard; this just keeps the margin
-    // comfortable.
-    char buf[1024];
+    // 2048, not 1024, AND THAT GROWTH IS A PREREQUISITE OF FEATURE 013 RATHER
+    // THAN A TIDY-UP (spec 013 D-I). The block below is 1,279 bytes with every
+    // selection at full length, and a whole defaults.cfg is 1,330 - both pinned
+    // as exact equalities by a pool_verify selftest case. At char buf[1024] the
+    // block overflowed, and snprintf would have dropped the tail of the last key
+    // IN SILENCE, producing a config that loads and is wrong.
+    //
+    // The arithmetic, so the next feature can rebase it rather than re-measure:
+    // the block was 790 bytes before feature 013 (with rows 27 and 11 landed),
+    // 013 adds 248 across its eight keys, and the two lines defaults.cfg wraps
+    // the block in - bloodborne_title_id and last_seed - cost 51 more, giving
+    // 1,038 / 1,089. Then 1,040 / 1,091, because correcting
+    // gen_weapon_table.py's LOT_CATEGORY_WEAPON took LeftHandWeaponTable.h from
+    // 14 rows to 16 and every picker line is one character per table row. Then
+    // 1,279 / 1,330 once feature 040 added its five keys, which are 239 bytes
+    // together: 55 + 56 + 50 + 56 for the four armour pickers (each the key, the
+    // '=', its 33 / 34 / 26 / 31 character selection line and a newline) and 22
+    // for start_with_supplies=1. The read buffer in LoadRandomizerDefaults is
+    // already char buf[4096], so the 1,330-byte worst case loads. At 2,048 the
+    // block has 769 bytes spare.
+    //
+    // EVERY KEY NAME'S LENGTH IS LOAD-BEARING because of that exact equality.
+    // Renaming one means redoing this arithmetic and the verifier's figure.
+    // The clamp below is still the real guard; this only keeps the margin.
+    char buf[2048];
     int len = snprintf(buf, sizeof(buf),
                         "randomize_enemies=%d\nrandomize_bosses=%d\nrandomize_treasure=%d\n"
                         "randomize_workshop_tools=%d\n"
                         "randomize_enemy_drops=%d\n"
                         "randomize_starting_weapons=%d\nrandomize_starting_guns=%d\n"
-                        "randomize_shop_weapons=%d\nenable_mergo_darkness=%d\n"
+                        "randomize_shop_weapons=%d\n"
+                        "randomize_shop_armour=%d\nrandomize_shop_items=%d\n"
+                        "enable_mergo_darkness=%d\n"
                         "no_team_type=%d\n"
                         "do_not_randomize_caged_dogs=%d\n"
                         "start_with_hunter_tools=%d\n"
+                        "start_with_supplies=%d\n"
                         "easy_shadows=%d\neasy_rom=%d\n"
                         "easy_failures=%d\neasy_emissary=%d\n"
                         "start_fresh_save=%d\n"
+                        "bosses_can_replace_enemies=%d\n"
+                        "boss_replacements_exact=%d\n"
+                        "boss_replacements_per_map=%d\n"
+                        "replace_all_enemies=%d\n"
+                        "space_out_inserted_bosses=%d\n"
+                        "inserted_boss_keeps_enemy_ai=%d\n"
                         "bosses_included=%s\n"
                         "enemies_included=%s\n"
                         "enemies_skipped=%s\n"
                         "trick_weapons_included=%s\n"
-                        "left_hand_weapons_included=%s\n",
+                        "left_hand_weapons_included=%s\n"
+                        "armour_head_included=%s\n"
+                        "armour_body_included=%s\n"
+                        "armour_gloves_included=%s\n"
+                        "armour_legwear_included=%s\n"
+                        "inserted_bosses_included=%s\n"
+                        "inserted_boss_areas=%s\n",
                         defaults.randomizeEnemies ? 1 : 0,
                         defaults.randomizeBosses ? 1 : 0,
                         defaults.randomizeTreasure ? 1 : 0,
@@ -56,20 +90,35 @@ std::string FormatSettings(const RandomizerDefaults& defaults) {
                         defaults.randomizeStartingWeapons ? 1 : 0,
                         defaults.randomizeStartingGuns ? 1 : 0,
                         defaults.randomizeShopWeapons ? 1 : 0,
+                        defaults.randomizeShopArmour ? 1 : 0,
+                        defaults.randomizeShopItems ? 1 : 0,
                         defaults.enableMergoDarkness ? 1 : 0,
                         defaults.noTeamType ? 1 : 0,
                         defaults.doNotRandomizeCagedDogs ? 1 : 0,
                         defaults.startWithHunterTools ? 1 : 0,
+                        defaults.startWithSupplies ? 1 : 0,
                         defaults.easyShadows ? 1 : 0,
                         defaults.easyRom ? 1 : 0,
                         defaults.easyFailures ? 1 : 0,
                         defaults.easyEmissary ? 1 : 0,
                         defaults.startFreshSave ? 1 : 0,
+                        defaults.bossesCanReplaceEnemies ? 1 : 0,
+                        defaults.bossReplacementsExact ? 1 : 0,
+                        defaults.bossReplacementsPerMap,
+                        defaults.replaceAllEnemies ? 1 : 0,
+                        defaults.spaceOutInsertedBosses ? 1 : 0,
+                        defaults.insertedBossKeepsEnemyAi ? 1 : 0,
                         defaults.bossesIncluded.Encode().c_str(),
                         defaults.enemiesIncluded.Encode().c_str(),
                         defaults.enemiesSkipped.Encode().c_str(),
                         defaults.trickWeapons.Encode().c_str(),
-                        defaults.leftHandWeapons.Encode().c_str());
+                        defaults.leftHandWeapons.Encode().c_str(),
+                        defaults.headwear.Encode().c_str(),
+                        defaults.bodyArmour.Encode().c_str(),
+                        defaults.gloves.Encode().c_str(),
+                        defaults.legwear.Encode().c_str(),
+                        defaults.insertedBosses.Encode().c_str(),
+                        defaults.bossAreas.Encode().c_str());
     // snprintf returns the length it WOULD have written, which can exceed
     // sizeof(buf) if the format ever outgrows it - clamp so a future setting
     // can't turn this into an out-of-bounds sceKernelWrite (see
@@ -100,6 +149,15 @@ bool ApplySettingKey(const char* key, const char* value, RandomizerDefaults& out
         out.randomizeStartingGuns = (atoi(value) != 0);
     } else if (strcmp(key, "randomize_shop_weapons") == 0) {
         out.randomizeShopWeapons = (atoi(value) != 0);
+    } else if (strcmp(key, "randomize_shop_armour") == 0) {
+        // Feature 011. Absent -> the struct's own false, which is the run the
+        // app made before these two keys existed: the pass never runs and the
+        // shop table is byte-identical to vanilla. Both key LENGTHS are
+        // load-bearing - pool_verify.py pins the settings block at an exact
+        // byte count - so renaming either means redoing that arithmetic.
+        out.randomizeShopArmour = (atoi(value) != 0);
+    } else if (strcmp(key, "randomize_shop_items") == 0) {
+        out.randomizeShopItems = (atoi(value) != 0);
     } else if (strcmp(key, "bosses_included") == 0) {
         out.bossesIncluded.Decode(value);
     } else if (strcmp(key, "enemies_included") == 0) {
@@ -126,6 +184,25 @@ bool ApplySettingKey(const char* key, const char* value, RandomizerDefaults& out
         // pool_verify.py pins the settings block at an exact byte
         // count - so renaming it means redoing that arithmetic.
         out.leftHandWeapons.Decode(value);
+    } else if (strcmp(key, "armour_head_included") == 0) {
+        // Feature 040's four, one per armour slot, in the game's own slot order.
+        // The same guard and the same fail-safe as the two weapon pickers above:
+        // a wrong-length or absent value leaves NOTHING ticked, which leaves that
+        // slot's vanilla garment alone.
+        //
+        // FOUR keys and not one, because the four slots are drawn independently
+        // and each selection is bound to one table, so a line pasted into the
+        // wrong key is rejected by the length guard rather than remapped onto
+        // another slot's pieces. All four key LENGTHS are load-bearing -
+        // pool_verify.py pins the settings block at an exact byte count - so
+        // renaming any of them means redoing that arithmetic.
+        out.headwear.Decode(value);
+    } else if (strcmp(key, "armour_body_included") == 0) {
+        out.bodyArmour.Decode(value);
+    } else if (strcmp(key, "armour_gloves_included") == 0) {
+        out.gloves.Decode(value);
+    } else if (strcmp(key, "armour_legwear_included") == 0) {
+        out.legwear.Decode(value);
     } else if (strcmp(key, "enable_mergo_darkness") == 0) {
         out.enableMergoDarkness = (atoi(value) != 0);
     } else if (strcmp(key, "no_team_type") == 0) {
@@ -144,6 +221,11 @@ bool ApplySettingKey(const char* key, const char* value, RandomizerDefaults& out
         // Absent -> the struct's own false, which is the run the app
         // made before this key existed.
         out.startWithHunterTools = (atoi(value) != 0);
+    } else if (strcmp(key, "start_with_supplies") == 0) {
+        // Feature 040. Absent -> the struct's own false, which is the run the
+        // app made before this key existed: the pass never runs and no origin row
+        // gains an item. This key's LENGTH is load-bearing too.
+        out.startWithSupplies = (atoi(value) != 0);
     } else if (strcmp(key, "easy_shadows") == 0) {
         // Same rule for all four: absent -> the struct's own false,
         // which is the run the app made before these keys existed.
@@ -160,6 +242,48 @@ bool ApplySettingKey(const char* key, const char* value, RandomizerDefaults& out
         // D17). A defaults.cfg written before this key existed therefore
         // reads as KEEP EXISTING, which is the only safe reading of silence.
         out.startFreshSave = (atoi(value) != 0);
+    } else if (strcmp(key, "bosses_can_replace_enemies") == 0) {
+        // Feature 013's master switch. Absent -> the struct's own false, which
+        // is not an approximation of the run the app made before this key
+        // existed but that run exactly: the pass is tested before its first
+        // draw, so an off run consumes no randomness and every seed still
+        // produces the world it used to.
+        out.bossesCanReplaceEnemies = (atoi(value) != 0);
+    } else if (strcmp(key, "boss_replacements_exact") == 0) {
+        // false is UP TO, true is EXACTLY.
+        out.bossReplacementsExact = (atoi(value) != 0);
+    } else if (strcmp(key, "boss_replacements_per_map") == 0) {
+        // The one integer setting in the config. Clamped on read as well as in
+        // AdjustSetting, because a hand-edited file is the one path that can
+        // present a value the UI cannot: 0 to 15 inclusive (spec 013 D-K), and
+        // atoi returns 0 for anything unparsable, which is the harmless end.
+        int n = atoi(value);
+        if (n < 0) n = 0;
+        if (n > 15) n = 15;
+        out.bossReplacementsPerMap = n;
+    } else if (strcmp(key, "replace_all_enemies") == 0) {
+        // The temporary test control (spec 013 §6). When it is deleted this
+        // branch goes with it and a defaults.cfg still carrying the line loads
+        // with it ignored, exactly as the retired bell-maidens key does. (Not
+        // spelled with its underscores here: pool_verify.py asserts that the
+        // only mention of that key name left in this file is the one comment
+        // below, which is how it tells documentation from a surviving branch.)
+        out.replaceAllEnemies = (atoi(value) != 0);
+    } else if (strcmp(key, "space_out_inserted_bosses") == 0) {
+        out.spaceOutInsertedBosses = (atoi(value) != 0);
+    } else if (strcmp(key, "inserted_boss_keeps_enemy_ai") == 0) {
+        // false is OWN AI, true is REPLACED ENEMY'S AI.
+        out.insertedBossKeepsEnemyAi = (atoi(value) != 0);
+    } else if (strcmp(key, "inserted_bosses_included") == 0) {
+        // 22 rows, and the same length guard as every other selection: a
+        // wrong-length or absent value leaves all 22 ticked, which is this
+        // type's constructed state. That reads as every boss enabled with the
+        // master switch off, which is today's run.
+        out.insertedBosses.Decode(value);
+    } else if (strcmp(key, "inserted_boss_areas") == 0) {
+        // 14 rows, same guard, same fail-safe: every area enabled with the
+        // master switch off.
+        out.bossAreas.Decode(value);
     } else if (strcmp(key, "last_seed") == 0) {
         // strtoul, not atoi: a seed can exceed INT_MAX.
         out.lastSeed = (uint32_t)strtoul(value, nullptr, 10);

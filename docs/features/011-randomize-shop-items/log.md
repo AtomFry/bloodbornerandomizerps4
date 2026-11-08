@@ -129,3 +129,135 @@ Edited in place: §3.2 (no longer out of scope), §5 (two files added at M3), §
 (the all-off-tree note replaced, and why D2 makes the flag necessary), M3 (goal
 widened, change 4 inserted, verification extended). §1–§7 went from 421 to 432
 lines.
+
+---
+
+## 2026-09-28 — stage E, all three milestones. Plan 011 fully built.
+
+Built by the `implementer` subagent. **Stage D was skipped**, as for rows 27 and
+37. All three milestones completed in one continuous run and **no stop condition
+fired**, which is what the Execution Strategy's continuous mode with a final-only
+gate calls for.
+
+**What was built.** M1 the pass — `ShopLineup.h` carving the shop offsets, the
+three `equipType` constants and the skip list out of `StartingWeapons.cpp`, plus
+`ShopStock.{h,cpp}` with the two per-bucket permutations. M2 the two settings, both
+config keys, the activation mapping and the report lines. M3 the verification —
+`starting_weapons_verify.py` corrected and extended, and `--shop-stock` tolerance
+added to `drops_verify.py` and `hunter_tools_verify.py` per spec D3.
+
+**The measured table matched spec §2 exactly before any edit** — 1288 listings
+splitting 644 / 220 / 424, 27 skipped, 220 and 397 shufflable across 44 and 57
+distinct ids.
+
+### The stale byte arithmetic, which was the one real hazard going in
+
+Row 27 landed and was committed **after** this plan was approved, so §3, §5, §6, M3
+change 7 and §9 P4 all carried **728 → 775** and **779 → 826**, computed from a
+pre-row-27 baseline. The dispatch told the implementer the measured post-27 figures
+— a **743**-byte block and a **794**-byte worst case — and instructed it explicitly
+**not** to adjust the assertion to whatever the code emitted, since that assertion
+is pinned in the failing direction on purpose and fitting it to the code is the one
+way the check could be defeated.
+
+It derived **790 / 841** from measurement plus the plan's own +47 (24 + 23), which
+is what the orchestrating session had predicted independently before dispatch. Both
+are **exact equalities** in `pool_verify.py` — `settings_block == 790` and
+`worst == 841` — so agreement here is two independent derivations meeting, not a
+number fitted to an outcome. 234 bytes spare in `char buf[1024]`.
+
+This is the shared-buffer collision plan 013 anticipated, arriving exactly as
+predicted and costing one dispatch note.
+
+### Five deviations, all in plan §10
+
+The three worth reading:
+
+1. **The config rebase above.**
+2. **The call site now sits between row 5 and row 27's team-type block**, rather
+   than directly before hunter tools as §4.3 describes, because row 27 inserted
+   itself in between. Verified independently: `StepItemData` runs starting weapons
+   (`:1056`) → **shop stock (`:1099`)** → team type (`:1125`) → hunter tools
+   (`:1144`) → trick weapon (`:1184`) → left-hand weapon (`:1208`). **Plan D1's
+   actual requirement holds literally** — after row 5's pass, before the two
+   character-creation grants — so row 5's rolls are unmoved and the grants remain
+   the run's last draws. The interposed team-type pass is harmless because it draws
+   no randomness, which its RNG-free signature enforces by type.
+3. **Selftest case S10 was built from genuine permutations** — a swap rather than
+   an overwrite, and "only the last 20 of 220 moved" rather than "200 reverted".
+   Taken literally, both of the plan's phrasings break SW-I11 and the case would
+   have been rejected for the wrong reason.
+
+### Verification, re-run independently by the orchestrating session
+
+Not taken from the report. `starting_weapons_verify.py selftest` **45/45** (was
+21/21, every pre-existing case unchanged); `pool_verify.py selftest` **98/98** with
+790 and 841 both asserting clean; `settings_ui_verify.py` **113/113**, `WeaponsGear`
+now listing **8** settings in spec order with `RANDOMIZE SHOP ARMOUR` and
+`RANDOMIZE SHOP ITEMS` in place, widest pane row still 649/700 px;
+`worlds_verify.py selftest` **29/29** and `all` passing; `drops_verify.py selftest`
+**16/16** (was 12/12); `hunter_tools_verify.py selftest` **29/29** (was 25/25);
+`team_type_verify.py selftest` **20/20** unchanged, which is what says row 27 still
+produces what it did; `itemdata_verify.py roundtrip` PASS byte-identical at
+28,309,992 bytes; `ui_scroll_verify.py` PASSED.
+
+`make` clean with **zero errors or warnings**; `.pkg` 7,143,424 bytes at 22:26,
+postdating the newest changed source at 22:25:40.
+
+**Also confirmed independently:**
+
+* **Every changed file is named in plan §5 — zero unnamed files.** The only extras
+  in the tree are `implementation-report.md`, the expected output, and `plan.md`
+  itself for §10.
+* **`plan.md` §1–§7 is byte-identical.** Every section heading sits on its
+  pre-dispatch line number, and `git diff -U0` puts both hunks at lines 510 and
+  516 — inside §10, which starts at 508.
+
+### Awaiting hardware
+
+Ready for hardware testing per `CLAUDE.md` §3, not done. The three `verify`
+subcommands need an output tree only the console produces, so the real-tree
+assertions — member list and sizes unchanged, only `ShopLineupParam.param`
+differing, row id set unchanged — are **unverified**.
+
+**The first hardware check is the one that can kill the feature:** Blood Vials and
+Quicksilver Bullets still on sale, at vanilla prices, unlimited. The 27-entry skip
+list exists to guarantee that, and if it has a hole the run is unplayable rather
+than merely shuffled. After that: the two progress lines reading about 215 and
+about 388, both lists scrambled but coherent, the currencies crossed, and which
+shops are actually reachable — which settles spec F10 behind D4.
+
+**Determinism is also a hardware question.** Nothing automated here establishes
+that one seed and one set of settings reproduce the same shops, nor that row 5's
+rolls are unmoved for a fixed seed; the pass-order check above is a static argument
+for it, not a measurement.
+
+### Noticed and deliberately not fixed
+
+`StatusText`'s `ItemData` label still reads `RANDOMIZING ENEMY DROPS` for every
+param feature (§3.2, out of scope). `docs/screen-text-inventory.md` and
+`docs/user-guide.md` are now stale on the two new labels, and the settings-UI
+spec's Appendix A has no rows for them — §4.4 scoped that edit to §7.1 only, and
+nothing machine-checks Appendix A. All three belong to the documentation stage.
+
+---
+
+## 2026-09-29 — hardware test passed. Row 11 is DONE.
+
+The developer reports the feature tested and working on the console. The backlog
+row is **DONE** — `CLAUDE.md` §3's bar, implemented and confirmed on hardware.
+
+The check that mattered was the first one: **Blood Vials and Quicksilver Bullets
+still on sale at vanilla prices, unlimited.** The 27-entry skip list is what
+guarantees that, and a hole in it would have made a run unplayable rather than
+merely shuffled. It held.
+
+Nothing in the code changed for this entry; it records the status transition and
+the fact that the console, not a verifier, is what moved it.
+
+**Still not established, and worth knowing it is not:** the three `verify`
+subcommands were only runnable if the generated trees were saved to `data/runs/`.
+If they were not, then the real-tree assertions — member list and sizes unchanged,
+only `ShopLineupParam.param` differing, row id set unchanged — remain unverified,
+as does determinism across a fixed seed. The pass-order argument in the stage E
+entry is static reasoning, not a measurement.

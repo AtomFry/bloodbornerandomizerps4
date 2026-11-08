@@ -55,6 +55,16 @@
 //  - The reference tool re-reads and re-writes every map file several times
 //    across separate passes (model-list merge, pool generation, mutation).
 //    This port does one read and one write per map.
+//  - BOSSES CAN REPLACE ENEMIES (feature 013, BossInsertion.h) runs as a
+//    SECOND PASS over each map inside StepWriteMap, after the enemy loop,
+//    after boss assignment, after the easy-mode pass and BEFORE the
+//    BossScalingMaps() loop. Its candidate list is harvested during StepReadMap's
+//    existing parts walk, behind the master toggle. The position is behaviour:
+//    the second pass is what lets SPREAD BOSSES OUT see a whole map's eligible
+//    placements before choosing any, and running before scaling is what gives an
+//    inserted boss the area's stats rather than its arena's. With the setting
+//    off the pass returns before its first RandInt, so every existing seed still
+//    produces the world it did.
 //  - The four easy-mode settings (feature 018, EasyModes.h) run as one pass
 //    inside StepWriteMap, AFTER the enemy loop and boss assignment and
 //    BEFORE the BossScalingMaps() loop below. Both halves of that position
@@ -78,6 +88,7 @@
 
 #include "EnemyRandomizer.h"
 
+#include "BossInsertion.h"
 #include "BossParamScaling.h"
 #include "BossRandomizer.h"
 #include "CagedDogList.h"
@@ -89,9 +100,12 @@
 #include "../Param/ParamBnd.h"
 #include "HunterTools.h"
 #include "DropRandomizer.h"
+#include "ShopStock.h"
 #include "RuneProbe.h"   // TEMPORARY - delete with the probe
+#include "StartingSupplies.h"
 #include "StartingWeapons.h"
 #include "TeamType.h"
+#include "ArmourGrant.h"
 #include "LeftHandWeaponGrant.h"
 #include "TrickWeaponGrant.h"
 #include "FileIo.h"
@@ -273,6 +287,12 @@ struct EnemyRandomizerJob::State {
         // Once per run rather than once per placement: the ticked rows never
         // change mid-run, and the write loop asks this question ~2,900 times.
         skipPatterns = BuildSkipPatterns(options.enemiesSkipped);
+
+        // The two protections the insertion pass has to honour that are not its
+        // own settings. Copied once, here, so the pass has one parameter and
+        // nobody can call it having honoured two of the three (BossInsertion.h).
+        options.bossInsertion.skipPatterns = skipPatterns;
+        options.bossInsertion.doNotRandomizeCagedDogs = options.doNotRandomizeCagedDogs;
     }
 
     // Boss phases address maps by name; the write loop addresses them by index.
@@ -367,6 +387,8 @@ struct EnemyRandomizerJob::State {
     std::string outMapDir;
 
     BossPool bossPool;
+    InsertionPool insertionPool;
+    InsertionCounts insertionCounts;
     std::string orphanMap;
     TreasurePool treasurePool;
     std::vector<uint8_t> itemDataPlain; // decompressed archive, held between steps
@@ -495,6 +517,13 @@ void EnemyRandomizerJob::State::StepReadMap() {
             }
         }
 
+        // BOSSES CAN REPLACE ENEMIES' harvest (feature 013). A second walk of
+        // the same parts rather than a branch inside the loop above: the two
+        // share not one rule - that one collects what can REPLACE an ordinary
+        // creature, this collects which BOSS IDENTITIES exist - and the whole
+        // thing is behind the master toggle, so an off run pays one boolean.
+        CollectInsertionCandidates(lm.name, lm.msbb, options.bossInsertion, insertionPool);
+
         maps.push_back(std::move(lm));
     }
 }
@@ -590,6 +619,22 @@ void EnemyRandomizerJob::State::StepBuildPool() {
         if (!ParsePoolString(entry, e)) continue;
         if (!ContainsAny(e.model, kBannedM2402)) poolHasUnbannedM2402 = true;
         if (!ContainsAny(e.model, kBannedM35)) poolHasUnbannedM35 = true;
+    }
+
+    // Feature 013. Built from what StepReadMap harvested, once, before any map
+    // is written - the pool is drained across the WHOLE run, not per map, so it
+    // cannot be built per map either.
+    if (options.bossInsertion.enabled) {
+        FinalizeInsertionPool(insertionPool);
+        result.insertPoolSize = (int)insertionPool.entries.size();
+        if (insertionPool.entries.empty()) {
+            Log("enemy randomizer: boss insertion - nothing ticked in inserted "
+                "bosses, the pass will do nothing");
+        } else {
+            Log(("enemy randomizer: boss insertion pool built - " +
+                 std::to_string(insertionPool.entries.size()) +
+                 " identities").c_str());
+        }
     }
 
     result.poolSize = (int)pool.size();
@@ -873,6 +918,14 @@ void EnemyRandomizerJob::State::StepWriteMap() {
         // behaviour, not taste - see the file header bullet and EasyModes.h.
         ApplyEasyModes(lm.name, lm.msbb, options.easyModes, result.easyCounts);
 
+        // BOSSES CAN REPLACE ENEMIES (feature 013). After the easy-mode pass and
+        // before the scaling loop, and both halves are behaviour - see the file
+        // header bullet and BossInsertion.h. The easy pass stays the last writer
+        // of its own placements because every placement it touches is on the
+        // fixed exclusion list and so is never an insertion target.
+        ApplyBossInsertion(lm.name, lm.msbb, options.bossInsertion, insertionPool,
+                           rng, insertionCounts);
+
         for (const BossScalingMapEntry& scalingEntry : BossScalingMaps()) {
             if (lm.name == scalingEntry.name) {
                 int scaledCount = ApplyBossParamScaling(lm.msbb, scalingEntry.zoneScale);
@@ -952,6 +1005,21 @@ void EnemyRandomizerJob::State::StepEmevd() {
     Log(("enemy randomizer: done - " + std::to_string(result.mapsProcessed) + " maps, " +
          std::to_string(result.enemiesRandomized) + " enemies randomized, " +
          std::to_string(result.npcParamsScaled) + " param-scaled").c_str());
+
+    // Feature 013, and only when the setting is on. The pool size is reported
+    // alongside the count because 0 inserted with a 0 pool is the silent skip
+    // working, and 0 inserted with a 32-identity pool is not.
+    if (options.bossInsertion.enabled) {
+        Log(("enemy randomizer: bosses inserted - " +
+             std::to_string(insertionCounts.inserted) + " placement(s) from a pool of " +
+             std::to_string(result.insertPoolSize) + " identities").c_str());
+        if (insertionCounts.shortfallMaps > 0) {
+            Log(("enemy randomizer: boss insertion short of the count asked for in " +
+                 std::to_string(insertionCounts.shortfallMaps) + " map file(s)").c_str());
+        }
+    }
+    result.insertedBosses = insertionCounts.inserted;
+    result.insertShortfallMaps = insertionCounts.shortfallMaps;
 
     // Feature 033, and only when the setting is on: an off run logs nothing
     // new. 26 is the expected figure with every map file present - the ten
@@ -1062,6 +1130,47 @@ void EnemyRandomizerJob::State::StepItemData() {
             result.shopWeaponsChanged = weapons.shopRowsChanged;
         }
 
+        // RANDOMIZE SHOP ARMOUR / RANDOMIZE SHOP ITEMS, feature 011. Runs HERE,
+        // immediately after the block above and before the two
+        // character-creation grants, and both halves of that position are
+        // deliberate (plan 011 D1):
+        //
+        //   after row 5's pass  - every draw that pass makes precedes every draw
+        //                         this one makes, so RANDOMIZE STARTING WEAPONS
+        //                         / GUNS / SHOP WEAPONS produce exactly the
+        //                         bytes and exactly the rolls they produce
+        //                         today, with these two settings on or off;
+        //   before the grants   - the two grants stay the LAST rolls of the run,
+        //                         which is the property spec 037 §7 recorded.
+        //
+        // The accepted cost is that turning either of these on moves which
+        // weapon a grant draws for a fixed seed, exactly as turning RANDOMIZE
+        // SHOP WEAPONS on does today. One shared stream means whichever pass is
+        // later moves when an earlier one is toggled.
+        //
+        // It writes the same table row 5's shop pass does, and cannot collide
+        // with it: that one writes equipType 0 listings, this one equipType 1
+        // and 3. See ShopStock.h and ShopLineup.h.
+        ShopStockOptions stockOpts;
+        stockOpts.randomizeShopArmour = options.randomizeShopArmour;
+        stockOpts.randomizeShopItems = options.randomizeShopItems;
+
+        if (stockOpts.Any()) {
+            const ParamMember* shop = FindParamMember(members, "ShopLineupParam.param");
+            if (shop == nullptr) {
+                Fail("ShopLineupParam.param not present in gameparam.parambnd.dcx "
+                     "(needed by RANDOMIZE SHOP ARMOUR / SHOP ITEMS)");
+                return;
+            }
+            ShopStockResult stock;
+            if (!RandomizeShopStock(itemDataPlain, *shop, stockOpts, rng, stock, &err)) {
+                Fail("shop stock randomization failed: " + err);
+                return;
+            }
+            result.shopArmourChanged = stock.armourRowsChanged;
+            result.shopItemsChanged = stock.itemRowsChanged;
+        }
+
         // NO TEAM TYPE - puts every NpcParam row onto the one team type. Runs
         // here, after the starting-weapon / shop block and before hunter tools,
         // because that is the reference's own relative position among the
@@ -1122,6 +1231,30 @@ void EnemyRandomizerJob::State::StepItemData() {
             }
         }
 
+        // START WITH SUPPLIES, feature 040, and the second param feature that
+        // isn't a randomizer: it writes the same two goods ids at the same count
+        // every run. Immediately after the hunter-tools block because the two are
+        // the same kind of thing and both fill item slots of the same 22 rows -
+        // and the position is readability only, not a behavioural constraint. It
+        // draws nothing and it never names a slot index, so it commutes with
+        // every pass in the run and with hunter tools in either order: together
+        // they fill four of the ten slots and neither can take the other's.
+        if (options.startWithSupplies) {
+            const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
+            if (chara == nullptr) {
+                Fail("CharaInitParam.param not present in gameparam.parambnd.dcx "
+                     "(needed by START WITH SUPPLIES)");
+                return;
+            }
+            StartingSuppliesResult supplies;
+            if (!GrantStartingSupplies(itemDataPlain, *chara, supplies, &err)) {
+                Fail("granting starting supplies failed: " + err);
+                return;
+            }
+            result.suppliesRowsChanged = supplies.rowsChanged;
+            result.suppliesSlotsWritten = supplies.slotsWritten;
+        }
+
         // LAST, and that is a requirement rather than a tidy ordering: this is
         // the only pass in the run that draws randomness at this point, so
         // putting it at the very end means turning the setting on cannot move
@@ -1171,6 +1304,43 @@ void EnemyRandomizerJob::State::StepItemData() {
             }
             result.leftHandWeaponGranted = grant.weaponGranted;
             result.leftHandWeaponRowsChanged = grant.rowsChanged;
+        }
+
+        // And then the armour, which is now the LAST pass of the run and the last
+        // thing in it that draws. That position is a requirement rather than a
+        // tidy ordering, the same requirement the two weapon grants have: the four
+        // words this consumes come after every other roll, so ticking a piece
+        // cannot move anything earlier in the world.
+        //
+        // ONE PASS FOR FOUR SETTINGS, because the four slots draw together: it
+        // takes exactly four raw words whenever anything is ticked, one per slot
+        // in slot order, and a slot with nothing ticked discards its word rather
+        // than skipping it. That constant count is what stops emptying one picker
+        // from changing which piece another slot draws for a fixed seed (spec 040
+        // B6, ArmourGrant.h).
+        //
+        // No requirement writer is passed to it, unlike both weapon grants: the
+        // armour row has no requirement fields at all, so there is nothing to
+        // lower and reqWriter's precedence rule is not involved.
+        if (options.AnyArmourTicked()) {
+            const ParamMember* chara = FindParamMember(members, "CharaInitParam.param");
+            if (chara == nullptr) {
+                Fail("CharaInitParam.param not present in gameparam.parambnd.dcx "
+                     "(needed by the four START WITH ... armour settings)");
+                return;
+            }
+            ArmourGrantResult armour;
+            if (!GrantArmour(itemDataPlain, *chara, options.headwear,
+                             options.bodyArmour, options.gloves, options.legwear,
+                             rng, armour, &err)) {
+                Fail("granting armour failed: " + err);
+                return;
+            }
+            for (int slot = 0; slot < 4; slot++) {
+                result.armourGranted[slot] = armour.granted[slot];
+            }
+            result.armourRowsChanged = armour.rowsChanged;
+            result.armourDraws = armour.drawsMade;
         }
 
         itemDataStep = 2;

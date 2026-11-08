@@ -76,6 +76,21 @@ struct RandomizerDefaults {
     bool randomizeStartingGuns = false;
     bool randomizeShopWeapons = false;
 
+    // RANDOMIZE SHOP ARMOUR and RANDOMIZE SHOP ITEMS (feature 011) - the other
+    // two thirds of the same shop table, each shuffled within its own kind. See
+    // Randomizer/ShopStock.h.
+    //
+    // Independent of each other and of the three toggles above: the shop's
+    // weapon, armour and consumable listings are three disjoint sets, so any
+    // combination of the five is valid.
+    //
+    // "No" is each one's own default, so a defaults.cfg written before these
+    // keys existed reads as off and the shops are the ones the game shipped -
+    // the standing rule that an older defaults.cfg must not silently turn a
+    // setting on.
+    bool randomizeShopArmour = false;
+    bool randomizeShopItems = false;
+
     // Which enemies may be used as replacements by RANDOMIZE ENEMIES. All
     // enabled is the default and is exactly the behaviour that existed before
     // the picker, so an older defaults.cfg is unaffected. See
@@ -186,6 +201,38 @@ struct RandomizerDefaults {
     // weapon; a character can start with one in each hand.
     LeftHandWeaponSelection leftHandWeapons;
 
+    // START WITH HEADWEAR / BODY ARMOUR / GLOVES / LEGWEAR - which of the 124
+    // wearable armour pieces may be granted to a new character, one picker per
+    // slot. See Randomizer/ArmourGrant.h and Randomizer/ArmourTables.h.
+    //
+    // FOUR SELECTIONS AND NOT ONE, in the game's own slot order (head, body,
+    // gloves, legwear), because a player wears four pieces and each slot is
+    // drawn independently of the other three: changing what is ticked in one
+    // must not change which piece a fixed seed draws in another (spec 040 B6).
+    //
+    // The same shape as the two weapon pickers above and independent of them and
+    // of each other: no accompanying boolean, the same none/one/many semantics,
+    // and nothing ticked as each type's own default - so a defaults.cfg written
+    // before these keys existed, or one carrying a stale-length line, reads as
+    // that slot's vanilla garment left alone, and the run is the one the app made
+    // before this existed, roll for roll.
+    HeadwearSelection   headwear;
+    BodyArmourSelection bodyArmour;
+    GlovesSelection     gloves;
+    LegwearSelection    legwear;
+
+    // START WITH SUPPLIES - grants 20 Blood Vials and 20 Quicksilver Bullets at
+    // character creation, into free inventory slots. See
+    // Randomizer/StartingSupplies.h.
+    //
+    // A toggle and not a picker, unlike the four above: there is nothing to
+    // choose. Two consumables, one count each, and the 20 is each goods row's
+    // own maxNum rather than a number anyone picked (spec 040 D2).
+    //
+    // "No" is the struct's own default, so a defaults.cfg written before this
+    // key existed reads as off and nothing about the run changes.
+    bool startWithSupplies = false;
+
     // EASY SHADOWS, EASY ROM, EASY FAILURES, EASY EMISSARY - four
     // independent settings, one per multi-body boss arena, each replacing
     // that fight's duplicate bodies with the tiny Iosefka's Clinic larva so
@@ -222,6 +269,80 @@ struct RandomizerDefaults {
     // it, because a per-world save policy is not something a new world starts
     // from.
     bool startFreshSave = false;
+
+    // BOSSES CAN REPLACE ENEMIES and its seven modifiers (feature 013) - the
+    // insertion pass that writes boss identities over ordinary enemy placements
+    // in the fourteen explorable areas, as a second pass after the enemy and
+    // boss passes. See Randomizer/BossInsertion.h.
+    //
+    // THE MASTER SWITCH IS TESTED BEFORE ANY DRAW. With it false the pass
+    // returns before it reaches a RandInt, so a run is byte-identical to the one
+    // the app made before this existed, roll for roll - the same discipline
+    // doNotRandomizeCagedDogs keeps. That is what makes "absent -> false" safe
+    // here: a defaults.cfg written before these keys existed reads as off, and
+    // off is not a conservative approximation of today's run, it IS today's run.
+    //
+    // The other seven do nothing at all while this is false, and none of them
+    // is a second way of switching the feature on.
+    bool bossesCanReplaceEnemies = false;
+
+    // BOSS REPLACEMENTS - false is UP TO, true is EXACTLY (spec 013 D-L).
+    // UP TO makes the count below a ceiling a map approaches; EXACTLY makes it
+    // min(count, what the map can supply) precisely. Named for the state `true`
+    // means, so the field reads the way the config key does.
+    bool bossReplacementsExact = false;
+
+    // BOSS REPLACEMENTS PER MAP - how many insertions one map file gets, 0 to
+    // 15 inclusive (spec 013 D-K: 15 is the last count at which spreading still
+    // keeps every map's closest pair above 20 paces). 0 means none anywhere and
+    // the run still succeeds.
+    //
+    // ONE, not zero, is the struct's own default, and unlike every bool here
+    // that is not "the run the app made before this existed" on its own - the
+    // master switch above is what supplies that. A count with no master switch
+    // on inserts nothing.
+    int bossReplacementsPerMap = 1;
+
+    // REPLACE ALL ENEMIES - a deliberately TEMPORARY test control (spec 013 §6).
+    // Replaces every eligible placement in every ticked area at once, ignoring
+    // the two settings above. It exists to answer one question on hardware -
+    // what 1,381 loose bosses do to the game - and is expected to crash or to
+    // make the game unplayable. It is deleted once one hardware run has
+    // answered, which is feature 013's milestone 5; the key is then simply no
+    // longer read, exactly as unchanged_bell_maidens is not.
+    bool replaceAllEnemies = false;
+
+    // SPREAD BOSSES OUT - chooses the placements by greedy farthest-point over
+    // their positions rather than by an unweighted draw, so each inserted boss
+    // tends to hold its own part of a map. At a count of 1 it changes nothing
+    // and consumes the same draws (spec 013 D-F, D-N).
+    bool spaceOutInsertedBosses = false;
+
+    // BOSS BEHAVIOUR - false is OWN AI, true is REPLACED ENEMY'S AI. True
+    // leaves the placement's existing ThinkParamID alone, which is the only way
+    // the reference tool ever expressed this (its 551000 branch assigns a local
+    // and never the field). It MAY SIMPLY NOT WORK - a think id refers to
+    // behaviours that belong to a particular body - and only the console can
+    // say. False, the default, writes the arriving boss's own think id.
+    bool insertedBossKeepsEnemyAi = false;
+
+    // INSERTED BOSSES - which of the 22 boss models may arrive in the world.
+    // NOT bossesIncluded: that list is 17 rows and governs which bosses hold
+    // which arena, this one is 22 and governs which arrive as replacements, and
+    // the two are separate choices about separate passes (spec 013 D-B).
+    //
+    // All ticked is the default, and with nothing ticked the whole pass is
+    // skipped silently - no error, no warning, nothing refused at commit
+    // (spec 013 D-G), which is the reference's own behaviour when its list
+    // comes up empty.
+    InsertedBossSelection insertedBosses;
+
+    // AREAS INCLUDED - which of the fourteen explorable areas the pass visits.
+    // Each row is a map-name prefix covering one to three map files. All ticked
+    // is the default; with nothing ticked nothing happens and the run succeeds.
+    // Neither m21 file is a row, so the Hunter's Dream and the Abandoned Old
+    // Workshop can never take part.
+    InsertAreaSelection bossAreas;
 
     // The seed the last commit actually used, so the wizard can open showing
     // it and "run that again" is two button presses. Unlike everything else

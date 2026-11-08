@@ -1,7 +1,8 @@
 // ModelPicker.h - the shared drill-in list. Drives the enemy picker (82 rows),
-// the boss picker (17), ENEMIES SKIPPED (85), START WITH A TRICK WEAPON (78)
-// and START WITH A LEFT WEAPON (14), which behave identically; the host
-// supplies the table, the count and the flags.
+// the boss picker (17), ENEMIES SKIPPED (85), START WITH A TRICK WEAPON (78),
+// START WITH A LEFT WEAPON (16), INSERTED BOSSES (22), AREAS INCLUDED (14) and
+// feature 040's four armour slots (33 / 34 / 26 / 31), which behave identically;
+// the host supplies the table, the count and the flags.
 //
 // The first two are INCLUSION lists - ticking a row lets that creature be
 // used as a replacement. The third is the opposite: ticking a row leaves the
@@ -137,6 +138,80 @@ inline constexpr PickerStrings kTrickWeaponsStrings = {
 // 2 pages.
 inline constexpr PickerStrings kLeftHandWeaponsStrings = {
     "START WITH A LEFT WEAPON",
+    "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
+};
+
+// The sixth list: the 22 boss models BOSSES CAN REPLACE ENEMIES may write over
+// an ordinary enemy placement (feature 013). Word for word
+// kBossesIncludedStrings with its own heading - it is the same question about a
+// different pass, and it keeps the id column for the same reason the three
+// creature lists do. A SEPARATE list from BOSSES INCLUDED, 22 rows against 17,
+// and ticking a row here says nothing about boss arenas.
+inline constexpr PickerStrings kInsertedBossesStrings = {
+    "INSERTED BOSSES",
+    nullptr,
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    true,
+};
+
+// The seventh, and the first that is neither creatures nor weapons: the
+// fourteen explorable areas the insertion pass may visit. No id column (plan
+// 013 D3) - all fourteen names are distinct, a map-name prefix like m24_01
+// means nothing to a player, and the text log names the file anyway.
+inline constexpr PickerStrings kBossAreasStrings = {
+    "AREAS INCLUDED",
+    nullptr,
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
+};
+
+// The eighth, ninth, tenth and eleventh lists: feature 040's four armour slots,
+// 33 / 34 / 26 / 31 pieces. Word for word the two weapon lists above, each with
+// its own heading, because they are the same question about a different slot and
+// reading differently would suggest they behave differently. No id column - all
+// four are pieces of armour whose names the game gives, and a six-digit param id
+// means nothing to a player.
+//
+// The instruction line puts each of them on the 11-row layout, so 33, 26 and 31
+// rows are 3 pages and 34 is 4. The 34-row body list is the one worth noticing:
+// it is one row past three full pages, so its last page holds a single row.
+inline constexpr PickerStrings kHeadwearStrings = {
+    "START WITH HEADWEAR",
+    "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
+};
+
+inline constexpr PickerStrings kBodyArmourStrings = {
+    "START WITH BODY ARMOUR",
+    "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
+};
+
+inline constexpr PickerStrings kGlovesStrings = {
+    "START WITH GLOVES",
+    "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
+    "YES", "NO",
+    "ENABLE ALL", "DISABLE ALL",
+    "ALL", "NONE",
+    false,
+};
+
+inline constexpr PickerStrings kLegwearStrings = {
+    "START WITH LEGWEAR",
     "TICK ANY NUMBER - ONE IS DRAWN FOR THE RUN",
     "YES", "NO",
     "ENABLE ALL", "DISABLE ALL",

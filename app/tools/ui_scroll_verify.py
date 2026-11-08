@@ -286,7 +286,18 @@ SCREENS = [
     # them draws - 14 rows at 11 visible is 2 pages, so the second page holds
     # only three. That is the case worth pinning here: a partly filled last
     # page is where a list band that assumes a full page shows it.
-    ("Left picker",     332, 52, 900, 3, 52, 14, 235, 3, SCREEN_H - 130, 2),
+    ("Left picker",     332, 52, 900, 3, 52, 16, 235, 3, SCREEN_H - 130, 2),
+    # Feature 040's four armour slots: the same component again, the same
+    # instruction-line geometry again, and four DIFFERENT lengths - 33 / 34 / 26 /
+    # 31. At 11 visible rows that is 3 / 4 / 3 / 3 pages, and the body list is the
+    # one worth pinning: 34 is one row past three full pages, so its last page
+    # holds a single row. Listed separately, like every duplicate set of numbers
+    # in this file, because a band nothing checks twice is a band one of its
+    # screens can walk away from.
+    ("Headwear picker",  332, 52, 900, 3, 52, 33, 235, 3, SCREEN_H - 130, 2),
+    ("Body picker",      332, 52, 900, 3, 52, 34, 235, 3, SCREEN_H - 130, 2),
+    ("Gloves picker",    332, 52, 900, 3, 52, 26, 235, 3, SCREEN_H - 130, 2),
+    ("Legwear picker",   332, 52, 900, 3, 52, 31, 235, 3, SCREEN_H - 130, 2),
 ]
 
 failures = []

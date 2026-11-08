@@ -16,6 +16,18 @@ Invariants (docs/plans/param-features.md):
   D-I6  itemLotId_2 is never written (reference reads it but never assigns it)
   D-I7  archive still holds the same members
 
+--shop-stock says the run also had one of the shop randomizers on - feature 5's
+RANDOMIZE SHOP WEAPONS or feature 11's RANDOMIZE SHOP ARMOUR / SHOP ITEMS. Those
+write ShopLineupParam.param, which D-I1 otherwise forbids, so the flag stops this
+tool reporting an entirely correct combined run as a failure. It tolerates that
+one member WHOLESALE and asserts nothing about it, unlike --team-type below:
+app/tools/starting_weapons_verify.py owns that table's positive invariants, and
+this tool only has to be able to judge NpcParam in its presence.
+
+It exists because plan 011 D2 takes a SINGLE hardware run with everything on.
+Without the flag there would be no tree this tool could say anything about at
+all, which is worse than a noisy one.
+
 --team-type says the run also had feature 027's NO TEAM TYPE
 (ENEMIES ON SAME TEAM) on. That feature writes byte 303 of every
 NpcParam row, so a correct combined run breaks D-I2 for an entirely correct
@@ -30,7 +42,7 @@ owns NpcParam and only has to be able to judge a tree it has touched.
 Usage:
     python drops_verify.py pool     <vanilla_dvdroot>
     python drops_verify.py verify   <vanilla_dvdroot> <output_dvdroot>
-                                    [--team-type]
+                                    [--team-type] [--shop-stock]
     python drops_verify.py selftest <vanilla_dvdroot>
 """
 
@@ -48,6 +60,9 @@ ITEMLOT1_OFFSET = 44   # NpcParam.itemLotId_1, s32
 ITEMLOT2_OFFSET = 48   # NpcParam.itemLotId_2, s32
 EXCLUDED_ROWS = {252100, 6071}
 NPC_MEMBER = "NpcParam.param"
+# Tolerated wholesale under --shop-stock, and never otherwise. Written by the
+# five shop settings of backlog rows 5 and 11, none of which touch NpcParam.
+SHOP_MEMBER = "ShopLineupParam.param"
 
 # NPC_PARAM_ST row stride, from param_offsets.py against the real paramdef. D-I2
 # needs it because "everything else in the row is intact" cannot be checked
@@ -132,9 +147,14 @@ def cmd_pool(vanilla_root):
     return 0
 
 
-def compare(van_plain, van_members, out_plain, out_members, team_type=False):
+def compare(van_plain, van_members, out_plain, out_members, team_type=False,
+            shop_stock=False):
     failures = []
     notes = []
+    tolerated = {NPC_MEMBER}
+    if shop_stock:
+        tolerated.add(SHOP_MEMBER)
+        notes.append("tolerating a shop randomizer's writes to " + SHOP_MEMBER)
 
     # D-I7 / D-I1: same members, and only NpcParam may differ.
     if sorted(van_members) != sorted(out_members):
@@ -146,7 +166,7 @@ def compare(van_plain, van_members, out_plain, out_members, team_type=False):
         if vsize != osize:
             failures.append("D-I7 member %s size changed %d -> %d" % (name, vsize, osize))
             continue
-        if name == NPC_MEMBER:
+        if name in tolerated:
             continue
         if van_plain[voff:voff + vsize] != out_plain[ooff:ooff + osize]:
             failures.append("D-I1 member %s modified (only %s may change)" % (name, NPC_MEMBER))
@@ -203,7 +223,7 @@ def compare(van_plain, van_members, out_plain, out_members, team_type=False):
     return failures, notes, changed
 
 
-def cmd_verify(vanilla_root, output_root, team_type=False):
+def cmd_verify(vanilla_root, output_root, team_type=False, shop_stock=False):
     opath = os.path.join(output_root, REL)
     if not os.path.exists(opath):
         print("no item-data archive in output tree - expected when enemy drops were off")
@@ -216,7 +236,7 @@ def cmd_verify(vanilla_root, output_root, team_type=False):
         print("--team-type: byte %d tolerated per row, and asserted to be %d"
               % (TEAM_TYPE_OFFSET, TEAM_TYPE_VALUE))
     failures, notes, changed = compare(van_plain, van_members, out_plain, out_members,
-                                       team_type=team_type)
+                                       team_type=team_type, shop_stock=shop_stock)
     print("NpcParam rows with a changed drop: %d" % changed)
     for n in notes:
         print("  NOTE: " + n)
@@ -236,19 +256,19 @@ def cmd_selftest(vanilla_root):
     van_plain, van_members = load_archive(vanilla_root)
     results = []
 
-    def run(label, mutate, expect, team_type=False):
+    def run(label, mutate, expect, team_type=False, shop_stock=False):
         out = bytearray(van_plain)
         mutate(out)
         f, _, _ = compare(van_plain, van_members, out, van_members,
-                          team_type=team_type)
+                          team_type=team_type, shop_stock=shop_stock)
         hit = any(expect in x for x in f)
         results.append((label, hit, f))
 
-    def fails(mutate, team_type=False):
+    def fails(mutate, team_type=False, shop_stock=False):
         out = bytearray(van_plain)
         mutate(out)
         f, _, _ = compare(van_plain, van_members, out, van_members,
-                          team_type=team_type)
+                          team_type=team_type, shop_stock=shop_stock)
         return f
 
     rows = dict(npc_rows(van_plain, van_members))
@@ -318,6 +338,34 @@ def cmd_selftest(vanilla_root):
     run("027: --team-type still rejects a stray write elsewhere in the row",
         team_types_plus_stray, "D-I2", team_type=True)
 
+    # --- 011 D3: the --shop-stock declaration --------------------------------
+    #
+    # The same shape as --team-type above: it passes with the flag, is rejected
+    # without it, and is not an amnesty for anything else.
+    shop_off, shop_size = van_members[SHOP_MEMBER]
+
+    def scramble_shop(buf):
+        for at in range(shop_off, shop_off + shop_size, 997):
+            buf[at] ^= 0xFF
+
+    results.append(("011: a shop-randomised tree passes WITH --shop-stock",
+                    not fails(scramble_shop, shop_stock=True),
+                    fails(scramble_shop, shop_stock=True)))
+    results.append(("011: the same bytes are REJECTED without --shop-stock",
+                    any("D-I1" in x for x in fails(scramble_shop)), []))
+
+    def shop_plus_stray(buf):
+        scramble_shop(buf)
+        buf[rows[a_row] + 100] = 0x5A
+    run("011: --shop-stock still rejects a stray NpcParam write",
+        shop_plus_stray, "D-I2", shop_stock=True)
+
+    def shop_plus_other_member(buf):
+        scramble_shop(buf)
+        buf[off:off + 4] = bytes((0xDE, 0xAD, 0xBE, 0xEF))
+    run("011: --shop-stock still rejects a THIRD member changing",
+        shop_plus_other_member, "D-I1", shop_stock=True)
+
     passed = 0
     for label, ok, detail in results:
         print("  %-28s %s" % (label, "OK" if ok else "MISSED"))
@@ -334,10 +382,14 @@ def main():
     team_type = "--team-type" in args
     if team_type:
         args.remove("--team-type")
+    shop_stock = "--shop-stock" in args
+    if shop_stock:
+        args.remove("--shop-stock")
     if len(args) >= 2 and args[0] == "pool":
         return cmd_pool(args[1])
     if len(args) >= 3 and args[0] == "verify":
-        return cmd_verify(args[1], args[2], team_type=team_type)
+        return cmd_verify(args[1], args[2], team_type=team_type,
+                          shop_stock=shop_stock)
     if len(args) >= 2 and args[0] == "selftest":
         return cmd_selftest(args[1])
     print(__doc__)

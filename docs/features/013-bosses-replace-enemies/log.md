@@ -317,3 +317,144 @@ the setting the hardware run exists to exercise.
 
 The plan needed no other edit — it already read 32 throughout, which is what made
 correcting the spec a documentation change rather than a re-plan.
+
+---
+
+## 2026-09-29 \u2014 plan approved
+
+The developer approved the plan and the Execution Strategy. Stage D (plan review)
+was skipped, as for rows 11, 27 and 37.
+
+**The byte arithmetic needs rebasing, and this is the third feature to hit it.**
+�5 was measured against a 728-byte settings block; rows **27** (+15) and **11**
+(+47) have both landed and been hardware-confirmed since, so the real baseline is
+**790 / 841**. This plan adds +248, giving **1038 / 1089** \u2014 both over
+`char buf[1024]` by 14 and 65 bytes, which **confirms D-I**: the growth to 2,048 is
+a prerequisite, not a tidy-up, and it is this feature that forces it. The
+implementer was given the measured figures and told to derive from them rather than
+from what the code emits.
+
+---
+
+## 2026-09-29 — stage E, milestones 1–4. Stopped at the Required gate.
+
+Built by the `implementer` subagent. **Stage D was skipped**, as for rows 11, 27
+and 37. **M1–M4 completed, no stop condition fired**, and the run ended on the
+**M4/M5 Required gate** — which is where the Execution Strategy puts it.
+**`REPLACE ALL ENEMIES` is untouched and ships live**, documented in the shape
+`RuneProbe.h` used, because only a hardware run can retire it.
+
+**What was built.** M1 the four new setting kinds and both generated tables
+(22 insertion rows summing to 32 identities, 14 area rows summing to 1,381
+targets). M2 all eight settings with persistence and the 2,048-byte buffer. M3 the
+insertion pass — `BossInsertion.{h,cpp}`, the run pool, the harvest,
+`part_fields::GetPosition` read-only at `+0x28`. M4 `insert_bosses_verify.py`.
+
+### The byte arithmetic, and a real hole it exposed
+
+Rebased as instructed: baseline measured at **790 / 841** before any edit, plus
+this plan's **+248**, giving **1,038 / 1,089**, both now exact equalities in
+`pool_verify.py`, with `char buf[1024]` grown to **2,048**. Reproduced
+independently by the orchestrating session. Third consecutive feature to need this
+rebase; the first where the overflow is real rather than forecast.
+
+**And the check that was supposed to catch the overflow did not work.**
+`pool_verify.py`'s fit assertion was `settings_block < max(bufs)`, where `bufs` is
+every `char buf[N]` in `RandomizerDefaultsStore.cpp`. There are two:
+`FormatSettings`' own **2,048** (line 45, grown by this feature) and
+`LoadRandomizerDefaults`' **4,096** *read* buffer (line 286). `max()` therefore
+picked the read buffer, so the assertion compared the write block against 4,096 —
+**a 1,038-byte block would have "fitted" `char buf[1024]` silently**, which is
+precisely the `snprintf` truncation D-I exists to prevent. It now parses
+`FormatSettings`' own `char buf[N];` — with the semicolon, so the comment's prose
+figures are not read as code.
+
+**This is the second shipped verifier in this feature family found to have a hole
+in the exact dimension it guarded**, after `drops_verify.py`'s D-I2 empty slice
+(row 27). Both were found by an agent implementing against the tool rather than by
+reading it. Verified independently here: the two buffer sizes are as stated and
+`1038 < 4096` is True.
+
+### The substantive finding: UP TO's ceiling truncates the mean
+
+`UP TO`'s rule is a per-placement draw at probability `min(N, supply)/supply`,
+bounded by `min(N, supply)`, so its expectation is
+`E[min(Binomial(supply, cap/supply), cap)]` — strictly **below** N, because the
+ceiling clips the upper tail while nothing lifts the lower one. **The implementation
+is §4 step 3 exactly; the gap belongs to the rule, not the code.** The verifier
+therefore asserts against the rule's own analytic value rather than a tolerance
+around N — about 20× tighter, and still failing the D-M violation it has to catch.
+
+Computed independently over the fourteen real supplies:
+
+| setting | UP TO, full run | EXACTLY, full run |
+| --- | ---: | ---: |
+| count 1 (**default**) | **8.9** | 14 |
+| count 5 | 58.1 | 70 |
+| count 15 | 190.4 | 210 |
+
+**Consequence, and it was a user-facing documentation defect.** Spec §2 row 3 said
+"At the default that is 14 bosses in a full run" as a statement of fact. 14 is
+`EXACTLY 1`; the default *mode* is `UP TO`, so the shipped default places about
+**nine**. Row 2 already describes `UP TO` as a ceiling some maps do not reach, so
+nothing contradicted — but row 3 read as a promise. **§2 row 3 corrected in place**
+on 2026-09-29, giving both modes' figures and citing the measurement.
+
+### Twelve deviations, all in plan §10
+
+The three worth reading: the rebase; the `max(bufs)` fix; and **M1 and M2 were
+built as one unit**, because M1 step 5's switch statements cannot compile without
+M2 step 1's fields and the two new selections break `settings_ui_verify.py` until
+M2 step 6. No gate sat between them, so nothing was skipped — but the boundary was
+not real, and D4 had already declined the Optional gate there.
+
+Also decided, and recorded: no boss-name test in the collector, the fixed exclusion
+list already sparing all 62 (measured); all `supply` draws taken in `UP TO` even
+after the ceiling fills, which is what keeps the stream position independent of how
+early the ceiling is reached; and two silent-skip log lines rather than one.
+
+### Verification, re-run independently by the orchestrating session
+
+`make clean && make` from scratch, **zero errors or warnings**, 7,143,424-byte
+`.pkg`; `insert_bosses_verify.py selftest` **56/56**; `pool_verify.py selftest`
+**108/108** including 1,089 / 1,038 / 2,048; `settings_ui_verify.py` **116/116**
+with the **Bosses pane at 10 rows** carrying all eight new settings and the widest
+pane row at **663/700 px** — exactly D1's predicted figure for `BOSS BEHAVIOUR`;
+`boss_verify.py selftest` 5/5; `caged_dogs_verify.py` 23/23;
+`easy_modes_verify.py` 25/25; `team_type_verify.py` 20/20;
+`starting_weapons_verify.py` 45/45; `trick_weapons_verify.py` 56/56;
+`ui_scroll_verify.py` PASSED.
+
+**Also confirmed independently:** `plan.md` §1–§7 is byte-identical — the only
+diff hunks are line 3 (the orchestrating session's own APPROVED edit) and line 552
+onward, inside §10 which starts at 548. Every changed file is named in plan §5;
+`Msbb.cpp` and `BossInsertion.cpp` appeared to be unnamed only because §5 writes
+them in the `` `X.h` / `.cpp` `` form. **`REPLACE ALL ENEMIES` is still present** in
+`SettingsModel.cpp` and its key in both halves of the store, which is what says M5
+was correctly not begun.
+
+**Not verifiable here:** M4 step 4's `verify` against real output trees, and §7
+M3's feature-off tree diff — both need PS4 runs. In their place the implementer
+exercised `verify` end-to-end on the vanilla tree as its own output plus **eight
+injection cases** that corrupt a known-good tree and require the right criterion to
+fire, and asserted the off-path invariant by reading `BossInsertion.cpp` to confirm
+every gate precedes the first `RandInt`. That last one is the risk-2 invariant from
+plan 013's own risk list, and it is currently carried by a static argument rather
+than by the byte-identical tree diff §7 M3 specifies.
+
+### The gate
+
+Four runs, in order, each tree worth copying into `data/runs/` for
+`insert_bosses_verify.py verify`: **(1)** defaults — does a loose boss aggro, fight
+and die with no fog gate, and does a save in an affected area reload; **(2)** count
+15, spacing off then on; **(3)** `REPLACED ENEMY'S AI` alone, the most likely to
+fail, where a crash is a plausible non-defective outcome; **(4)**
+`REPLACE ALL ENEMIES`, last and once — **its outcome recorded here is what unblocks
+M5.**
+
+### Noticed, not fixed
+
+`docs/plans/pickers.md` §7.5 and `032/spec.md` §8 still claim this feature puts
+bosses into the ordinary enemy pool. It does not, and spec §3 item 1 and §10 D-N
+both say so — these two are the last places the original error survives, and §3.2
+scopes them out.

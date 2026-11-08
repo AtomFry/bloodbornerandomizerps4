@@ -42,7 +42,8 @@ dvdroot tree:
      nor the placeholder "*".
   4. The id is obtainable in vanilla: sold in a ShopLineupParam.param row with
      equipType == 0, or present in an ItemLotParam.param slot whose matching
-     lotItemCategory is 1.
+     lotItemCategory is 0. (Category 0 is WEAPONS; category 1 is armour. This
+     read 1 until 2026-09-29 - see LOT_CATEGORY_WEAPON.)
 
 What the 14 are: 11 firearms (Hunter Blunderbuss, Ludwig's Rifle, Hunter Pistol,
 Evelyn, Repeating Pistol, Cannon, Rosmarinus, Flamesprayer, Gatling Gun, Church
